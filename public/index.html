@@ -36,6 +36,22 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
   @keyframes riseIn { from { opacity: 0; transform: translate(-50%, 10px);} to { opacity: 1; transform: translate(-50%, 0);} }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 760px) {
+    .app-shell { flex-direction: column; }
+    .app-sidebar {
+      width: 100% !important; flex-direction: row !important; align-items: center;
+      padding: 10px 12px !important; border-right: none !important; border-top: 1px solid var(--border);
+      order: 2; gap: 0 !important; overflow-x: auto;
+    }
+    .app-sidebar-brand, .app-sidebar-footer-label { display: none !important; }
+    .app-sidebar nav { flex-direction: row !important; margin-top: 0 !important; flex: 1; justify-content: space-around; }
+    .app-sidebar nav button { flex-direction: column; gap: 3px !important; font-size: 10.5px !important; padding: 6px 10px !important; }
+    .app-sidebar-footer { margin-top: 0 !important; padding-top: 0 !important; border-top: none !important; flex-direction: row-reverse; gap: 8px; }
+    .app-main { padding: 16px 14px !important; order: 1; }
+    .task-toolbar { gap: 8px !important; }
+    .modal-card { padding: 20px 18px !important; }
+  }
 </style>
 </head>
 <body>
@@ -192,7 +208,6 @@ function Shell({ children }) { return <div style={{ minHeight: "100vh", width: "
 function App() {
   const [session, setSession] = useState(undefined); // undefined = chargement, null = déconnecté
   const [profile, setProfile] = useState(null);
-  const [profileCount, setProfileCount] = useState(null); // pour savoir si c'est le tout premier lancement
   const [toast, setToast] = useState(null);
   const notify = (text, kind = "ok") => {
     setToast({ text, kind, key: uid() });
@@ -206,36 +221,46 @@ function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  const [profileChecked, setProfileChecked] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     async function loadProfile() {
       if (session === undefined) return;
-      if (!session) { setProfile(null); return; }
+      if (!session) { setProfile(null); setProfileChecked(true); return; }
       const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-      if (!cancelled) setProfile(data || null);
+      if (!cancelled) { setProfile(data || null); setProfileChecked(true); }
     }
     loadProfile();
-    return () => { cancelled = true; };
+    const id = setInterval(loadProfile, 8000); // revérifie si une demande a été approuvée
+    return () => { cancelled = true; clearInterval(id); };
   }, [session]);
 
-  useEffect(() => {
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).then(({ count }) => setProfileCount(count || 0));
-  }, [session]);
-
-  if (session === undefined || profileCount === null) {
+  if (session === undefined || !profileChecked) {
     return <Shell><div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><Spinner /></div></Shell>;
-  }
-
-  if (profileCount === 0) {
-    return <Shell><SetupAdmin onDone={() => window.location.reload()} notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
   }
 
   if (!session) {
-    return <Shell><Login notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
+    return <Shell><AuthGate notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
   }
 
-  if (session && !profile) {
-    return <Shell><div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><Spinner /></div></Shell>;
+  if (!profile) {
+    return (
+      <Shell>
+        <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+          <div style={{ maxWidth: 380, textAlign: "center", background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 16, padding: 32 }}>
+            <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 19, margin: "0 0 8px" }}>Aucun accès</h1>
+            <p style={{ color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6, marginBottom: 20 }}>Ton compte n'est rattaché à aucun serveur pour l'instant. Demande un nouveau code d'invitation, ou crée ton propre serveur.</p>
+            <button onClick={() => supabase.auth.signOut()} style={{ ...secondaryBtn, width: "100%" }}>Se déconnecter</button>
+          </div>
+        </div>
+        {toast && <Toast toast={toast} />}
+      </Shell>
+    );
+  }
+
+  if (profile.status === "pending") {
+    return <Shell><PendingScreen onLogout={() => supabase.auth.signOut()} />{toast && <Toast toast={toast} />}</Shell>;
   }
 
   return (
@@ -246,42 +271,25 @@ function App() {
   );
 }
 
-/* ---------------- Bootstrap : création du tout premier compte admin ---------------- */
-function SetupAdmin({ onDone, notify }) {
-  const [username, setUsername] = useState("admin");
-  const [email, setEmail] = useState("");
-  const [displayName, setDisplayName] = useState("Administrateur");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const submit = async () => {
-    if (!email || !password || !username.trim() || busy) return;
-    setBusy(true); setErr("");
-    try {
-      await callApi('/api/create-account', { username: username.trim(), email: email.trim(), password, displayName: displayName.trim() || username.trim(), color: "#9B7EF5" });
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) throw error;
-      notify("Compte administrateur créé.");
-      onDone();
-    } catch (e) { setErr(e.message); }
-    setBusy(false);
-  };
+/* ---------------- Porte d'entrée : connexion ou création de compte ---------------- */
+function AuthGate({ notify }) {
+  const [tab, setTab] = useState("login"); // login | signup
 
   return (
     <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <div style={{ width: 380, maxWidth: "90vw", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "34px 32px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg,var(--admin),#B08CFA)", display: "grid", placeItems: "center", boxShadow: "0 8px 20px rgba(155,126,245,.35)" }}><I.Shield size={22} color="#fff" /></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, position: "absolute", top: 28, left: 32 }}><NotebookMark size={26} /><span style={{ fontFamily: "Fraunces, serif", fontSize: 19 }}>Le Carnet</span></div>
+      <div style={{ width: 400, maxWidth: "92vw" }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, background: "var(--bg-2)", padding: 4, borderRadius: 11 }}>
+          <button onClick={() => setTab("login")} style={{
+            flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 600,
+            background: tab === "login" ? "var(--panel-2)" : "transparent", color: tab === "login" ? "var(--text)" : "var(--text-dim)",
+          }}>Se connecter</button>
+          <button onClick={() => setTab("signup")} style={{
+            flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 600,
+            background: tab === "signup" ? "var(--panel-2)" : "transparent", color: tab === "signup" ? "var(--text)" : "var(--text-dim)",
+          }}>Créer un compte</button>
         </div>
-        <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 22, textAlign: "center", margin: "0 0 4px" }}>Bienvenue</h1>
-        <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13.5, margin: "0 0 26px" }}>Premier lancement du carnet — crée ton compte administrateur.</p>
-        <Field label="Identifiant"><input value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
-        <Field label="Email (sert à te connecter)"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={inputStyle} /></Field>
-        <Field label="Nom affiché"><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
-        <Field label="Mot de passe"><input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} style={inputStyle} /></Field>
-        {err && <div style={{ color: "#FF9A8F", fontSize: 13, marginBottom: 14 }}>{err}</div>}
-        <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Création…" : "Créer mon compte admin"}</button>
+        {tab === "login" ? <Login notify={notify} /> : <Signup notify={notify} />}
       </div>
     </div>
   );
@@ -301,9 +309,9 @@ function Login({ notify }) {
     try {
       let email = identifier.trim();
       if (!email.includes("@")) {
-        const { data } = await supabase.from('profiles').select('email').eq('username', identifier.trim()).single();
+        const { data } = await supabase.rpc('email_for_username', { p_username: identifier.trim() });
         if (!data) throw new Error("Identifiant ou mot de passe incorrect.");
-        email = data.email;
+        email = data;
       }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error("Identifiant ou mot de passe incorrect.");
@@ -313,21 +321,141 @@ function Login({ notify }) {
   const onKey = (e) => { if (e.key === "Enter") submit(); };
 
   return (
+    <div onKeyDown={onKey} style={{ width: "100%", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" }}>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><div style={{ width: 48, height: 48, borderRadius: 13, background: "linear-gradient(135deg,var(--accent),var(--accent-2))", display: "grid", placeItems: "center", boxShadow: "0 8px 20px rgba(91,110,245,.35)" }}><I.Lock size={20} color="#fff" /></div></div>
+      <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 22, textAlign: "center", margin: "0 0 4px" }}>Content de vous revoir</h1>
+      <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13, margin: "0 0 22px" }}>Connecte-toi à ton serveur.</p>
+      <Field label="Identifiant ou email"><input autoFocus value={identifier} onChange={e => setIdentifier(e.target.value)} style={inputStyle} /></Field>
+      <Field label="Mot de passe">
+        <div style={{ position: "relative" }}>
+          <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: 40 }} />
+          <button type="button" onClick={() => setShowPw(s => !s)} style={eyeBtn}>{showPw ? <I.EyeOff size={16} /> : <I.Eye size={16} />}</button>
+        </div>
+      </Field>
+      {err && <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#FF9A8F", fontSize: 13, margin: "4px 0 14px" }}><I.Alert size={14} /> {err}</div>}
+      <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Connexion…" : "Se connecter"}</button>
+    </div>
+  );
+}
+
+/* ---------------- Création de compte : nouveau serveur ou rejoindre ---------------- */
+function Signup({ notify }) {
+  const [step, setStep] = useState("choose"); // choose | create | join | done-pending
+  const [serverName, setServerName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const doSignupCore = async () => {
+    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+    if (error) throw error;
+    let session = data.session;
+    if (!session) {
+      // Confirmation email activée côté Supabase : on tente une connexion directe
+      // (fonctionne si la confirmation est désactivée malgré tout).
+      const r = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (r.error) throw new Error("Vérifie ta boîte mail pour confirmer ton compte, puis reviens te connecter.");
+      session = r.data.session;
+    }
+    return session;
+  };
+
+  const createServer = async () => {
+    if (!serverName.trim() || !username.trim() || !displayName.trim() || !email.trim() || !password) return;
+    setBusy(true); setErr("");
+    try {
+      const session = await doSignupCore();
+      const { data: server, error: sErr } = await supabase.from('servers').insert({ name: serverName.trim(), owner_id: session.user.id }).select().single();
+      if (sErr) throw sErr;
+      const { error: pErr } = await supabase.from('profiles').insert({
+        id: session.user.id, server_id: server.id, username: username.trim(), email: email.trim(),
+        display_name: displayName.trim(), color: "#9B7EF5",
+      });
+      if (pErr) throw pErr;
+      notify("Ton serveur est prêt !");
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+
+  const joinServer = async () => {
+    if (!joinCode.trim() || !username.trim() || !displayName.trim() || !email.trim() || !password) return;
+    setBusy(true); setErr("");
+    try {
+      const session = await doSignupCore();
+      const { data: server, error: sErr } = await supabase.from('servers').select('id,name').eq('join_code', joinCode.trim().toLowerCase()).single();
+      if (sErr || !server) throw new Error("Code d'invitation introuvable.");
+      const { error: pErr } = await supabase.from('profiles').insert({
+        id: session.user.id, server_id: server.id, username: username.trim(), email: email.trim(),
+        display_name: displayName.trim(), color: "#5B9EF5",
+      });
+      if (pErr) throw pErr;
+      setStep("done-pending");
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+
+  const cardStyle = { width: "100%", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" };
+
+  if (step === "choose") {
+    return (
+      <div style={cardStyle}>
+        <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 22, textAlign: "center", margin: "0 0 4px" }}>Créer un compte</h1>
+        <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13, margin: "0 0 22px" }}>Chaque serveur est un espace totalement séparé.</p>
+        <button onClick={() => setStep("create")} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
+          <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,var(--admin),#B08CFA)", display: "grid", placeItems: "center", flexShrink: 0 }}><I.Shield size={17} color="#fff" /></div>
+          <div><div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>Créer un nouveau serveur</div><div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>Tu en seras l'administrateur</div></div>
+        </button>
+        <button onClick={() => setStep("join")} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "14px 16px", cursor: "pointer" }}>
+          <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,var(--accent),var(--accent-2))", display: "grid", placeItems: "center", flexShrink: 0 }}><I.UserPlus size={17} color="#fff" /></div>
+          <div><div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>Rejoindre un serveur existant</div><div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>Avec un code d'invitation</div></div>
+        </button>
+      </div>
+    );
+  }
+
+  if (step === "done-pending") {
+    return (
+      <div style={cardStyle}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><I.Check size={34} color="#5FBF8B" /></div>
+        <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 20, textAlign: "center", margin: "0 0 8px" }}>Demande envoyée</h1>
+        <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6 }}>L'administrateur de ce serveur doit approuver ta demande. Tu peux patienter sur cette page, ou revenir plus tard en te connectant.</p>
+      </div>
+    );
+  }
+
+  const isCreate = step === "create";
+  return (
+    <div style={cardStyle}>
+      <button onClick={() => { setStep("choose"); setErr(""); }} style={{ background: "none", border: "none", color: "var(--text-dimmer)", fontSize: 12.5, cursor: "pointer", padding: 0, marginBottom: 14 }}>← Retour</button>
+      <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 19, margin: "0 0 18px" }}>{isCreate ? "Nouveau serveur" : "Rejoindre un serveur"}</h1>
+      {isCreate
+        ? <Field label="Nom du serveur"><input value={serverName} onChange={e => setServerName(e.target.value)} placeholder="ex. Famille Borget" style={inputStyle} /></Field>
+        : <Field label="Code d'invitation"><input value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="ex. a1b2c3d4" style={inputStyle} /></Field>}
+      <Field label="Nom affiché"><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
+      <Field label="Identifiant"><input value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
+      <Field label="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} /></Field>
+      <Field label="Mot de passe"><input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} /></Field>
+      {err && <div style={{ color: "#FF9A8F", fontSize: 13, marginBottom: 14 }}>{err}</div>}
+      <button type="button" onClick={isCreate ? createServer : joinServer} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>
+        {busy ? "…" : isCreate ? "Créer le serveur" : "Envoyer la demande"}
+      </button>
+    </div>
+  );
+}
+
+/* ---------------- Écran d'attente d'approbation ---------------- */
+function PendingScreen({ onLogout }) {
+  return (
     <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, position: "absolute", top: 28, left: 32 }}><NotebookMark size={26} /><span style={{ fontFamily: "Fraunces, serif", fontSize: 19 }}>Le Carnet</span></div>
-      <div onKeyDown={onKey} style={{ width: 380, maxWidth: "90vw", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "34px 32px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg,var(--accent),var(--accent-2))", display: "grid", placeItems: "center", boxShadow: "0 8px 20px rgba(91,110,245,.35)" }}><I.Lock size={22} color="#fff" /></div></div>
-        <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 24, textAlign: "center", margin: "0 0 4px" }}>Content de vous revoir</h1>
-        <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13.5, margin: "0 0 26px" }}>Connectez-vous pour ouvrir votre carnet de tâches.</p>
-        <Field label="Identifiant ou email"><input autoFocus value={identifier} onChange={e => setIdentifier(e.target.value)} style={inputStyle} /></Field>
-        <Field label="Mot de passe">
-          <div style={{ position: "relative" }}>
-            <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: 40 }} />
-            <button type="button" onClick={() => setShowPw(s => !s)} style={eyeBtn}>{showPw ? <I.EyeOff size={16} /> : <I.Eye size={16} />}</button>
-          </div>
-        </Field>
-        {err && <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#FF9A8F", fontSize: 13, margin: "4px 0 14px" }}><I.Alert size={14} /> {err}</div>}
-        <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Connexion…" : "Se connecter"}</button>
+      <div style={{ maxWidth: 400, textAlign: "center", background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 16, padding: 32 }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><NotebookMark size={34} /></div>
+        <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 19, margin: "0 0 8px" }}>En attente d'approbation</h1>
+        <p style={{ color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6, marginBottom: 20 }}>L'administrateur de ce serveur n'a pas encore validé ta demande. Reviens un peu plus tard — cette page se met à jour automatiquement.</p>
+        <button onClick={onLogout} style={{ ...secondaryBtn, width: "100%" }}>Se déconnecter</button>
       </div>
     </div>
   );
@@ -375,26 +503,26 @@ function Workspace({ me, session, onLogout, notify }) {
   ];
 
   return (
-    <div style={{ position: "relative", zIndex: 1, display: "flex", minHeight: "100vh" }}>
-      <aside className="paper" style={{ width: 236, flexShrink: 0, borderRight: "1px solid var(--border)", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 18 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 8px" }}><NotebookMark size={24} /><span style={{ fontFamily: "Fraunces, serif", fontSize: 18 }}>Le Carnet</span></div>
+    <div className="app-shell" style={{ position: "relative", zIndex: 1, display: "flex", minHeight: "100vh" }}>
+      <aside className="paper app-sidebar" style={{ width: 236, flexShrink: 0, borderRight: "1px solid var(--border)", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 18 }}>
+        <div className="app-sidebar-brand" style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 8px" }}><NotebookMark size={24} /><span style={{ fontFamily: "Fraunces, serif", fontSize: 18 }}>Le Carnet</span></div>
         <nav style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
           {tabs.map(t => (<button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", cursor: "pointer", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: 500, textAlign: "left" }}><t.icon size={16} /> {t.label}</button>))}
         </nav>
-        <div style={{ marginTop: "auto", paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", marginBottom: 10 }}>
+        <div className="app-sidebar-footer" style={{ marginTop: "auto", paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
+          <div className="app-sidebar-footer-label" style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", marginBottom: 10 }}>
             <Avatar user={me} size={30} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{me.display_name}</div>
               <div style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>{isAdmin ? "Administrateur" : (ROLES.find(r => r.id === me.role) || {}).label || "Membre"}</div>
             </div>
           </div>
-          <button onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", background: "transparent", border: "1px solid var(--border-soft)", borderRadius: 9, color: "var(--text-dim)", fontSize: 13, cursor: "pointer" }}><I.LogOut size={14} /> Se déconnecter</button>
+          <button onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", background: "transparent", border: "1px solid var(--border-soft)", borderRadius: 9, color: "var(--text-dim)", fontSize: 13, cursor: "pointer" }}><I.LogOut size={14} /> <span className="app-sidebar-footer-label">Se déconnecter</span></button>
         </div>
       </aside>
-      <main style={{ flex: 1, minWidth: 0, padding: "26px 34px", overflowY: "auto" }}>
-        {tab === "tasks" && <TasksView me={me} isAdmin={isAdmin} myPerms={myPerms} accounts={accounts} tasks={tasks} notify={notify} />}
-        {tab === "messages" && <MessagesView me={me} myPerms={myPerms} accounts={accounts} messages={messages} />}
+      <main className="app-main" style={{ flex: 1, minWidth: 0, padding: "26px 34px", overflowY: "auto" }}>
+        {tab === "tasks" && <TasksView me={me} isAdmin={isAdmin} myPerms={myPerms} accounts={accounts.filter(a => a.status !== "pending")} tasks={tasks} notify={notify} />}
+        {tab === "messages" && <MessagesView me={me} myPerms={myPerms} accounts={accounts.filter(a => a.status !== "pending")} messages={messages} />}
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} notify={notify} />}
       </main>
     </div>
@@ -438,7 +566,7 @@ function TasksView({ me, isAdmin, myPerms, accounts, tasks, notify }) {
       if (error) { notify(error.message, "err"); return; }
       notify("Tâche mise à jour.");
     } else {
-      const { error } = await supabase.from('tasks').insert({ ...draft, created_by: me.id });
+      const { error } = await supabase.from('tasks').insert({ ...draft, created_by: me.id, server_id: me.server_id });
       if (error) { notify(error.message, "err"); return; }
       notify("Tâche créée.");
     }
@@ -454,7 +582,7 @@ function TasksView({ me, isAdmin, myPerms, accounts, tasks, notify }) {
         <div><h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Tâches</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>{counts.open} en cours{counts.late > 0 && <span style={{ color: "#FF9A8F" }}> · {counts.late} en retard</span>}</p></div>
         <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: (isAdmin || myPerms.createTasks) ? "flex" : "none", alignItems: "center", gap: 7, ...primaryBtn, padding: "10px 16px", width: "auto" }}><I.Plus size={16} /> Nouvelle tâche</button>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 20 }}>
+      <div className="task-toolbar" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 20 }}>
         <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}><I.Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)" }} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher une tâche…" style={{ ...inputStyle, paddingLeft: 32, background: "var(--bg-2)" }} /></div>
         <SelectPill icon={I.Sort} value={sortBy} onChange={setSortBy} options={[{ value: "priority", label: "Trier : priorité" }, { value: "due", label: "Trier : échéance" }, { value: "title", label: "Trier : titre" }]} />
         <SelectPill icon={I.Filter} value={filterDone} onChange={setFilterDone} options={[{ value: "open", label: "À faire" }, { value: "done", label: "Terminées" }, { value: "all", label: "Toutes" }]} />
@@ -511,7 +639,7 @@ function TaskForm({ initial, accounts, onCancel, onSave }) {
   const submit = () => { if (!title.trim()) return; onSave({ ...(initial || {}), title: title.trim(), notes: notes.trim(), label, priority: Number(priority), due: due || null, assignee, done: initial?.done || false }); };
   return (
     <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
-      <div style={modalStyle}>
+      <div className="modal-card" style={modalStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>{initial ? "Modifier la tâche" : "Nouvelle tâche"}</h2><button type="button" onClick={onCancel} style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
         <Field label="Titre"><input autoFocus value={title} onChange={e => setTitle(e.target.value)} style={inputStyle} /></Field>
         <Field label="Notes (optionnel)"><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></Field>
@@ -548,7 +676,7 @@ function MessagesView({ me, myPerms, accounts, messages }) {
   const send = async () => {
     if (!draft.trim() || !activeId || !myPerms.sendMessages) return;
     const text = draft.trim(); setDraft("");
-    await supabase.from('messages').insert({ from_id: me.id, to_id: activeId, text });
+    await supabase.from('messages').insert({ from_id: me.id, to_id: activeId, text, server_id: me.server_id });
   };
   const onKey = (e) => { if (e.key === "Enter") send(); };
   const activeUser = accounts.find(a => a.id === activeId);
@@ -590,6 +718,26 @@ function MessagesView({ me, myPerms, accounts, messages }) {
 function AdminView({ me, session, accounts, tasks, notify }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [server, setServer] = useState(null);
+
+  useEffect(() => {
+    supabase.from('servers').select('*').eq('id', me.server_id).single().then(({ data }) => setServer(data));
+  }, [me.server_id]);
+
+  const pending = accounts.filter(a => a.status === "pending");
+  const approved = accounts.filter(a => a.status !== "pending");
+
+  const approve = async (a) => {
+    const defaults = ROLE_DEFAULT_PERMS.member;
+    const { error } = await supabase.from('profiles').update({ status: "approved", role: "member", permissions: defaults }).eq('id', a.id);
+    if (error) { notify(error.message, "err"); return; }
+    notify(`${a.display_name} a rejoint le serveur.`);
+  };
+  const reject = async (a) => {
+    const { error } = await supabase.from('profiles').delete().eq('id', a.id);
+    if (error) { notify(error.message, "err"); return; }
+    notify("Demande refusée.");
+  };
 
   const createOrUpdate = async (draft) => {
     try {
@@ -612,11 +760,43 @@ function AdminView({ me, session, accounts, tasks, notify }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 12 }}>
-        <div><h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 10 }}><I.Shield size={24} color="var(--admin)" /> Administration</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>{accounts.length} compte(s) · {tasks.length} tâche(s)</p></div>
+        <div><h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 10 }}><I.Shield size={24} color="var(--admin)" /> Administration</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>{approved.length} compte(s) · {tasks.length} tâche(s)</p></div>
         <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(135deg,var(--admin),#B08CFA)", border: "none", color: "#fff", fontWeight: 600, fontSize: 13.5, padding: "10px 16px", borderRadius: 9, cursor: "pointer", boxShadow: "0 8px 20px rgba(155,126,245,.3)" }}><I.UserPlus size={16} /> Créer un compte</button>
       </div>
+
+      {server && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 4 }}>Code d'invitation de « {server.name} »</div>
+            <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: "var(--accent-2)", letterSpacing: 1 }}>{server.join_code}</div>
+          </div>
+          <button onClick={() => { navigator.clipboard?.writeText(server.join_code); notify("Code copié."); }} style={secondaryBtn}>Copier le code</button>
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+            <I.Alert size={14} color="#FFC97A" /> {pending.length} demande(s) en attente
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pending.map(a => (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "#2A2410", border: "1px solid #4A3F1A", borderRadius: 12, padding: "12px 16px", flexWrap: "wrap" }}>
+                <Avatar user={a} size={32} />
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username} · {a.email}</div>
+                </div>
+                <button onClick={() => approve(a)} style={{ ...primaryBtn, width: "auto", padding: "7px 14px", fontSize: 13 }}>Approuver</button>
+                <button onClick={() => reject(a)} style={{ ...secondaryBtn, width: "auto", padding: "7px 14px", fontSize: 13, color: "#FF9A8F" }}>Refuser</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {accounts.map(a => (
+        {approved.map(a => (
           <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", flexWrap: "wrap" }}>
             <Avatar user={a} size={34} />
             <div style={{ flex: 1, minWidth: 140 }}>
@@ -653,7 +833,7 @@ function UserForm({ initial, onCancel, onSave }) {
   };
   return (
     <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
-      <div style={modalStyle}>
+      <div className="modal-card" style={modalStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>{initial ? "Modifier le compte" : "Nouveau compte"}</h2><button type="button" onClick={onCancel} style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
         <Field label="Nom affiché"><input autoFocus value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
         <Field label="Identifiant"><input value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
@@ -685,4 +865,3 @@ root.render(<App />);
 </script>
 </body>
 </html>
-
