@@ -241,6 +241,8 @@ function App() {
   }
 
   if (!session) {
+    const inviteToken = new URLSearchParams(window.location.search).get("invite");
+    if (inviteToken) return <Shell><InviteAccept token={inviteToken} notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
     return <Shell><AuthGate notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
   }
 
@@ -268,6 +270,70 @@ function App() {
       <Workspace me={profile} session={session} onLogout={() => supabase.auth.signOut()} notify={notify} />
       {toast && <Toast toast={toast} />}
     </Shell>
+  );
+}
+
+/* ---------------- Acceptation d'une invitation reçue par email ---------------- */
+function InviteAccept({ token, notify }) {
+  const [info, setInfo] = useState(null);
+  const [loadErr, setLoadErr] = useState("");
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    callApi('/api/accept-invite', { action: 'check', token })
+      .then(setInfo)
+      .catch(e => setLoadErr(e.message));
+  }, [token]);
+
+  const goHome = () => { window.location.href = window.location.pathname; };
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true); setErr("");
+    try {
+      await callApi('/api/accept-invite', { action: 'accept', token, username: username.trim(), displayName: displayName.trim(), password });
+      const { error } = await supabase.auth.signInWithPassword({ email: info.email, password });
+      if (error) throw new Error("Compte créé, mais la connexion a échoué. Connecte-toi manuellement.");
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+      <div onKeyDown={(e) => { if (e.key === "Enter" && info) submit(); }} style={{ width: 400, maxWidth: "92vw", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><NotebookMark size={34} /></div>
+        {!info && !loadErr && <div style={{ display: "grid", placeItems: "center", padding: 20 }}><Spinner /></div>}
+        {loadErr && (
+          <div style={{ textAlign: "center" }}>
+            <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 20, margin: "0 0 10px" }}>Invitation indisponible</h1>
+            <p style={{ color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6, marginBottom: 20 }}>{loadErr}</p>
+            <button type="button" onClick={goHome} style={{ ...secondaryBtn, width: "100%" }}>Aller à la connexion</button>
+          </div>
+        )}
+        {info && (
+          <div>
+            <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 21, textAlign: "center", margin: "0 0 4px" }}>Rejoindre « {info.serverName} »</h1>
+            <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13, margin: "0 0 20px" }}>Crée ton compte pour {info.email}</p>
+            <Field label="Identifiant (pour te connecter)"><input autoFocus value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
+            <Field label="Nom affiché"><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
+            <Field label="Mot de passe (8 caractères minimum)">
+              <div style={{ position: "relative" }}>
+                <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: 40 }} />
+                <button type="button" onClick={() => setShowPw(v => !v)} style={eyeBtn}>{showPw ? <I.EyeOff size={16} /> : <I.Eye size={16} />}</button>
+              </div>
+            </Field>
+            {err && <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#FF9A8F", fontSize: 13, margin: "4px 0 14px" }}><I.Alert size={14} /> {err}</div>}
+            <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Création…" : "Créer mon compte"}</button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -719,10 +785,52 @@ function AdminView({ me, session, accounts, tasks, notify }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [server, setServer] = useState(null);
+  const [invites, setInvites] = useState([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     supabase.from('servers').select('*').eq('id', me.server_id).single().then(({ data }) => setServer(data));
   }, [me.server_id]);
+
+  const loadInvites = async () => {
+    const { data } = await supabase.from('invites').select('*').is('used_at', null).order('created_at', { ascending: false });
+    setInvites(data || []);
+  };
+  useEffect(() => {
+    loadInvites();
+    const ch = supabase.channel('invites-' + me.server_id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invites' }, loadInvites)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [me.server_id]);
+
+  const sendInvite = async () => {
+    if (inviting || !inviteEmail.trim()) return;
+    setInviting(true);
+    try {
+      const r = await callApi('/api/invite', { action: 'send', email: inviteEmail.trim(), role: inviteRole }, session);
+      if (r.emailSent) notify("Invitation envoyée à " + inviteEmail.trim() + ".");
+      else { navigator.clipboard?.writeText(r.link); notify(r.warning || "Email non envoyé : lien copié.", "err"); }
+      setInviteEmail("");
+      loadInvites();
+    } catch (e) { notify(e.message, "err"); }
+    setInviting(false);
+  };
+  const resendInvite = async (inv) => {
+    try {
+      const r = await callApi('/api/invite', { action: 'resend', id: inv.id }, session);
+      notify(r.emailSent ? "Invitation renvoyée." : (r.warning || "Email non envoyé."), r.emailSent ? "ok" : "err");
+      loadInvites();
+    } catch (e) { notify(e.message, "err"); }
+  };
+  const revokeInvite = async (inv) => {
+    const { error } = await supabase.from('invites').delete().eq('id', inv.id);
+    if (error) { notify(error.message, "err"); return; }
+    notify("Invitation annulée.");
+    loadInvites();
+  };
 
   const pending = accounts.filter(a => a.status === "pending");
   const approved = accounts.filter(a => a.status !== "pending");
@@ -773,6 +881,32 @@ function AdminView({ me, session, accounts, tasks, notify }) {
           <button onClick={() => { navigator.clipboard?.writeText(server.join_code); notify("Code copié."); }} style={secondaryBtn}>Copier le code</button>
         </div>
       )}
+
+      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Inviter par email</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input type="email" placeholder="adresse@exemple.com" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} onKeyDown={e => { if (e.key === "Enter") sendInvite(); }} style={{ ...inputStyle, flex: 1, minWidth: 180, width: "auto" }} />
+          <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+            {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
+          <button type="button" onClick={sendInvite} disabled={inviting} style={{ ...primaryBtn, width: "auto", padding: "10px 18px", opacity: inviting ? 0.6 : 1 }}>{inviting ? "Envoi…" : "Envoyer"}</button>
+        </div>
+        {invites.length > 0 && (
+          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>Invitations en attente</div>
+            {invites.map(inv => {
+              const expired = new Date(inv.expires_at) < new Date();
+              return (
+                <div key={inv.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13 }}>
+                  <span style={{ flex: 1, minWidth: 160, wordBreak: "break-all" }}>{inv.email} <span style={{ color: "var(--text-dimmer)" }}>· {(ROLES.find(r => r.id === inv.role) || ROLES[1]).label}{expired ? " · expirée" : ""}</span></span>
+                  <button type="button" onClick={() => resendInvite(inv)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12 }}>Renvoyer</button>
+                  <button type="button" onClick={() => revokeInvite(inv)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12, color: "#FF9A8F" }}>Annuler</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {pending.length > 0 && (
         <div style={{ marginBottom: 24 }}>
