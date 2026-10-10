@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoustiCheck — Prévention & Vigilance</title>
+  <style>
+    :root {
+      --primary: #2d6a4f;
+      --primary-dark: #1b4332;
+      --accent: #d90429;
+      --admin-color: #4a148c;
+      --bg-light: #f4f6f8;
+      --card-bg: #ffffff;
+      --text: #212529;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-light);
+      color: var(--text);
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #2d6a4f, #1b4332);
+      color: white;
+      padding: 1.2rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      flex: 1;
+      width: 100%;
+    }
+
+    section {
+      margin-bottom: 2.5rem;
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      padding: 1.8rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+      margin-bottom: 1.5rem;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .metric-card {
+      padding: 1rem;
+      border-radius: 8px;
+    }
+
+    .species-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: white;
+      margin-bottom: 0.5rem;
+    }
+
+    .badge-tigre { background-color: #e63946; }
+    .badge-commun { background-color: #457b9d; }
+
+    .btn {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.7rem 1.2rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.3s;
+    }
+
+    .btn:hover {
+      background-color: var(--primary-dark);
+    }
+
+    .btn-admin {
+      background-color: var(--admin-color);
+    }
+
+    .btn-admin:hover {
+      background-color: #310a5d;
+    }
+
+    .btn-danger {
+      background-color: #d90429;
+      color: white;
+      border: none;
+      padding: 0.4rem 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-danger:hover {
+      background-color: #b70220;
+    }
+
+    .alert-box {
+      border-left: 5px solid var(--accent);
+      background-color: #fff0f3;
+      padding: 1.2rem;
+      margin-top: 1.2rem;
+      border-radius: 0 8px 8px 0;
+    }
+
+    form label {
+      display: block;
+      margin-top: 1rem;
+      font-weight: 600;
+    }
+
+    form input, form select, .city-select {
+      width: 100%;
+      padding: 0.7rem;
+      margin-top: 0.3rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+
+    .video-container {
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
+      border-radius: 8px;
+      margin-top: 1rem;
+    }
+
+    .video-container iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    .account-info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      background: #f8f9fa;
+      padding: 1.2rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+      border: 1px solid #e9ecef;
+    }
+
+    .account-info-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .account-info-item span {
+      font-size: 0.85rem;
+      color: #6c757d;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    th, td {
+      padding: 0.85rem;
+      text-align: left;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    th {
+      background-color: #f1f3f5;
+    }
+
+    footer {
+      background-color: #1b4332;
+      color: white;
+      text-align: center;
+      padding: 1.4rem;
+      margin-top: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🦟 MoustiCheck</h1>
+  </header>
+
+  <main>
+    <!-- DONNÉES & MÉTÉO -->
+    <section id="accueil">
+      <div class="card">
+        <h2>📊 Données réelles & Conditions Actuelles par Ville</h2>
+        <div style="max-width: 400px; margin: 1rem 0;">
+          <label for="citySelect">📍 Choisir une ville :</label>
+          <select id="citySelect" class="city-select" onchange="updateCityData(this.value)">
+            <option value="vitrolles">Vitrolles</option>
+            <option value="marseille">Marseille</option>
+            <option value="aix">Aix-en-Provence</option>
+            <option value="marignane">Marignane</option>
+          </select>
+        </div>
+
+        <div class="grid-4">
+          <div class="metric-card" style="background: #e8f5e9;">
+            <h3>🌡️ Température</h3>
+            <p id="tempVal" style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">22 °C</p>
+          </div>
+          <div class="metric-card" style="background: #e1f5fe;">
+            <h3>💧 Humidité</h3>
+            <p id="humidityVal" style="font-size: 1.5rem; font-weight: bold; color: #0288d1;">78 %</p>
+          </div>
+          <div class="metric-card" style="background: #fff8e1;">
+            <h3>💨 Vent moyen</h3>
+            <p id="windVal" style="font-size: 1.5rem; font-weight: bold; color: #f57f17;">8 km/h</p>
+          </div>
+          <div class="metric-card" style="background: #f3e5f5;">
+            <h3>⏰ Pic d'activité</h3>
+            <p style="font-size: 1.1rem; font-weight: bold; color: #7b1fa2;">07h-09h & 17h-20h</p>
+          </div>
+        </div>
+
+        <div class="alert-box">
+          <h3 id="riskTitle">⚠️ Indice de Risque : ÉLEVÉ (Niveau 4/5)</h3>
+          <p id="riskDesc">Les conditions d'humidité associées aux températures douces favorisent la ponte.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- LES ESPÈCES -->
+    <section id="especes">
+      <h2 style="margin-bottom: 1rem;">🔍 Les 2 Espèces Principales</h2>
+      <div class="grid-2">
+        <div class="card">
+          <span class="species-badge badge-tigre">Espèce 1</span>
+          <h3>Moustique Tigre (Aedes albopictus)</h3>
+          <p style="margin-top: 0.5rem;"><strong>Apparence :</strong> Petit (moins de 5 mm), noir avec rayures blanches sur le corps et les pattes.</p>
+          <p><strong>Période d'activité :</strong> Pique surtout en journée (aube et crépuscule).</p>
+          <p><strong>Particularité :</strong> Vol silencieux, vit à proximité immédiate des habitations.</p>
+        </div>
+        <div class="card">
+          <span class="species-badge badge-commun">Espèce 2</span>
+          <h3>Moustique Commun (Culex pipiens)</h3>
+          <p style="margin-top: 0.5rem;"><strong>Apparence :</strong> Brun-jaunâtre uniforme sans rayures.</p>
+          <p><strong>Période d'activité :</strong> Pique principalement la nuit.</p>
+          <p><strong>Particularité :</strong> Bourdonnement strident audible lors du vol.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRÉVENTION & VIDÉO -->
+    <section id="prevention">
+      <div class="card">
+        <h2>🛡️ Gestes de Prévention</h2>
+        <ul style="margin-left: 1.5rem; margin-top: 1rem; margin-bottom: 1.5rem;">
+          <li><strong>Vider :</strong> Coupelles sous les pots, seaux, arrosoirs et jouets.</li>
+          <li><strong>Couvrir :</strong> Récupérateurs d'eau de pluie avec une moustiquaire.</li>
+          <li><strong>Nettoyer :</strong> Gouttières et caniveaux obstrués.</li>
+        </ul>
+
+        <h3 style="margin-top: 1rem;">🎥 Vidéo explicative : Adopter les bons réflexes</h3>
+        <div class="video-container">
+          <iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" title="Vidéo de prévention moustiques" allowfullscreen></iframe>
+        </div>
+      </div>
+    </section>
+
+    <!-- MON COMPTE -->
+    <section id="compte">
+      <div class="card">
+        <h2>👤 Mon Compte Utilisateur</h2>
+        
+        <h3 style="margin-top: 1.2rem; font-size: 1.1rem; color: var(--primary);">Fiche Profil</h3>
+        <div class="account-info-grid">
+          <div class="account-info-item">
+            <span>Nom d'utilisateur</span>
+            <strong id="displayUsername">Alex13</strong>
+          </div>
+          <div class="account-info-item">
+            <span>Adresse E-mail</span>
+            <strong id="displayEmail">alex@exemple.fr</strong>
+          </div>
+          <div class="account-info-item">
+            <span>Ville rattachée</span>
+            <strong id="displayCity">Vitrolles</strong>
+          </div>
+          <div class="account-info-item">
+            <span>Abonnement Alertes</span>
+            <strong id="displayAlerts" style="color: var(--primary);">Actif (Hebdomadaire)</strong>
+          </div>
+        </div>
+
+        <h3 style="margin-top: 1.8rem; font-size: 1.1rem; color: var(--primary);">Mettre à jour mes informations</h3>
+        <form onsubmit="updateAccount(event)">
+          <label for="username">Changer le nom d'utilisateur :</label>
+          <input type="text" id="username" value="Alex13" required>
+
+          <label for="userEmail">Nouvelle adresse E-mail :</label>
+          <input type="email" id="userEmail" value="alex@exemple.fr" required>
+
+          <label for="usercity">Ville de résidence :</label>
+          <select id="usercity">
+            <option value="Vitrolles" selected>Vitrolles</option>
+            <option value="Marseille">Marseille</option>
+            <option value="Aix-en-Provence">Aix-en-Provence</option>
+            <option value="Marignane">Marignane</option>
+          </select>
+
+          <label for="alertPref">Fréquence des notifications :</label>
+          <select id="alertPref">
+            <option value="Actif (Hebdomadaire)">Toutes les semaines</option>
+            <option value="Actif (Uniquement risque élevé)">En cas de risque élevé uniquement</option>
+            <option value="Désactivé">Désactivé</option>
+          </select>
+
+          <button type="submit" class="btn" style="margin-top: 1.2rem;">Enregistrer les modifications</button>
+        </form>
+
+        <p id="msgCompte" style="margin-top: 1rem; color: #2b9348; font-weight: bold; display: none;"></p>
+      </div>
+    </section>
+
+    <!-- ACCÈS & PANNEAU ADMIN INTERACTIF -->
+    <section id="admin">
+      <div id="loginBox" class="card" style="max-width: 450px; margin: 0 auto; border-top: 4px solid var(--admin-color);">
+        <h2>🔒 Espace Administrateur</h2>
+        <p style="font-size: 0.9rem; color: #666; margin-top: 0.3rem;">Accès sécurisé réservé à la gestion de la plateforme.</p>
+        <input type="password" id="pass" placeholder="Mot de passe d'accès" style="margin: 1rem 0 0.5rem 0;">
+        <button class="btn btn-admin" onclick="checkAdmin()" style="width: 100%;">Se connecter</button>
+        <p id="adminErr" style="color: var(--accent); display: none; margin-top: 0.5rem; text-align: center; font-weight: bold;">Mot de passe incorrect.</p>
+      </div>
+
+      <div id="dashBox" class="card" style="display: none; border-top: 4px solid var(--admin-color);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+          <h2>⚙️ Panneau de Gestion Admin</h2>
+          <button class="btn-danger" onclick="logoutAdmin()">🔒 Déconnexion</button>
+        </div>
+        
+        <h3 style="margin-top: 1.5rem; font-size: 1.1rem; color: var(--admin-color);">➕ Ajouter un utilisateur</h3>
+        <form onsubmit="addUserAdmin(event)" style="margin-bottom: 2rem;">
+          <div class="grid-2">
+            <div>
+              <label for="newAdminUser">Nom d'utilisateur :</label>
+              <input type="text" id="newAdminUser" required placeholder="Ex: Jean13">
+            </div>
+            <div>
+              <label for="newAdminEmail">Adresse E-mail :</label>
+              <input type="email" id="newAdminEmail" required placeholder="jean@exemple.fr">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div>
+              <label for="newAdminCity">Ville :</label>
+              <select id="newAdminCity">
+                <option value="Vitrolles">Vitrolles</option>
+                <option value="Marseille">Marseille</option>
+                <option value="Aix-en-Provence">Aix-en-Provence</option>
+                <option value="Marignane">Marignane</option>
+              </select>
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+              <button type="submit" class="btn btn-admin" style="width: 100%; margin-top: 1rem;">Ajouter l'utilisateur</button>
+            </div>
+          </div>
+        </form>
+
+        <h3 style="margin-top: 1rem; font-size: 1.1rem; color: var(--admin-color);">📋 Liste des comptes enregistrés</h3>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Utilisateur</th>
+                <th>E-mail</th>
+                <th>Ville</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminUserList">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2026 MoustiCheck — Développé par <strong>Adel Mokrane</strong></p>
+  </footer>
+
+  <script>
+    // Base de données utilisateurs pour la démo
+    let adminUsers = [
+      { id: 1, name: "Alex13", email: "alex@exemple.fr", city: "Vitrolles", active: true },
+      { id: 2, name: "Marie_PACA", email: "marie@exemple.fr", city: "Marignane", active: true }
+    ];
+
+    function updateCityData(val) {
+      const data = {
+        vitrolles: { temp: "22 °C", hum: "78 %", wind: "8 km/h", risk: "⚠️ Indice de Risque : ÉLEVÉ (4/5)" },
+        marseille: { temp: "23 °C", hum: "72 %", wind: "14 km/h", risk: "⚠️ Indice de Risque : TRÈS ÉLEVÉ (5/5)" },
+        aix: { temp: "21 °C", hum: "75 %", wind: "6 km/h", risk: "⚠️ Indice de Risque : ÉLEVÉ (4/5)" },
+        marignane: { temp: "22 °C", hum: "80 %", wind: "10 km/h", risk: "⚠️ Indice de Risque : ÉLEVÉ (4/5)" }
+      };
+      
+      document.getElementById('tempVal').textContent = data[val].temp;
+      document.getElementById('humidityVal').textContent = data[val].hum;
+      document.getElementById('windVal').textContent = data[val].wind;
+      document.getElementById('riskTitle').textContent = data[val].risk;
+    }
+
+    function updateAccount(e) {
+      e.preventDefault();
+      const newName = document.getElementById('username').value;
+      const newEmail = document.getElementById('userEmail').value;
+      const newCity = document.getElementById('usercity').value;
+      const newAlerts = document.getElementById('alertPref').value;
+
+      document.getElementById('displayUsername').textContent = newName;
+      document.getElementById('displayEmail').textContent = newEmail;
+      document.getElementById('displayCity').textContent = newCity;
+      document.getElementById('displayAlerts').textContent = newAlerts;
+
+      const userInAdmin = adminUsers.find(u => u.id === 1);
+      if (userInAdmin) {
+        userInAdmin.name = newName;
+        userInAdmin.email = newEmail;
+        userInAdmin.city = newCity;
+        renderAdminUsers();
+      }
+
+      const msg = document.getElementById('msgCompte');
+      msg.style.display = 'block';
+      msg.textContent = "✅ Informations mises à jour avec succès !";
+
+      setTimeout(() => {
+        msg.style.display = 'none';
+      }, 4000);
+    }
+
+    function checkAdmin() {
+      const p = document.getElementById('pass').value;
+      if (p === "admin123") {
+        document.getElementById('loginBox').style.display = "none";
+        document.getElementById('dashBox').style.display = "block";
+        document.getElementById('adminErr').style.display = "none";
+        renderAdminUsers();
+      } else {
+        document.getElementById('adminErr').style.display = "block";
+      }
+    }
+
+    function logoutAdmin() {
+      document.getElementById('loginBox').style.display = "block";
+      document.getElementById('dashBox').style.display = "none";
+      document.getElementById('pass').value = "";
+    }
+
+    function renderAdminUsers() {
+      const tbody = document.getElementById('adminUserList');
+      tbody.innerHTML = '';
+
+      adminUsers.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>#${u.id}</td>
+          <td><strong>${u.name}</strong></td>
+          <td>${u.email}</td>
+          <td>${u.city}</td>
+          <td>
+            <span style="color: ${u.active ? '#2b9348' : '#d90429'}; font-weight: bold;">
+              ${u.active ? 'Actif' : 'Bloqué'}
+            </span>
+          </td>
+          <td>
+            <button onclick="toggleUser(${u.id})" class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background-color: #457b9d;">
+              ${u.active ? 'Bloquer' : 'Activer'}
+            </button>
+            <button onclick="deleteUser(${u.id})" class="btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+              Supprimer
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function toggleUser(id) {
+      const u = adminUsers.find(item => item.id === id);
+      if (u) {
+        u.active = !u.active;
+        renderAdminUsers();
+      }
+    }
+
+    function deleteUser(id) {
+      adminUsers = adminUsers.filter(item => item.id !== id);
+      renderAdminUsers();
+    }
+
+    function addUserAdmin(e) {
+      e.preventDefault();
+      const name = document.getElementById('newAdminUser').value;
+      const email = document.getElementById('newAdminEmail').value;
+      const city = document.getElementById('newAdminCity').value;
+
+      adminUsers.push({
+        id: adminUsers.length ? adminUsers[adminUsers.length - 1].id + 1 : 1,
+        name: name,
+        email: email,
+        city: city,
+        active: true
+      });
+
+      document.getElementById('newAdminUser').value = '';
+      document.getElementById('newAdminEmail').value = '';
+      renderAdminUsers();
+    }
+  </script>
+</body>
+</html>
