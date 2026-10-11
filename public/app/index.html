@@ -258,6 +258,7 @@ function App() {
   }, []);
 
   const [profileChecked, setProfileChecked] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,7 +271,7 @@ function App() {
     loadProfile();
     const id = setInterval(loadProfile, 8000); // revérifie si une demande a été approuvée
     return () => { cancelled = true; clearInterval(id); };
-  }, [session]);
+  }, [session, reloadKey]);
 
   if (session === undefined || !profileChecked) {
     return <Shell><div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><Spinner /></div></Shell>;
@@ -280,6 +281,10 @@ function App() {
     const inviteToken = new URLSearchParams(window.location.search).get("invite");
     if (inviteToken) return <Shell footer><InviteAccept token={inviteToken} notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
     return <Shell footer><AuthGate notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
+  }
+
+  if (!profile && ((session.user.app_metadata && session.user.app_metadata.providers) || []).includes("google")) {
+    return <Shell footer><CompleteProfile session={session} notify={notify} onDone={() => setReloadKey(k => k + 1)} onLogout={() => supabase.auth.signOut()} />{toast && <Toast toast={toast} />}</Shell>;
   }
 
   if (!profile) {
@@ -373,6 +378,143 @@ function InviteAccept({ token, notify }) {
   );
 }
 
+/* ---------------- Connexion avec Google ---------------- */
+function GoogleButton({ label, onError }) {
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (busy) return;
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin + "/app/" } });
+    if (error) { setBusy(false); onError && onError("Connexion Google indisponible pour l'instant : " + error.message); }
+  };
+  return (
+    <button type="button" onClick={go} disabled={busy} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", background: "#fff", color: "#1f1f1f", border: "1px solid #dadce0", borderRadius: 9, padding: "10px 0", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: busy ? 0.7 : 1 }}>
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      {label}
+    </button>
+  );
+}
+function OrDivider() {
+  return <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0", color: "var(--text-dimmer)", fontSize: 12 }}><div style={{ flex: 1, height: 1, background: "var(--border-soft)" }} />ou<div style={{ flex: 1, height: 1, background: "var(--border-soft)" }} /></div>;
+}
+
+/* ---------------- Après une première connexion Google : choisir son serveur ---------------- */
+function CompleteProfile({ session, notify, onDone, onLogout }) {
+  const user = session.user;
+  const email = user.email || "";
+  const meta = user.user_metadata || {};
+  const [step, setStep] = useState("loading"); // loading | invite | choose | create | join | done-pending
+  const [invites, setInvites] = useState([]);
+  const [serverName, setServerName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [displayName, setDisplayName] = useState(meta.full_name || meta.name || "");
+  const [username, setUsername] = useState(email.split("@")[0].replace(/[^A-Za-z0-9._-]/g, "").slice(0, 30));
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    callApi('/api/accept-invite', { action: 'my-invites' }, session)
+      .then(r => { setInvites(r.invites || []); setStep((r.invites || []).length ? "invite" : "choose"); })
+      .catch(() => setStep("choose"));
+  }, []);
+
+  const friendly = (e) => /duplicate|unique/i.test(e.message || "") ? "Cet identifiant est déjà pris, choisis-en un autre." : (e.message || "Erreur");
+  const needIdentity = () => !username.trim() || !displayName.trim();
+
+  const claim = async (inv) => {
+    if (needIdentity()) { setErr("Renseigne ton nom et ton identifiant."); return; }
+    setBusy(true); setErr("");
+    try {
+      await callApi('/api/accept-invite', { action: 'claim-invite', inviteId: inv.id, username: username.trim(), displayName: displayName.trim() }, session);
+      notify("Bienvenue dans « " + inv.serverName + " » !");
+      onDone();
+    } catch (e) { setErr(friendly(e)); }
+    setBusy(false);
+  };
+  const createServer = async () => {
+    if (!serverName.trim() || needIdentity()) { setErr("Remplis tous les champs."); return; }
+    setBusy(true); setErr("");
+    try {
+      const { data: server, error: sErr } = await supabase.from('servers').insert({ name: serverName.trim(), owner_id: user.id }).select().single();
+      if (sErr) throw sErr;
+      const { error: pErr } = await supabase.from('profiles').insert({ id: user.id, server_id: server.id, username: username.trim(), email, display_name: displayName.trim(), color: "#9B7EF5" });
+      if (pErr) throw pErr;
+      notify("Ton serveur est prêt !");
+      onDone();
+    } catch (e) { setErr(friendly(e)); }
+    setBusy(false);
+  };
+  const joinServer = async () => {
+    if (!joinCode.trim() || needIdentity()) { setErr("Remplis tous les champs."); return; }
+    setBusy(true); setErr("");
+    try {
+      const { data: server, error: sErr } = await supabase.from('servers').select('id,name').eq('join_code', joinCode.trim().toLowerCase()).single();
+      if (sErr || !server) throw new Error("Code d'invitation introuvable.");
+      const { error: pErr } = await supabase.from('profiles').insert({ id: user.id, server_id: server.id, username: username.trim(), email, display_name: displayName.trim(), color: "#5B9EF5" });
+      if (pErr) throw pErr;
+      onDone();
+    } catch (e) { setErr(friendly(e)); }
+    setBusy(false);
+  };
+
+  const cardStyle = { width: 400, maxWidth: "92vw", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" };
+  const identityFields = (
+    <div>
+      <Field label="Nom affiché"><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
+      <Field label="Identifiant"><input value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
+    </div>
+  );
+  const errBox = err && <div style={{ color: "#FF9A8F", fontSize: 13, marginBottom: 14 }}>{err}</div>;
+  const wrap = (children) => (
+    <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+      <div style={cardStyle}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><NotebookMark size={32} /></div>
+        {children}
+        <button type="button" onClick={onLogout} style={{ ...secondaryBtn, width: "100%", marginTop: 14 }}>Se déconnecter</button>
+      </div>
+    </div>
+  );
+
+  if (step === "loading") return wrap(<div style={{ display: "grid", placeItems: "center", padding: 16 }}><Spinner /></div>);
+
+  if (step === "invite") {
+    const inv = invites[0];
+    return wrap(<div>
+      <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 20, textAlign: "center", margin: "0 0 6px" }}>Tu as été invité(e)</h1>
+      <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13.5, margin: "0 0 18px" }}>Rejoins « {inv.serverName} » avec {email}.</p>
+      {identityFields}{errBox}
+      <button type="button" onClick={() => claim(inv)} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "…" : "Rejoindre " + inv.serverName}</button>
+      <button type="button" onClick={() => setStep("choose")} style={{ background: "none", border: "none", color: "var(--text-dimmer)", fontSize: 12.5, cursor: "pointer", marginTop: 12, width: "100%" }}>Plutôt créer ou rejoindre un autre serveur</button>
+    </div>);
+  }
+
+  if (step === "choose") {
+    const opt = (onClick, grad, icon, title, sub) => (
+      <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
+        <div style={{ width: 36, height: 36, borderRadius: 9, background: grad, display: "grid", placeItems: "center", flexShrink: 0 }}>{icon}</div>
+        <div><div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{title}</div><div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>{sub}</div></div>
+      </button>
+    );
+    return wrap(<div>
+      <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 21, textAlign: "center", margin: "0 0 4px" }}>Bienvenue{displayName ? ", " + displayName.split(" ")[0] : ""} !</h1>
+      <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13, margin: "0 0 20px" }}>Connecté avec {email}. Choisis ton espace.</p>
+      {opt(() => { setErr(""); setStep("create"); }, "linear-gradient(135deg,var(--admin),#B08CFA)", <I.Shield size={17} color="#fff" />, "Créer un nouveau serveur", "Tu en seras l'administrateur")}
+      {opt(() => { setErr(""); setStep("join"); }, "linear-gradient(135deg,var(--accent),var(--accent-2))", <I.UserPlus size={17} color="#fff" />, "Rejoindre un serveur existant", "Avec un code d'invitation")}
+    </div>);
+  }
+
+  const isCreate = step === "create";
+  return wrap(<div>
+    <button onClick={() => { setStep("choose"); setErr(""); }} style={{ background: "none", border: "none", color: "var(--text-dimmer)", fontSize: 12.5, cursor: "pointer", padding: 0, marginBottom: 12 }}>← Retour</button>
+    <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 19, margin: "0 0 16px" }}>{isCreate ? "Nouveau serveur" : "Rejoindre un serveur"}</h1>
+    {isCreate
+      ? <Field label="Nom du serveur"><input value={serverName} onChange={e => setServerName(e.target.value)} placeholder="ex. Famille Borget" style={inputStyle} /></Field>
+      : <Field label="Code d'invitation"><input value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="ex. a1b2c3d4" style={inputStyle} /></Field>}
+    {identityFields}{errBox}
+    <button type="button" onClick={isCreate ? createServer : joinServer} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "…" : isCreate ? "Créer le serveur" : "Envoyer la demande"}</button>
+  </div>);
+}
+
 /* ---------------- Porte d'entrée : connexion ou création de compte ---------------- */
 function AuthGate({ notify }) {
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") === "signup" ? "signup" : "login"); // login | signup
@@ -436,6 +578,8 @@ function Login({ notify }) {
       </Field>
       {err && <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#FF9A8F", fontSize: 13, margin: "4px 0 14px" }}><I.Alert size={14} /> {err}</div>}
       <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Connexion…" : "Se connecter"}</button>
+      <OrDivider />
+      <GoogleButton label="Continuer avec Google" onError={setErr} />
     </div>
   );
 }
@@ -507,6 +651,9 @@ function Signup({ notify }) {
       <div style={cardStyle}>
         <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 22, textAlign: "center", margin: "0 0 4px" }}>Créer un compte</h1>
         <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13, margin: "0 0 22px" }}>Chaque serveur est un espace totalement séparé.</p>
+        <GoogleButton label="S'inscrire avec Google" onError={setErr} />
+        {err && <div style={{ color: "#FF9A8F", fontSize: 13, marginTop: 10 }}>{err}</div>}
+        <OrDivider />
         <button onClick={() => setStep("create")} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
           <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,var(--admin),#B08CFA)", display: "grid", placeItems: "center", flexShrink: 0 }}><I.Shield size={17} color="#fff" /></div>
           <div><div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>Créer un nouveau serveur</div><div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>Tu en seras l'administrateur</div></div>
