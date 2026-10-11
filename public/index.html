@@ -200,7 +200,14 @@ function Toast({ toast }) {
   return (<div key={toast.key} style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: toast.kind === "err" ? "#3A1F1E" : "var(--panel-2)", border: `1px solid ${toast.kind === "err" ? "#FF6B5E" : "var(--border-soft)"}`, color: "var(--text)", padding: "10px 18px", borderRadius: 10, fontSize: 14, zIndex: 50, animation: "riseIn .25s ease", boxShadow: "0 12px 30px rgba(0,0,0,.4)" }}>{toast.text}</div>);
 }
 function Spinner() { return <div style={{ width: 26, height: 26, borderRadius: "50%", border: "3px solid #2B303A", borderTopColor: "var(--accent)", animation: "spin .8s linear infinite" }} />; }
-function Shell({ children }) { return <div style={{ minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden" }}><GrainOverlay />{children}</div>; }
+function SiteFooter({ floating }) {
+  return (
+    <div style={{ textAlign: "center", fontSize: 12, color: "var(--text-dimmer)", padding: "22px 0 6px", ...(floating ? { position: "absolute", bottom: 10, left: 0, right: 0, padding: 0, zIndex: 1 } : {}) }}>
+      © 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget
+    </div>
+  );
+}
+function Shell({ children, footer }) { return <div style={{ minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden" }}><GrainOverlay />{children}{footer && <SiteFooter floating />}</div>; }
 
 /* ============================================================
    App racine
@@ -242,8 +249,8 @@ function App() {
 
   if (!session) {
     const inviteToken = new URLSearchParams(window.location.search).get("invite");
-    if (inviteToken) return <Shell><InviteAccept token={inviteToken} notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
-    return <Shell><AuthGate notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
+    if (inviteToken) return <Shell footer><InviteAccept token={inviteToken} notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
+    return <Shell footer><AuthGate notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
   }
 
   if (!profile) {
@@ -262,7 +269,7 @@ function App() {
   }
 
   if (profile.status === "pending") {
-    return <Shell><PendingScreen onLogout={() => supabase.auth.signOut()} />{toast && <Toast toast={toast} />}</Shell>;
+    return <Shell footer><PendingScreen onLogout={() => supabase.auth.signOut()} />{toast && <Toast toast={toast} />}</Shell>;
   }
 
   return (
@@ -595,6 +602,7 @@ function Workspace({ me, session, onLogout, notify }) {
         {tab === "tasks" && <TasksView me={me} isAdmin={isAdmin} myPerms={myPerms} accounts={accounts.filter(a => a.status !== "pending")} tasks={tasks} notify={notify} />}
         {tab === "messages" && <MessagesView me={me} myPerms={myPerms} accounts={accounts.filter(a => a.status !== "pending")} messages={messages} />}
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} notify={notify} />}
+        <SiteFooter />
       </main>
     </div>
   );
