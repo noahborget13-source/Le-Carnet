@@ -5,6 +5,11 @@
   ],
   "redirects": [
     {
+      "source": "/",
+      "destination": "/maintenance.html",
+      "permanent": false
+    },
+    {
       "source": "/((?!maintenance\\.html$|api/).*)",
       "destination": "/maintenance.html",
       "permanent": false
