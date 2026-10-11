@@ -1,4 +1,13 @@
 {
   "version": 2,
-  "crons": [{ "path": "/api/cron-reminders", "schedule": "0 7 * * *" }]
+  "crons": [
+    { "path": "/api/cron-reminders", "schedule": "0 7 * * *" }
+  ],
+  "redirects": [
+    {
+      "source": "/((?!maintenance\\.html$|api/).*)",
+      "destination": "/maintenance.html",
+      "permanent": false
+    }
+  ]
 }
