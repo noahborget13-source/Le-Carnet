@@ -575,7 +575,12 @@ function Workspace({ me, session, onLogout, notify }) {
         <nav style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
           {tabs.map(t => (<button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", cursor: "pointer", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: 500, textAlign: "left" }}><t.icon size={16} /> {t.label}</button>))}
         </nav>
-        <div className="app-sidebar-footer" style={{ marginTop: "auto", paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
+        <a className="app-sidebar-footer-label" href="https://mousticheck.netlify.app/" target="_blank" rel="noopener" style={{ display: "block", marginTop: "auto", textDecoration: "none", color: "var(--text)", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "10px 12px", fontSize: 12.5, lineHeight: 1.45 }}>
+          <div style={{ fontSize: 10, letterSpacing: 1, color: "var(--text-dimmer)", marginBottom: 3 }}>PUB</div>
+          <div style={{ fontWeight: 600 }}>🦟 MoustiCheck</div>
+          <div style={{ color: "var(--text-dim)" }}>Le suivi du risque moustiques près de chez toi.</div>
+        </a>
+        <div className="app-sidebar-footer" style={{ marginTop: 0, paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
           <div className="app-sidebar-footer-label" style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", marginBottom: 10 }}>
             <Avatar user={me} size={30} />
             <div style={{ minWidth: 0 }}>
