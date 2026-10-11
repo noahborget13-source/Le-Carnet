@@ -100,7 +100,7 @@ export default async function handler(req, res) {
       invite = data;
     }
 
-    const link = `${siteUrl(req)}/?invite=${invite.token}`;
+    const link = `${siteUrl(req)}/app/?invite=${invite.token}`;
     try {
       await sendMail({ to: invite.email, serverName, inviterName: caller.display_name || 'Un administrateur', role: invite.role, link });
     } catch (mailErr) {
