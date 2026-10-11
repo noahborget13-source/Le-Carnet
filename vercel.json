@@ -5,12 +5,7 @@
   ],
   "redirects": [
     {
-      "source": "/",
-      "destination": "/maintenance.html",
-      "permanent": false
-    },
-    {
-      "source": "/((?!maintenance\\.html$|api/).*)",
+      "source": "/((?!maintenance\\.html$|api/|_next/|assets/|.*\\.(?:css|js|png|jpg|jpeg|gif|svg|ico|json)$).*)",
       "destination": "/maintenance.html",
       "permanent": false
     }
