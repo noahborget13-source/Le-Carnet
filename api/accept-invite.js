@@ -14,6 +14,62 @@ const ROLE_DEFAULT_PERMS = {
   guest:     { createTasks: false, editAnyTask: false, editOwnTask: false, deleteAnyTask: false, deleteOwnTask: false, sendMessages: true },
 };
 
+
+const COLORS = ['#5B9EF5', '#5FBF8B', '#FFB648', '#F56BA8', '#9B7EF5', '#FF6B5E'];
+const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
+
+// Actions réservées à une personne déjà connectée avec Google (pas de token dans l'URL).
+async function handleGoogle(req, res, action) {
+  const bearer = (req.headers.authorization || '').replace('Bearer ', '');
+  if (!bearer) return res.status(401).json({ error: 'Non authentifié' });
+  const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(bearer);
+  const user = userData?.user;
+  if (userErr || !user) return res.status(401).json({ error: 'Session invalide' });
+  if (!(user.app_metadata?.providers || []).includes('google') || !user.email) {
+    return res.status(403).json({ error: "Seule une connexion Google vérifiée peut utiliser cette action." });
+  }
+  const email = user.email.toLowerCase();
+
+  const { data: existing } = await supabaseAdmin.from('profiles').select('id').eq('id', user.id).maybeSingle();
+  if (existing) return res.status(400).json({ error: 'Ce compte appartient déjà à un serveur.' });
+
+  const nowIso = new Date().toISOString();
+  const { data: invites } = await supabaseAdmin.from('invites').select('id, server_id, role, email')
+    .ilike('email', email).is('used_at', null).gt('expires_at', nowIso).order('created_at', { ascending: false });
+
+  if (action === 'my-invites') {
+    const out = [];
+    for (const inv of invites || []) {
+      const { data: server } = await supabaseAdmin.from('servers').select('name').eq('id', inv.server_id).single();
+      out.push({ id: inv.id, serverName: server?.name || 'Le Carnet', role: inv.role });
+    }
+    return res.status(200).json({ ok: true, invites: out });
+  }
+
+  // claim-invite
+  const { inviteId } = req.body;
+  const invite = (invites || []).find(i => i.id === inviteId);
+  if (!invite) return res.status(400).json({ error: "Invitation introuvable ou expirée." });
+  const username = String(req.body.username || '').trim();
+  const displayName = String(req.body.displayName || '').trim();
+  if (!username || !displayName) return res.status(400).json({ error: 'Identifiant et nom affiché requis.' });
+  if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Identifiant : 3 à 30 caractères (lettres, chiffres, . _ -).' });
+  const { data: taken } = await supabaseAdmin.from('profiles').select('id').ilike('username', username).limit(1);
+  if (taken && taken.length) return res.status(400).json({ error: 'Cet identifiant est déjà pris, choisis-en un autre.' });
+
+  const { error: profileErr } = await supabaseAdmin.from('profiles').insert({
+    id: user.id, server_id: invite.server_id, username, email: user.email, display_name: displayName,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    role: invite.role, permissions: ROLE_DEFAULT_PERMS[invite.role] || ROLE_DEFAULT_PERMS.member, status: 'approved',
+  });
+  if (profileErr) {
+    const msg = /duplicate|unique/i.test(profileErr.message) ? 'Cet identifiant est déjà pris, choisis-en un autre.' : profileErr.message;
+    return res.status(400).json({ error: msg });
+  }
+  await supabaseAdmin.from('invites').update({ used_at: nowIso }).eq('id', invite.id);
+  return res.status(200).json({ ok: true });
+}
+
 async function loadInvite(token) {
   if (!token || typeof token !== 'string' || token.length < 20) return { error: "Lien d'invitation invalide." };
   const { data: invite } = await supabaseAdmin.from('invites').select('*').eq('token', token).single();
@@ -29,6 +85,7 @@ export default async function handler(req, res) {
 
   try {
     const { action, token } = req.body || {};
+    if (action === 'my-invites' || action === 'claim-invite') return await handleGoogle(req, res, action);
     const loaded = await loadInvite(token);
     if (loaded.error) return res.status(400).json({ error: loaded.error });
     const { invite, serverName } = loaded;
