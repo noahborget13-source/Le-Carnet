@@ -3,1012 +3,249 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Le Carnet</title>
-<meta name="description" content="Le Carnet — organisez vos tâches en équipe : priorités, échéances, couleurs et messagerie." />
+<script>
+  // Anciens liens d'invitation (/?invite=...) : on les envoie vers l'application.
+  if (/[?&]invite=/.test(location.search)) location.replace('/app/' + location.search);
+</script>
+<title>Le Carnet — Gestion de tâches en équipe : priorités, échéances, calendrier</title>
+<meta name="description" content="Le Carnet : organisez vos tâches à plusieurs avec priorités, échéances, rappels par email, calendrier, sous-tâches, commentaires et messagerie. Chaque équipe a son propre espace." />
+<link rel="canonical" href="https://le-carnet-beta.vercel.app/" />
+<meta name="theme-color" content="#14171C" />
+<meta property="og:type" content="website" />
+<meta property="og:locale" content="fr_FR" />
+<meta property="og:site_name" content="Le Carnet" />
+<meta property="og:title" content="Le Carnet — Gestion de tâches en équipe" />
+<meta property="og:description" content="Priorités, échéances, rappels par email, calendrier et messagerie : organisez vos tâches à plusieurs, dans votre propre espace." />
+<meta property="og:url" content="https://le-carnet-beta.vercel.app/" />
+<meta name="twitter:card" content="summary" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.28.4/babel.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Le Carnet",
+  "url": "https://le-carnet-beta.vercel.app/",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Tous (navigateur web)",
+  "inLanguage": "fr",
+  "description": "Application web de gestion de tâches en équipe : priorités, échéances, rappels par email, calendrier, sous-tâches, commentaires et messagerie.",
+  "author": { "@type": "Person", "name": "Noah Borget" }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "Qu'est-ce qu'un serveur dans Le Carnet ?", "acceptedAnswer": { "@type": "Answer", "text": "Un serveur est l'espace d'une équipe, d'une famille ou d'un groupe d'amis. Les tâches et les membres d'un serveur sont totalement séparés de ceux des autres serveurs." } },
+    { "@type": "Question", "name": "Comment inviter quelqu'un ?", "acceptedAnswer": { "@type": "Answer", "text": "L'administrateur du serveur peut envoyer une invitation par email, ou donner le code d'invitation du serveur. Dans ce dernier cas, la demande d'accès doit être approuvée par l'administrateur." } },
+    { "@type": "Question", "name": "Mes tâches sont-elles visibles par tout le monde ?", "acceptedAnswer": { "@type": "Answer", "text": "Non. Seuls les membres approuvés de ton serveur voient ses tâches. Les messages privés ne sont visibles que par les deux personnes concernées." } },
+    { "@type": "Question", "name": "Peut-on choisir ce que chaque personne a le droit de faire ?", "acceptedAnswer": { "@type": "Answer", "text": "Oui. Chaque personne est modérateur, membre ou invité, et l'administrateur peut ajuster ses droits un par un : créer, modifier ou supprimer des tâches, envoyer des messages." } },
+    { "@type": "Question", "name": "Faut-il installer quelque chose ?", "acceptedAnswer": { "@type": "Answer", "text": "Non. Le Carnet fonctionne dans le navigateur, sur ordinateur comme sur téléphone." } }
+  ]
+}
+</script>
 <style>
   :root {
     --bg: #14171C; --bg-2: #1B1F26; --panel: #1D2128; --panel-2: #20242C;
     --border: #262B34; --border-soft: #2B303A; --text: #EDEBE3;
-    --text-dim: #9098A8; --text-dimmer: #6C7484;
-    --accent: #5B6EF5; --accent-2: #6E7BF8; --admin: #9B7EF5;
+    --text-dim: #9AA2B2; --text-dimmer: #6C7484;
+    --accent: #5B6EF5; --accent-2: #6E7BF8; --violet: #9B7EF5;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
+  html { scroll-behavior: smooth; }
   body {
+    margin: 0; color: var(--text); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; line-height: 1.6;
     background: radial-gradient(1200px 800px at 12% -12%, #232838 0%, transparent 55%),
       radial-gradient(900px 700px at 100% 0%, #1c2836 0%, transparent 45%), var(--bg);
-    color: var(--text); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
   }
-  #root { min-height: 100%; }
-  input, select, textarea, button { font-family: inherit; }
-  ::-webkit-scrollbar { width: 9px; height: 9px; }
-  ::-webkit-scrollbar-thumb { background: #2C313B; border-radius: 6px; }
-  .paper { background-color: var(--panel); background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.028) 1px, transparent 0); background-size: 14px 14px; }
-  .fade-in { animation: fadeIn .35s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
-  @keyframes riseIn { from { opacity: 0; transform: translate(-50%, 10px);} to { opacity: 1; transform: translate(-50%, 0);} }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  a { color: inherit; }
+  h1, h2, h3 { font-family: 'Fraunces', Georgia, serif; font-weight: 600; line-height: 1.15; margin: 0; }
+  .wrap { width: min(1080px, 100% - 32px); margin: 0 auto; }
+  .btn { display: inline-block; text-decoration: none; font-weight: 600; font-size: 15px; padding: 12px 22px; border-radius: 10px; border: 1px solid var(--border-soft); color: var(--text); background: transparent; }
+  .btn.primary { border: none; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 10px 24px rgba(91,110,245,.3); }
+  .btn.small { padding: 8px 16px; font-size: 14px; }
 
-  @media (max-width: 760px) {
-    .app-shell { flex-direction: column; }
-    .app-sidebar {
-      width: 100% !important; flex-direction: row !important; align-items: center;
-      padding: 10px 12px !important; border-right: none !important; border-top: 1px solid var(--border);
-      order: 2; gap: 0 !important; overflow-x: auto;
-    }
-    .app-sidebar-brand, .app-sidebar-footer-label { display: none !important; }
-    .app-sidebar nav { flex-direction: row !important; margin-top: 0 !important; flex: 1; justify-content: space-around; }
-    .app-sidebar nav button { flex-direction: column; gap: 3px !important; font-size: 10.5px !important; padding: 6px 10px !important; }
-    .app-sidebar-footer { margin-top: 0 !important; padding-top: 0 !important; border-top: none !important; flex-direction: row-reverse; gap: 8px; }
-    .app-main { padding: 16px 14px !important; order: 1; }
-    .task-toolbar { gap: 8px !important; }
-    .modal-card { padding: 20px 18px !important; }
+  nav.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: 'Fraunces', serif; font-size: 20px; }
+  .links { display: flex; align-items: center; gap: 22px; font-size: 14.5px; color: var(--text-dim); }
+  .links a { text-decoration: none; }
+  .links a:hover { color: var(--text); }
+  .nav-actions { display: flex; gap: 10px; }
+
+  .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; padding: 56px 0 72px; }
+  .eyebrow { display: inline-block; font-size: 12.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-2); font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: clamp(34px, 5.2vw, 56px); letter-spacing: -0.01em; }
+  .hero h1 em { font-style: normal; background: linear-gradient(135deg, #8E9CFF, var(--violet)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p.lead { font-size: 18px; color: var(--text-dim); margin: 20px 0 28px; max-width: 520px; }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .hero small { display: block; margin-top: 16px; color: var(--text-dimmer); font-size: 13px; }
+
+  /* aperçu de l'application */
+  .mock { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 18px; padding: 18px; box-shadow: 0 40px 80px rgba(0,0,0,.5); transform: rotate(1.2deg); }
+  .mock-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .mock-head b { font-family: 'Fraunces', serif; font-size: 19px; }
+  .mock-head span { font-size: 12px; color: #FF9A8F; }
+  .task { display: flex; align-items: center; gap: 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 9px; padding: 12px 14px 12px 0; }
+  .task i { width: 5px; align-self: stretch; flex-shrink: 0; }
+  .task .t { flex: 1; min-width: 0; }
+  .task .t strong { font-size: 14px; display: block; }
+  .task .t small { color: var(--text-dimmer); font-size: 12px; }
+  .task .due { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+  .task .due.late { color: #FF9A8F; }
+  .av { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 700; color: #fff; }
+  .pill { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 6px; margin-left: 6px; }
+
+  section { padding: 64px 0; }
+  .section-head { max-width: 640px; margin-bottom: 36px; }
+  .section-head h2 { font-size: clamp(27px, 3.6vw, 38px); }
+  .section-head p { color: var(--text-dim); margin: 12px 0 0; font-size: 16.5px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+  .card .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; font-size: 19px; margin-bottom: 14px; background: #5B6EF51F; }
+  .card h3 { font-size: 18px; margin-bottom: 6px; }
+  .card p { margin: 0; color: var(--text-dim); font-size: 14.5px; }
+
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; counter-reset: s; }
+  .step { position: relative; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px 22px 22px; }
+  .step::before { counter-increment: s; content: counter(s); position: absolute; top: -14px; left: 20px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; background: linear-gradient(135deg, var(--accent), var(--violet)); color: #fff; }
+  .step h3 { font-size: 18px; margin-bottom: 6px; }
+  .step p { margin: 0; color: var(--text-dim); font-size: 14.5px; }
+
+  table.roles { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; font-size: 14px; }
+  .roles th, .roles td { padding: 12px 14px; text-align: center; border-bottom: 1px solid var(--border); }
+  .roles th:first-child, .roles td:first-child { text-align: left; }
+  .roles th { background: var(--panel-2); font-size: 13px; color: var(--text-dim); }
+  .roles tr:last-child td { border-bottom: none; }
+  .yes { color: #5FBF8B; font-weight: 700; } .no { color: var(--text-dimmer); }
+  .roles-wrap { overflow-x: auto; }
+  .note { color: var(--text-dimmer); font-size: 13.5px; margin-top: 12px; }
+
+  details { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 10px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 16px; }
+  details p { color: var(--text-dim); margin: 10px 0 0; font-size: 15px; }
+
+  .final { text-align: center; background: radial-gradient(600px 300px at 50% 0%, #2b3150 0%, transparent 70%), var(--panel); border: 1px solid var(--border-soft); border-radius: 22px; padding: 56px 24px; }
+  .final h2 { font-size: clamp(27px, 3.6vw, 38px); margin-bottom: 12px; }
+  .final p { color: var(--text-dim); margin: 0 0 26px; }
+  .final .cta-row { justify-content: center; }
+
+  footer { text-align: center; color: var(--text-dimmer); font-size: 13px; padding: 36px 0 40px; }
+
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: 1fr; padding-top: 28px; gap: 36px; }
+    .mock { transform: none; }
+    .links { display: none; }
+    section { padding: 48px 0; }
+  }
+  @media (max-width: 420px) {
+    .nav-actions .btn.small:first-child { display: none; }
   }
 </style>
 </head>
 <body>
-<div id="root"></div>
-<script>
-  window.addEventListener('error', function (e) {
-    var root = document.getElementById('root');
-    if (root && !root.hasChildNodes()) {
-      var detail = (e.message || 'Erreur inconnue') + (e.filename ? ' — ' + e.filename.split('/').pop() + (e.lineno ? ':' + e.lineno : '') : '');
-      root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#14171C;color:#EDEBE3;font-family:system-ui,sans-serif;text-align:center;"><div><p style="font-weight:600;margin-bottom:8px;">Le Carnet n\'a pas pu se charger.</p><p style="color:#9098A8;font-size:13px;max-width:460px;word-break:break-word;">' + detail + '</p></div></div>';
-    }
-  });
+<div class="wrap">
+  <nav class="top" aria-label="Navigation principale">
+    <a class="brand" href="/" aria-label="Le Carnet — accueil">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="2" width="18" height="20" rx="2.5" fill="#5B6EF5" opacity="0.15"/><rect x="3" y="2" width="18" height="20" rx="2.5" stroke="#5B6EF5" stroke-width="1.5"/><line x1="7" y1="7" x2="15" y2="7" stroke="#9B7EF5" stroke-width="1.5" stroke-linecap="round"/><line x1="7" y1="11" x2="17" y2="11" stroke="#5B9EF5" stroke-width="1.5" stroke-linecap="round"/><line x1="7" y1="15" x2="13" y2="15" stroke="#5FBF8B" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Le Carnet
+    </a>
+    <div class="links"><a href="#fonctionnalites">Fonctionnalités</a><a href="#comment">Comment ça marche</a><a href="#roles">Droits</a><a href="#faq">FAQ</a></div>
+    <div class="nav-actions"><a class="btn small" href="/app/">Se connecter</a><a class="btn small primary" href="/app/?tab=signup">Créer un compte</a></div>
+  </nav>
 
-  // ⚠️ À REMPLIR après création de ton projet Supabase (voir README.md)
-  window.SUPABASE_URL = "https://ovkjhtqzbgdlylxhhkjc.supabase.co";
-  window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4";
-</script>
-<script type="text/babel" data-presets="react">
-if (!window.__LE_CARNET_BOOTED__) {
-window.__LE_CARNET_BOOTED__ = true;
-const { useState, useEffect, useRef, useMemo } = React;
-const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-
-/* ============================================================
-   LE CARNET — version hébergée (Supabase + Vercel)
-   ============================================================ */
-const LABELS = [
-  { id: "corail",  hex: "#FF6B5E", name: "Corail" },
-  { id: "ambre",   hex: "#FFB648", name: "Ambre" },
-  { id: "sauge",   hex: "#5FBF8B", name: "Sauge" },
-  { id: "azur",    hex: "#5B9EF5", name: "Azur" },
-  { id: "violet",  hex: "#9B7EF5", name: "Violette" },
-  { id: "rose",    hex: "#F56BA8", name: "Rose" },
-];
-const PRIORITIES = [
-  { id: 3, label: "Urgente", hex: "#FF6B5E" },
-  { id: 2, label: "Normale", hex: "#FFB648" },
-  { id: 1, label: "Basse",   hex: "#5FBF8B" },
-];
-const ROLES = [
-  { id: "moderator", label: "Modérateur" },
-  { id: "member",    label: "Membre" },
-  { id: "guest",     label: "Invité" },
-];
-const ROLE_DEFAULT_PERMS = {
-  moderator: { createTasks: true,  editAnyTask: true,  editOwnTask: true,  deleteAnyTask: true,  deleteOwnTask: true,  sendMessages: true },
-  member:    { createTasks: true,  editAnyTask: false, editOwnTask: true,  deleteAnyTask: false, deleteOwnTask: true,  sendMessages: true },
-  guest:     { createTasks: false, editAnyTask: false, editOwnTask: false, deleteAnyTask: false, deleteOwnTask: false, sendMessages: true },
-};
-const PERM_LABELS = [
-  { key: "createTasks",  label: "Créer des tâches" },
-  { key: "editOwnTask",  label: "Modifier ses propres tâches" },
-  { key: "editAnyTask",  label: "Modifier toutes les tâches" },
-  { key: "deleteOwnTask", label: "Supprimer ses propres tâches" },
-  { key: "deleteAnyTask", label: "Supprimer toutes les tâches" },
-  { key: "sendMessages", label: "Envoyer des messages" },
-];
-function effectivePerms(account) {
-  if (!account) return {};
-  if (account.role === "admin") return { createTasks: true, editAnyTask: true, editOwnTask: true, deleteAnyTask: true, deleteOwnTask: true, sendMessages: true };
-  const base = ROLE_DEFAULT_PERMS[account.role] || ROLE_DEFAULT_PERMS.member;
-  return { ...base, ...(account.permissions || {}) };
-}
-const uid = () => Math.random().toString(36).slice(2, 10);
-const todayISO = () => new Date().toISOString().slice(0, 10);
-function daysUntil(dateStr) {
-  if (!dateStr) return null;
-  const d = new Date(dateStr + "T00:00:00");
-  const t = new Date(todayISO() + "T00:00:00");
-  return Math.round((d - t) / 86400000);
-}
-function formatDue(due, dleft) {
-  if (dleft === 0) return "Aujourd'hui";
-  if (dleft === 1) return "Demain";
-  if (dleft < 0) return `En retard (${Math.abs(dleft)} j)`;
-  if (dleft <= 7) return `Dans ${dleft} j`;
-  const d = new Date(due + "T00:00:00");
-  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
-}
-async function callApi(path, body, session) {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(session ? { Authorization: "Bearer " + session.access_token } : {}) },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Erreur serveur");
-  return data;
-}
-
-/* ---------------- Icônes ---------------- */
-function Icon({ path, size = 16, ...rest }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...rest}>{path}</svg>;
-}
-const I = {
-  Plus: p => <Icon {...p} path={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>} />,
-  X: p => <Icon {...p} path={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} />,
-  Send: p => <Icon {...p} path={<><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>} />,
-  Shield: p => <Icon {...p} path={<path d="M12 2 4 5v6c0 5 3.4 9 8 11 4.6-2 8-6 8-11V5l-8-3z"/>} />,
-  Trash: p => <Icon {...p} path={<><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></>} />,
-  UserPlus: p => <Icon {...p} path={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></>} />,
-  Flag: p => <Icon {...p} path={<><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></>} />,
-  Calendar: p => <Icon {...p} path={<><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>} />,
-  Message: p => <Icon {...p} path={<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>} />,
-  Check: p => <Icon {...p} path={<><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></>} />,
-  Circle: p => <Icon {...p} path={<circle cx="12" cy="12" r="10"/>} />,
-  Chevron: p => <Icon {...p} path={<polyline points="6 9 12 15 18 9"/>} />,
-  Search: p => <Icon {...p} path={<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>} />,
-  Filter: p => <Icon {...p} path={<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>} />,
-  Sort: p => <Icon {...p} path={<><path d="M3 16l4 4 4-4"/><path d="M7 20V4"/><path d="M21 8l-4-4-4 4"/><path d="M17 4v16"/></>} />,
-  Palette: p => <Icon {...p} path={<><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2a10 10 0 1 0 0 20c1.5 0 2-1 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8z"/></>} />,
-  Alert: p => <Icon {...p} path={<><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>} />,
-  Settings: p => <Icon {...p} path={<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>} />,
-  LogOut: p => <Icon {...p} path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>} />,
-  Lock: p => <Icon {...p} path={<><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>} />,
-  Eye: p => <Icon {...p} path={<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>} />,
-  EyeOff: p => <Icon {...p} path={<><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.6 21.6 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>} />,
-};
-function NotebookMark({ size = 22 }) {
-  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <rect x="3" y="2" width="18" height="20" rx="2.5" fill="#5B6EF5" opacity="0.15" />
-    <rect x="3" y="2" width="18" height="20" rx="2.5" stroke="#5B6EF5" strokeWidth="1.5" />
-    <line x1="7" y1="7" x2="15" y2="7" stroke="#9B7EF5" strokeWidth="1.5" strokeLinecap="round" />
-    <line x1="7" y1="11" x2="17" y2="11" stroke="#5B9EF5" strokeWidth="1.5" strokeLinecap="round" />
-    <line x1="7" y1="15" x2="13" y2="15" stroke="#5FBF8B" strokeWidth="1.5" strokeLinecap="round" />
-  </svg>);
-}
-
-const inputStyle = { width: "100%", background: "#14171C", border: "1px solid var(--border-soft)", borderRadius: 9, padding: "10px 12px", color: "var(--text)", fontSize: 14, outline: "none", boxSizing: "border-box" };
-const primaryBtn = { background: "linear-gradient(135deg,var(--accent),var(--accent-2))", border: "none", color: "#fff", fontWeight: 600, fontSize: 14, padding: "10px 0", borderRadius: 9, cursor: "pointer", boxShadow: "0 10px 24px rgba(91,110,245,.3)" };
-const secondaryBtn = { background: "transparent", border: "1px solid var(--border-soft)", color: "var(--text-dim)", fontWeight: 600, fontSize: 14, padding: "10px 0", borderRadius: 9, cursor: "pointer" };
-const iconBtn = { background: "transparent", border: "1px solid var(--border-soft)", color: "var(--text-dim)", borderRadius: 7, padding: 6, cursor: "pointer", display: "grid", placeItems: "center" };
-const chipBtn = { background: "var(--bg-2)", border: "1px solid var(--border-soft)", color: "var(--text-dim)", fontSize: 13, padding: "8px 12px", borderRadius: 8, cursor: "pointer", position: "relative" };
-const overlayStyle = { position: "fixed", inset: 0, background: "rgba(10,12,16,.6)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", zIndex: 40, padding: 20 };
-const modalStyle = { width: 440, maxWidth: "100%", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "26px 26px 24px", boxShadow: "0 30px 60px rgba(0,0,0,.5)", maxHeight: "88vh", overflowY: "auto" };
-const eyeBtn = { position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "var(--text-dimmer)", cursor: "pointer", padding: 4 };
-
-function Field({ label, children }) { return (<label style={{ display: "block", marginBottom: 14 }}><div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 6, fontWeight: 500 }}>{label}</div>{children}</label>); }
-function EmptyState({ text }) { return (<div style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "40px 20px", textAlign: "center", color: "var(--text-dimmer)", fontSize: 14 }}>{text}</div>); }
-function GrainOverlay() { return (<svg style={{ position: "fixed", inset: 0, width: "100%", height: "100%", opacity: 0.03, pointerEvents: "none", zIndex: 0 }}><filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" /></filter><rect width="100%" height="100%" filter="url(#grain)" /></svg>); }
-function Avatar({ user, size = 28 }) {
-  const initials = ((user && (user.display_name || user.username)) || "?").slice(0, 2).toUpperCase();
-  return (<div style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: (user && user.color) || "#5B6EF5", display: "grid", placeItems: "center", fontSize: size * 0.38, fontWeight: 700, color: "#14171C" }}>{initials}</div>);
-}
-function Toast({ toast }) {
-  return (<div key={toast.key} style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: toast.kind === "err" ? "#3A1F1E" : "var(--panel-2)", border: `1px solid ${toast.kind === "err" ? "#FF6B5E" : "var(--border-soft)"}`, color: "var(--text)", padding: "10px 18px", borderRadius: 10, fontSize: 14, zIndex: 50, animation: "riseIn .25s ease", boxShadow: "0 12px 30px rgba(0,0,0,.4)" }}>{toast.text}</div>);
-}
-function Spinner() { return <div style={{ width: 26, height: 26, borderRadius: "50%", border: "3px solid #2B303A", borderTopColor: "var(--accent)", animation: "spin .8s linear infinite" }} />; }
-function SiteFooter({ floating }) {
-  return (
-    <div style={{ textAlign: "center", fontSize: 12, color: "var(--text-dimmer)", padding: "22px 0 6px", ...(floating ? { position: "absolute", bottom: 10, left: 0, right: 0, padding: 0, zIndex: 1 } : {}) }}>
-      © 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget
-    </div>
-  );
-}
-function Shell({ children, footer }) { return <div style={{ minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden" }}><GrainOverlay />{children}{footer && <SiteFooter floating />}</div>; }
-
-/* ============================================================
-   App racine
-   ============================================================ */
-function App() {
-  const [session, setSession] = useState(undefined); // undefined = chargement, null = déconnecté
-  const [profile, setProfile] = useState(null);
-  const [toast, setToast] = useState(null);
-  const notify = (text, kind = "ok") => {
-    setToast({ text, kind, key: uid() });
-    clearTimeout(notify._t);
-    notify._t = setTimeout(() => setToast(null), 3200);
-  };
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  const [profileChecked, setProfileChecked] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadProfile() {
-      if (session === undefined) return;
-      if (!session) { setProfile(null); setProfileChecked(true); return; }
-      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-      if (!cancelled) { setProfile(data || null); setProfileChecked(true); }
-    }
-    loadProfile();
-    const id = setInterval(loadProfile, 8000); // revérifie si une demande a été approuvée
-    return () => { cancelled = true; clearInterval(id); };
-  }, [session]);
-
-  if (session === undefined || !profileChecked) {
-    return <Shell><div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><Spinner /></div></Shell>;
-  }
-
-  if (!session) {
-    const inviteToken = new URLSearchParams(window.location.search).get("invite");
-    if (inviteToken) return <Shell footer><InviteAccept token={inviteToken} notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
-    return <Shell footer><AuthGate notify={notify} />{toast && <Toast toast={toast} />}</Shell>;
-  }
-
-  if (!profile) {
-    return (
-      <Shell>
-        <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-          <div style={{ maxWidth: 380, textAlign: "center", background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 16, padding: 32 }}>
-            <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 19, margin: "0 0 8px" }}>Aucun accès</h1>
-            <p style={{ color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6, marginBottom: 20 }}>Ton compte n'est rattaché à aucun serveur pour l'instant. Demande un nouveau code d'invitation, ou crée ton propre serveur.</p>
-            <button onClick={() => supabase.auth.signOut()} style={{ ...secondaryBtn, width: "100%" }}>Se déconnecter</button>
-          </div>
-        </div>
-        {toast && <Toast toast={toast} />}
-      </Shell>
-    );
-  }
-
-  if (profile.status === "pending") {
-    return <Shell footer><PendingScreen onLogout={() => supabase.auth.signOut()} />{toast && <Toast toast={toast} />}</Shell>;
-  }
-
-  return (
-    <Shell>
-      <Workspace me={profile} session={session} onLogout={() => supabase.auth.signOut()} notify={notify} />
-      {toast && <Toast toast={toast} />}
-    </Shell>
-  );
-}
-
-/* ---------------- Acceptation d'une invitation reçue par email ---------------- */
-function InviteAccept({ token, notify }) {
-  const [info, setInfo] = useState(null);
-  const [loadErr, setLoadErr] = useState("");
-  const [username, setUsername] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPw, setShowPw] = useState(false);
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    callApi('/api/accept-invite', { action: 'check', token })
-      .then(setInfo)
-      .catch(e => setLoadErr(e.message));
-  }, [token]);
-
-  const goHome = () => { window.location.href = window.location.pathname; };
-
-  const submit = async () => {
-    if (busy) return;
-    setBusy(true); setErr("");
-    try {
-      await callApi('/api/accept-invite', { action: 'accept', token, username: username.trim(), displayName: displayName.trim(), password });
-      const { error } = await supabase.auth.signInWithPassword({ email: info.email, password });
-      if (error) throw new Error("Compte créé, mais la connexion a échoué. Connecte-toi manuellement.");
-      window.history.replaceState({}, "", window.location.pathname);
-    } catch (e) { setErr(e.message); }
-    setBusy(false);
-  };
-
-  return (
-    <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <div onKeyDown={(e) => { if (e.key === "Enter" && info) submit(); }} style={{ width: 400, maxWidth: "92vw", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><NotebookMark size={34} /></div>
-        {!info && !loadErr && <div style={{ display: "grid", placeItems: "center", padding: 20 }}><Spinner /></div>}
-        {loadErr && (
-          <div style={{ textAlign: "center" }}>
-            <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 20, margin: "0 0 10px" }}>Invitation indisponible</h1>
-            <p style={{ color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6, marginBottom: 20 }}>{loadErr}</p>
-            <button type="button" onClick={goHome} style={{ ...secondaryBtn, width: "100%" }}>Aller à la connexion</button>
-          </div>
-        )}
-        {info && (
-          <div>
-            <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 21, textAlign: "center", margin: "0 0 4px" }}>Rejoindre « {info.serverName} »</h1>
-            <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13, margin: "0 0 20px" }}>Crée ton compte pour {info.email}</p>
-            <Field label="Identifiant (pour te connecter)"><input autoFocus value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
-            <Field label="Nom affiché"><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
-            <Field label="Mot de passe (8 caractères minimum)">
-              <div style={{ position: "relative" }}>
-                <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: 40 }} />
-                <button type="button" onClick={() => setShowPw(v => !v)} style={eyeBtn}>{showPw ? <I.EyeOff size={16} /> : <I.Eye size={16} />}</button>
-              </div>
-            </Field>
-            {err && <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#FF9A8F", fontSize: 13, margin: "4px 0 14px" }}><I.Alert size={14} /> {err}</div>}
-            <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Création…" : "Créer mon compte"}</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Porte d'entrée : connexion ou création de compte ---------------- */
-function AuthGate({ notify }) {
-  const [tab, setTab] = useState("login"); // login | signup
-
-  return (
-    <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, position: "absolute", top: 28, left: 32 }}><NotebookMark size={26} /><span style={{ fontFamily: "Fraunces, serif", fontSize: 19 }}>Le Carnet</span></div>
-      <div style={{ width: 400, maxWidth: "92vw" }}>
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, background: "var(--bg-2)", padding: 4, borderRadius: 11 }}>
-          <button onClick={() => setTab("login")} style={{
-            flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 600,
-            background: tab === "login" ? "var(--panel-2)" : "transparent", color: tab === "login" ? "var(--text)" : "var(--text-dim)",
-          }}>Se connecter</button>
-          <button onClick={() => setTab("signup")} style={{
-            flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 600,
-            background: tab === "signup" ? "var(--panel-2)" : "transparent", color: tab === "signup" ? "var(--text)" : "var(--text-dim)",
-          }}>Créer un compte</button>
-        </div>
-        {tab === "login" ? <Login notify={notify} /> : <Signup notify={notify} />}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Login ---------------- */
-function Login({ notify }) {
-  const [identifier, setIdentifier] = useState(""); // username OU email
-  const [password, setPassword] = useState("");
-  const [showPw, setShowPw] = useState(false);
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    if (busy) return;
-    setBusy(true); setErr("");
-    try {
-      let email = identifier.trim();
-      if (!email.includes("@")) {
-        const { data } = await supabase.rpc('email_for_username', { p_username: identifier.trim() });
-        if (!data) throw new Error("Identifiant ou mot de passe incorrect.");
-        email = data;
-      }
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw new Error("Identifiant ou mot de passe incorrect.");
-    } catch (e) { setErr(e.message); }
-    setBusy(false);
-  };
-  const onKey = (e) => { if (e.key === "Enter") submit(); };
-
-  return (
-    <div onKeyDown={onKey} style={{ width: "100%", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" }}>
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><div style={{ width: 48, height: 48, borderRadius: 13, background: "linear-gradient(135deg,var(--accent),var(--accent-2))", display: "grid", placeItems: "center", boxShadow: "0 8px 20px rgba(91,110,245,.35)" }}><I.Lock size={20} color="#fff" /></div></div>
-      <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 22, textAlign: "center", margin: "0 0 4px" }}>Content de vous revoir</h1>
-      <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13, margin: "0 0 22px" }}>Connecte-toi à ton serveur.</p>
-      <Field label="Identifiant ou email"><input autoFocus value={identifier} onChange={e => setIdentifier(e.target.value)} style={inputStyle} /></Field>
-      <Field label="Mot de passe">
-        <div style={{ position: "relative" }}>
-          <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: 40 }} />
-          <button type="button" onClick={() => setShowPw(s => !s)} style={eyeBtn}>{showPw ? <I.EyeOff size={16} /> : <I.Eye size={16} />}</button>
-        </div>
-      </Field>
-      {err && <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#FF9A8F", fontSize: 13, margin: "4px 0 14px" }}><I.Alert size={14} /> {err}</div>}
-      <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Connexion…" : "Se connecter"}</button>
-    </div>
-  );
-}
-
-/* ---------------- Création de compte : nouveau serveur ou rejoindre ---------------- */
-function Signup({ notify }) {
-  const [step, setStep] = useState("choose"); // choose | create | join | done-pending
-  const [serverName, setServerName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
-  const [username, setUsername] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const doSignupCore = async () => {
-    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
-    if (error) throw error;
-    let session = data.session;
-    if (!session) {
-      // Confirmation email activée côté Supabase : on tente une connexion directe
-      // (fonctionne si la confirmation est désactivée malgré tout).
-      const r = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (r.error) throw new Error("Vérifie ta boîte mail pour confirmer ton compte, puis reviens te connecter.");
-      session = r.data.session;
-    }
-    return session;
-  };
-
-  const createServer = async () => {
-    if (!serverName.trim() || !username.trim() || !displayName.trim() || !email.trim() || !password) return;
-    setBusy(true); setErr("");
-    try {
-      const session = await doSignupCore();
-      const { data: server, error: sErr } = await supabase.from('servers').insert({ name: serverName.trim(), owner_id: session.user.id }).select().single();
-      if (sErr) throw sErr;
-      const { error: pErr } = await supabase.from('profiles').insert({
-        id: session.user.id, server_id: server.id, username: username.trim(), email: email.trim(),
-        display_name: displayName.trim(), color: "#9B7EF5",
-      });
-      if (pErr) throw pErr;
-      notify("Ton serveur est prêt !");
-    } catch (e) { setErr(e.message); }
-    setBusy(false);
-  };
-
-  const joinServer = async () => {
-    if (!joinCode.trim() || !username.trim() || !displayName.trim() || !email.trim() || !password) return;
-    setBusy(true); setErr("");
-    try {
-      const session = await doSignupCore();
-      const { data: server, error: sErr } = await supabase.from('servers').select('id,name').eq('join_code', joinCode.trim().toLowerCase()).single();
-      if (sErr || !server) throw new Error("Code d'invitation introuvable.");
-      const { error: pErr } = await supabase.from('profiles').insert({
-        id: session.user.id, server_id: server.id, username: username.trim(), email: email.trim(),
-        display_name: displayName.trim(), color: "#5B9EF5",
-      });
-      if (pErr) throw pErr;
-      setStep("done-pending");
-    } catch (e) { setErr(e.message); }
-    setBusy(false);
-  };
-
-  const cardStyle = { width: "100%", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" };
-
-  if (step === "choose") {
-    return (
-      <div style={cardStyle}>
-        <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 22, textAlign: "center", margin: "0 0 4px" }}>Créer un compte</h1>
-        <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13, margin: "0 0 22px" }}>Chaque serveur est un espace totalement séparé.</p>
-        <button onClick={() => setStep("create")} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
-          <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,var(--admin),#B08CFA)", display: "grid", placeItems: "center", flexShrink: 0 }}><I.Shield size={17} color="#fff" /></div>
-          <div><div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>Créer un nouveau serveur</div><div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>Tu en seras l'administrateur</div></div>
-        </button>
-        <button onClick={() => setStep("join")} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "14px 16px", cursor: "pointer" }}>
-          <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,var(--accent),var(--accent-2))", display: "grid", placeItems: "center", flexShrink: 0 }}><I.UserPlus size={17} color="#fff" /></div>
-          <div><div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>Rejoindre un serveur existant</div><div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>Avec un code d'invitation</div></div>
-        </button>
-      </div>
-    );
-  }
-
-  if (step === "done-pending") {
-    return (
-      <div style={cardStyle}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><I.Check size={34} color="#5FBF8B" /></div>
-        <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 20, textAlign: "center", margin: "0 0 8px" }}>Demande envoyée</h1>
-        <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6 }}>L'administrateur de ce serveur doit approuver ta demande. Tu peux patienter sur cette page, ou revenir plus tard en te connectant.</p>
-      </div>
-    );
-  }
-
-  const isCreate = step === "create";
-  return (
-    <div style={cardStyle}>
-      <button onClick={() => { setStep("choose"); setErr(""); }} style={{ background: "none", border: "none", color: "var(--text-dimmer)", fontSize: 12.5, cursor: "pointer", padding: 0, marginBottom: 14 }}>← Retour</button>
-      <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 19, margin: "0 0 18px" }}>{isCreate ? "Nouveau serveur" : "Rejoindre un serveur"}</h1>
-      {isCreate
-        ? <Field label="Nom du serveur"><input value={serverName} onChange={e => setServerName(e.target.value)} placeholder="ex. Famille Borget" style={inputStyle} /></Field>
-        : <Field label="Code d'invitation"><input value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="ex. a1b2c3d4" style={inputStyle} /></Field>}
-      <Field label="Nom affiché"><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
-      <Field label="Identifiant"><input value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
-      <Field label="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} /></Field>
-      <Field label="Mot de passe"><input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} /></Field>
-      {err && <div style={{ color: "#FF9A8F", fontSize: 13, marginBottom: 14 }}>{err}</div>}
-      <button type="button" onClick={isCreate ? createServer : joinServer} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>
-        {busy ? "…" : isCreate ? "Créer le serveur" : "Envoyer la demande"}
-      </button>
-    </div>
-  );
-}
-
-/* ---------------- Écran d'attente d'approbation ---------------- */
-function PendingScreen({ onLogout }) {
-  return (
-    <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <div style={{ maxWidth: 400, textAlign: "center", background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 16, padding: 32 }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><NotebookMark size={34} /></div>
-        <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 19, margin: "0 0 8px" }}>En attente d'approbation</h1>
-        <p style={{ color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6, marginBottom: 20 }}>L'administrateur de ce serveur n'a pas encore validé ta demande. Reviens un peu plus tard — cette page se met à jour automatiquement.</p>
-        <button onClick={onLogout} style={{ ...secondaryBtn, width: "100%" }}>Se déconnecter</button>
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   Workspace
-   ============================================================ */
-function Workspace({ me, session, onLogout, notify }) {
-  const [tab, setTab] = useState("tasks");
-  const [tasks, setTasks] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const myPerms = useMemo(() => effectivePerms(me), [me]);
-  const isAdmin = me.role === "admin";
-
-  useEffect(() => {
-    supabase.from('profiles').select('*').then(({ data }) => setAccounts(data || []));
-    const ch = supabase.channel('profiles-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-      supabase.from('profiles').select('*').then(({ data }) => setAccounts(data || []));
-    }).subscribe();
-    return () => supabase.removeChannel(ch);
-  }, []);
-
-  useEffect(() => {
-    supabase.from('tasks').select('*').then(({ data }) => setTasks(data || []));
-    const ch = supabase.channel('tasks-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-      supabase.from('tasks').select('*').then(({ data }) => setTasks(data || []));
-    }).subscribe();
-    return () => supabase.removeChannel(ch);
-  }, []);
-
-  useEffect(() => {
-    supabase.from('messages').select('*').then(({ data }) => setMessages(data || []));
-    const ch = supabase.channel('messages-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
-      supabase.from('messages').select('*').then(({ data }) => setMessages(data || []));
-    }).subscribe();
-    return () => supabase.removeChannel(ch);
-  }, []);
-
-  const tabs = [
-    { id: "tasks", label: "Tâches", icon: I.Check },
-    { id: "messages", label: "Messagerie", icon: I.Message },
-    ...(isAdmin ? [{ id: "admin", label: "Administration", icon: I.Shield }] : []),
-  ];
-
-  return (
-    <div className="app-shell" style={{ position: "relative", zIndex: 1, display: "flex", minHeight: "100vh" }}>
-      <aside className="paper app-sidebar" style={{ width: 236, flexShrink: 0, borderRight: "1px solid var(--border)", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 18 }}>
-        <div className="app-sidebar-brand" style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 8px" }}><NotebookMark size={24} /><span style={{ fontFamily: "Fraunces, serif", fontSize: 18 }}>Le Carnet</span></div>
-        <nav style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
-          {tabs.map(t => (<button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", cursor: "pointer", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: 500, textAlign: "left" }}><t.icon size={16} /> {t.label}</button>))}
-        </nav>
-        <a className="app-sidebar-footer-label" href="https://mousticheck.netlify.app/" target="_blank" rel="noopener" style={{ display: "block", marginTop: "auto", textDecoration: "none", color: "var(--text)", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "10px 12px", fontSize: 12.5, lineHeight: 1.45 }}>
-          <div style={{ fontSize: 10, letterSpacing: 1, color: "var(--text-dimmer)", marginBottom: 3 }}>PUB</div>
-          <div style={{ fontWeight: 600 }}>🦟 MoustiCheck</div>
-          <div style={{ color: "var(--text-dim)" }}>Le suivi du risque moustiques près de chez toi.</div>
-        </a>
-        <div className="app-sidebar-footer" style={{ marginTop: 0, paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
-          <div className="app-sidebar-footer-label" style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", marginBottom: 10 }}>
-            <Avatar user={me} size={30} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{me.display_name}</div>
-              <div style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>{isAdmin ? "Administrateur" : (ROLES.find(r => r.id === me.role) || {}).label || "Membre"}</div>
-            </div>
-          </div>
-          <button onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", background: "transparent", border: "1px solid var(--border-soft)", borderRadius: 9, color: "var(--text-dim)", fontSize: 13, cursor: "pointer" }}><I.LogOut size={14} /> <span className="app-sidebar-footer-label">Se déconnecter</span></button>
-        </div>
-      </aside>
-      <main className="app-main" style={{ flex: 1, minWidth: 0, padding: "26px 34px", overflowY: "auto" }}>
-        {tab === "tasks" && <TasksView me={me} isAdmin={isAdmin} myPerms={myPerms} accounts={accounts.filter(a => a.status !== "pending")} tasks={tasks} notify={notify} />}
-        {tab === "messages" && <MessagesView me={me} myPerms={myPerms} accounts={accounts.filter(a => a.status !== "pending")} messages={messages} />}
-        {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} notify={notify} />}
-        <SiteFooter />
-      </main>
-    </div>
-  );
-}
-
-/* ============================================================
-   Tasks
-   ============================================================ */
-function TasksView({ me, isAdmin, myPerms, accounts, tasks, notify }) {
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [query, setQuery] = useState("");
-  const [sortBy, setSortBy] = useState("priority");
-  const [filterLabel, setFilterLabel] = useState(null);
-  const [filterDone, setFilterDone] = useState("open");
-  const [filterMine, setFilterMine] = useState(false);
-
-  const visible = useMemo(() => {
-    let list = tasks.filter(t => {
-      if (filterDone === "open" && t.done) return false;
-      if (filterDone === "done" && !t.done) return false;
-      if (filterLabel && t.label !== filterLabel) return false;
-      if (filterMine && t.assignee !== me.id) return false;
-      if (query && !t.title.toLowerCase().includes(query.toLowerCase())) return false;
-      return true;
-    });
-    list.sort((a, b) => {
-      if (sortBy === "priority") return b.priority - a.priority || (a.due || "9999").localeCompare(b.due || "9999");
-      if (sortBy === "due") return (a.due || "9999-99-99").localeCompare(b.due || "9999-99-99");
-      if (sortBy === "title") return a.title.localeCompare(b.title, "fr");
-      return 0;
-    });
-    return list;
-  }, [tasks, query, sortBy, filterLabel, filterDone, filterMine, me.id]);
-
-  const saveTask = async (draft) => {
-    if (draft.id) {
-      const { id, ...data } = draft;
-      const { error } = await supabase.from('tasks').update(data).eq('id', id);
-      if (error) { notify(error.message, "err"); return; }
-      notify("Tâche mise à jour.");
-    } else {
-      const { error } = await supabase.from('tasks').insert({ ...draft, created_by: me.id, server_id: me.server_id });
-      if (error) { notify(error.message, "err"); return; }
-      notify("Tâche créée.");
-    }
-    setShowForm(false); setEditing(null);
-  };
-  const removeTask = async (id) => { const { error } = await supabase.from('tasks').delete().eq('id', id); notify(error ? error.message : "Tâche supprimée.", error ? "err" : "ok"); };
-  const toggleDone = async (t) => { await supabase.from('tasks').update({ done: !t.done }).eq('id', t.id); };
-  const counts = { open: tasks.filter(t => !t.done).length, late: tasks.filter(t => !t.done && t.due && daysUntil(t.due) < 0).length };
-
-  return (
+  <header class="hero">
     <div>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 12 }}>
-        <div><h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Tâches</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>{counts.open} en cours{counts.late > 0 && <span style={{ color: "#FF9A8F" }}> · {counts.late} en retard</span>}</p></div>
-        <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: (isAdmin || myPerms.createTasks) ? "flex" : "none", alignItems: "center", gap: 7, ...primaryBtn, padding: "10px 16px", width: "auto" }}><I.Plus size={16} /> Nouvelle tâche</button>
-      </div>
-      <div className="task-toolbar" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 20 }}>
-        <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}><I.Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)" }} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher une tâche…" style={{ ...inputStyle, paddingLeft: 32, background: "var(--bg-2)" }} /></div>
-        <SelectPill icon={I.Sort} value={sortBy} onChange={setSortBy} options={[{ value: "priority", label: "Trier : priorité" }, { value: "due", label: "Trier : échéance" }, { value: "title", label: "Trier : titre" }]} />
-        <SelectPill icon={I.Filter} value={filterDone} onChange={setFilterDone} options={[{ value: "open", label: "À faire" }, { value: "done", label: "Terminées" }, { value: "all", label: "Toutes" }]} />
-        <button onClick={() => setFilterMine(m => !m)} style={{ ...chipBtn, background: filterMine ? "var(--panel-2)" : "var(--bg-2)", color: filterMine ? "var(--text)" : "var(--text-dim)", borderColor: filterMine ? "var(--accent)" : "var(--border-soft)" }}>Assignées à moi</button>
-        <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>{LABELS.map(l => (<button key={l.id} title={l.name} onClick={() => setFilterLabel(f => f === l.id ? null : l.id)} style={{ width: 22, height: 22, borderRadius: "50%", background: l.hex, cursor: "pointer", border: filterLabel === l.id ? "2px solid var(--text)" : "2px solid transparent" }} />))}</div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {visible.length === 0 && <EmptyState text="Aucune tâche ici." />}
-        {visible.map(t => (<TaskCard key={t.id} task={t} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} onToggle={() => toggleDone(t)} onEdit={() => { setEditing(t); setShowForm(true); }} onDelete={() => removeTask(t.id)} />))}
-      </div>
-      {showForm && <TaskForm initial={editing} accounts={accounts} onCancel={() => { setShowForm(false); setEditing(null); }} onSave={saveTask} />}
+      <span class="eyebrow">Gestion de tâches en équipe</span>
+      <h1>Organisez vos tâches, <em>ensemble</em>, sans prise de tête.</h1>
+      <p class="lead">Le Carnet réunit vos tâches, vos échéances, un calendrier et une messagerie dans un espace à vous. Pour une équipe, une famille ou un groupe d'amis.</p>
+      <div class="cta-row"><a class="btn primary" href="/app/?tab=signup">Créer mon espace</a><a class="btn" href="/app/">Se connecter</a></div>
+      <small>Fonctionne dans le navigateur, sur ordinateur comme sur téléphone. Rien à installer.</small>
     </div>
-  );
-}
-function SelectPill({ icon: Icon, value, onChange, options }) {
-  return (<div style={{ position: "relative" }}><Icon size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)", pointerEvents: "none" }} /><select value={value} onChange={e => onChange(e.target.value)} style={{ ...chipBtn, paddingLeft: 28, paddingRight: 26, appearance: "none", cursor: "pointer" }}>{options.map(o => <option key={o.value} value={o.value} style={{ background: "var(--bg-2)" }}>{o.label}</option>)}</select><I.Chevron size={12} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)", pointerEvents: "none" }} /></div>);
-}
-function TaskCard({ task, accounts, me, isAdmin, myPerms, onToggle, onEdit, onDelete }) {
-  const label = LABELS.find(l => l.id === task.label) || LABELS[0];
-  const prio = PRIORITIES.find(p => p.id === task.priority) || PRIORITIES[1];
-  const assignee = accounts.find(a => a.id === task.assignee);
-  const dleft = task.due ? daysUntil(task.due) : null;
-  const late = dleft !== null && dleft < 0 && !task.done;
-  const soon = dleft !== null && dleft >= 0 && dleft <= 2 && !task.done;
-  const own = task.created_by === me.id;
-  const canEdit = isAdmin || myPerms.editAnyTask || (own && myPerms.editOwnTask);
-  const canDelete = isAdmin || myPerms.deleteAnyTask || (own && myPerms.deleteOwnTask);
-  return (
-    <div className="fade-in" style={{ display: "flex", alignItems: "stretch", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", opacity: task.done ? 0.55 : 1 }}>
-      <div style={{ width: 5, background: label.hex, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", flexWrap: "wrap" }}>
-        <button onClick={onToggle} style={{ background: "none", border: "none", cursor: "pointer", color: task.done ? "#5FBF8B" : "var(--text-dimmer)", flexShrink: 0 }}>{task.done ? <I.Check size={20} /> : <I.Circle size={20} />}</button>
-        <div style={{ flex: 1, minWidth: 140 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}><span style={{ fontSize: 14.5, fontWeight: 600, textDecoration: task.done ? "line-through" : "none", color: task.done ? "#7A8190" : "var(--text)" }}>{task.title}</span><span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: prio.hex, background: `${prio.hex}1A`, padding: "2px 7px", borderRadius: 6 }}><I.Flag size={10} /> {prio.label}</span></div>
-          {task.notes && <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 3 }}>{task.notes}</div>}
-        </div>
-        {task.due && (<div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, flexShrink: 0, color: late ? "#FF9A8F" : soon ? "#FFC97A" : "var(--text-dim)" }}>{late ? <I.Alert size={13} /> : <I.Calendar size={13} />}{formatDue(task.due, dleft)}</div>)}
-        {assignee && <div title={assignee.display_name}><Avatar user={assignee} size={26} /></div>}
-        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-          {canEdit && <button onClick={onEdit} style={iconBtn} title="Modifier"><I.Settings size={14} /></button>}
-          {canDelete && <button onClick={onDelete} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer"><I.Trash size={14} /></button>}
-        </div>
+    <div class="mock" aria-hidden="true">
+      <div class="mock-head"><b>Tâches</b><span>1 en retard</span></div>
+      <div class="task"><i style="background:#FF6B5E"></i><div class="t"><strong>Envoyer le devis au client <span class="pill" style="color:#FF6B5E;background:#FF6B5E1A">Urgente</span></strong><small>#travail · ☑ 2/3</small></div><span class="due late">En retard (1 j)</span><span class="av" style="background:#5B9EF5">NB</span></div>
+      <div class="task"><i style="background:#5FBF8B"></i><div class="t"><strong>Faire les courses <span class="pill" style="color:#FFB648;background:#FFB6481A">Normale</span></strong><small>#maison · ↻ Toutes les semaines</small></div><span class="due">Demain</span><span class="av" style="background:#F56BA8">LM</span></div>
+      <div class="task"><i style="background:#9B7EF5"></i><div class="t"><strong>Réserver le restaurant <span class="pill" style="color:#5FBF8B;background:#5FBF8B1A">Basse</span></strong><small>#sortie · 💬 3</small></div><span class="due">Dans 5 j</span><span class="av" style="background:#FFB648">AK</span></div>
+      <div class="task" style="margin-bottom:0"><i style="background:#5B9EF5"></i><div class="t"><strong>Préparer la réunion de lundi</strong><small>#travail</small></div><span class="due">12 oct.</span><span class="av" style="background:#5B9EF5">NB</span></div>
+    </div>
+  </header>
+</div>
+
+<main>
+  <section id="fonctionnalites">
+    <div class="wrap">
+      <div class="section-head"><h2>Tout ce qu'il faut pour avancer à plusieurs</h2><p>Des outils simples, pensés pour qu'on s'en serve vraiment au quotidien.</p></div>
+      <div class="grid">
+        <article class="card"><div class="ic">🚩</div><h3>Priorités et tri</h3><p>Marque chaque tâche comme urgente, normale ou basse, et trie ta liste par priorité, échéance ou titre.</p></article>
+        <article class="card"><div class="ic">⏰</div><h3>Échéances et rappels</h3><p>Fixe une date limite. Un email te prévient quand une tâche t'est assignée, puis la veille de l'échéance.</p></article>
+        <article class="card"><div class="ic">🎨</div><h3>Couleurs et étiquettes</h3><p>Une couleur par tâche et des étiquettes libres (#maison, #travail…) pour tout retrouver avec la recherche.</p></article>
+        <article class="card"><div class="ic">☑️</div><h3>Sous-tâches</h3><p>Découpe une grosse tâche en étapes à cocher et suis l'avancement d'un coup d'œil.</p></article>
+        <article class="card"><div class="ic">🔁</div><h3>Tâches récurrentes</h3><p>Tous les jours, toutes les semaines ou tous les mois : la prochaine occurrence se crée toute seule.</p></article>
+        <article class="card"><div class="ic">📅</div><h3>Calendrier</h3><p>Visualise toutes les échéances du mois et ouvre une tâche d'un clic.</p></article>
+        <article class="card"><div class="ic">💬</div><h3>Commentaires et messagerie</h3><p>Discute sous chaque tâche, ou envoie un message privé à un membre de ton espace.</p></article>
+        <article class="card"><div class="ic">🛡️</div><h3>Rôles et droits</h3><p>Administrateur, modérateur, membre ou invité, avec des droits réglables personne par personne.</p></article>
       </div>
     </div>
-  );
-}
-function TaskForm({ initial, accounts, onCancel, onSave }) {
-  const [title, setTitle] = useState(initial?.title || "");
-  const [notes, setNotes] = useState(initial?.notes || "");
-  const [label, setLabel] = useState(initial?.label || LABELS[0].id);
-  const [priority, setPriority] = useState(initial?.priority || 2);
-  const [due, setDue] = useState(initial?.due || "");
-  const [assignee, setAssignee] = useState(initial?.assignee || accounts[0]?.id || "");
-  const submit = () => { if (!title.trim()) return; onSave({ ...(initial || {}), title: title.trim(), notes: notes.trim(), label, priority: Number(priority), due: due || null, assignee, done: initial?.done || false }); };
-  return (
-    <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
-      <div className="modal-card" style={modalStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>{initial ? "Modifier la tâche" : "Nouvelle tâche"}</h2><button type="button" onClick={onCancel} style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
-        <Field label="Titre"><input autoFocus value={title} onChange={e => setTitle(e.target.value)} style={inputStyle} /></Field>
-        <Field label="Notes (optionnel)"><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></Field>
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1 }}><Field label="Échéance"><input type="date" value={due} onChange={e => setDue(e.target.value)} style={inputStyle} /></Field></div>
-          <div style={{ flex: 1 }}><Field label="Assignée à"><select value={assignee} onChange={e => setAssignee(e.target.value)} style={inputStyle}>{accounts.map(a => <option key={a.id} value={a.id} style={{ background: "var(--bg-2)" }}>{a.display_name}</option>)}</select></Field></div>
-        </div>
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Priorité</div>
-          <div style={{ display: "flex", gap: 8 }}>{PRIORITIES.map(p => (<button key={p.id} type="button" onClick={() => setPriority(p.id)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, border: `1.5px solid ${priority === p.id ? p.hex : "var(--border-soft)"}`, background: priority === p.id ? `${p.hex}1A` : "transparent", color: priority === p.id ? p.hex : "var(--text-dim)" }}>{p.label}</button>))}</div>
-        </div>
-        <div style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}><I.Palette size={13} /> Étiquette de couleur</div>
-          <div style={{ display: "flex", gap: 9 }}>{LABELS.map(l => (<button key={l.id} type="button" title={l.name} onClick={() => setLabel(l.id)} style={{ width: 28, height: 28, borderRadius: "50%", background: l.hex, cursor: "pointer", border: label === l.id ? "2.5px solid var(--text)" : "2.5px solid transparent" }} />))}</div>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}><button type="button" onClick={onCancel} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" onClick={submit} style={{ ...primaryBtn, flex: 1 }}>{initial ? "Enregistrer" : "Créer la tâche"}</button></div>
+  </section>
+
+  <section id="comment">
+    <div class="wrap">
+      <div class="section-head"><h2>Comment ça marche</h2><p>Trois étapes, et votre espace est prêt.</p></div>
+      <div class="steps">
+        <div class="step"><h3>Crée ton serveur</h3><p>Donne un nom à ton espace (« Famille », « Équipe projet »…). Tu en deviens l'administrateur.</p></div>
+        <div class="step"><h3>Invite tes proches</h3><p>Envoie une invitation par email, ou partage le code du serveur : les demandes passent par toi.</p></div>
+        <div class="step"><h3>Organisez-vous</h3><p>Créez, assignez et cochez vos tâches. Chaque serveur est isolé : personne d'autre n'y a accès.</p></div>
       </div>
     </div>
-  );
-}
+  </section>
 
-/* ============================================================
-   Messages
-   ============================================================ */
-function MessagesView({ me, myPerms, accounts, messages }) {
-  const contacts = useMemo(() => accounts.filter(a => a.id !== me.id), [accounts, me.id]);
-  const [activeId, setActiveId] = useState(null);
-  useEffect(() => { if (!activeId && contacts.length) setActiveId(contacts[0].id); }, [contacts, activeId]);
-  const [draft, setDraft] = useState("");
-  const bottomRef = useRef(null);
-  const thread = messages.filter(m => (m.from_id === me.id && m.to_id === activeId) || (m.from_id === activeId && m.to_id === me.id)).sort((a, b) => new Date(a.ts) - new Date(b.ts));
-  useEffect(() => { bottomRef.current && bottomRef.current.scrollIntoView({ behavior: "smooth" }); }, [thread.length, activeId]);
-  const lastMsgFor = (id) => messages.filter(m => (m.from_id === me.id && m.to_id === id) || (m.from_id === id && m.to_id === me.id)).sort((a, b) => new Date(b.ts) - new Date(a.ts))[0];
-  const send = async () => {
-    if (!draft.trim() || !activeId || !myPerms.sendMessages) return;
-    const text = draft.trim(); setDraft("");
-    await supabase.from('messages').insert({ from_id: me.id, to_id: activeId, text, server_id: me.server_id });
-  };
-  const onKey = (e) => { if (e.key === "Enter") send(); };
-  const activeUser = accounts.find(a => a.id === activeId);
-  return (
-    <div>
-      <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: "0 0 20px" }}>Messagerie</h1>
-      <div style={{ display: "flex", height: "calc(100vh - 150px)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
-        <div className="paper" style={{ width: 250, flexShrink: 0, borderRight: "1px solid var(--border)", overflowY: "auto" }}>
-          {contacts.length === 0 && <EmptyState text="Aucun autre membre pour l'instant." />}
-          {contacts.map(u => { const last = lastMsgFor(u.id); return (
-            <button key={u.id} onClick={() => setActiveId(u.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "12px 14px", background: activeId === u.id ? "var(--panel-2)" : "transparent", border: "none", borderBottom: "1px solid #21252d", cursor: "pointer", textAlign: "left" }}>
-              <Avatar user={u} size={32} />
-              <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{u.display_name}</div><div style={{ fontSize: 11.5, color: "var(--text-dimmer)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{last ? last.text : "Aucun message"}</div></div>
-            </button>
-          );})}
-        </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-          {activeUser ? (<>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--border)" }}><Avatar user={activeUser} size={28} /><span style={{ fontWeight: 600, fontSize: 14 }}>{activeUser.display_name}</span></div>
-            <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
-              {thread.length === 0 && <EmptyState text="Aucun message. Dites bonjour !" />}
-              {thread.map(m => (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", maxWidth: "70%", background: m.from_id === me.id ? "linear-gradient(135deg,var(--accent),var(--accent-2))" : "var(--panel-2)", color: m.from_id === me.id ? "#fff" : "var(--text)", padding: "9px 13px", borderRadius: 12, borderBottomRightRadius: m.from_id === me.id ? 3 : 12, borderBottomLeftRadius: m.from_id === me.id ? 12 : 3, fontSize: 13.5 }}>{m.text}<div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>{new Date(m.ts).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div></div>))}
-              <div ref={bottomRef} />
-            </div>
-            <div style={{ display: "flex", gap: 10, padding: 14, borderTop: "1px solid var(--border)" }}>
-              <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={onKey} disabled={!myPerms.sendMessages} placeholder={myPerms.sendMessages ? "Écrire un message…" : "Ton rôle ne permet pas d'envoyer de messages"} style={{ ...inputStyle, flex: 1, background: "var(--bg)", opacity: myPerms.sendMessages ? 1 : 0.5 }} />
-              <button type="button" onClick={send} disabled={!myPerms.sendMessages} style={{ background: "linear-gradient(135deg,var(--accent),var(--accent-2))", border: "none", color: "#fff", borderRadius: 9, padding: "0 16px", cursor: myPerms.sendMessages ? "pointer" : "not-allowed", opacity: myPerms.sendMessages ? 1 : 0.5, display: "grid", placeItems: "center" }}><I.Send size={16} /></button>
-            </div>
-          </>) : <EmptyState text="Choisissez une personne pour démarrer une conversation." />}
-        </div>
+  <section id="roles">
+    <div class="wrap">
+      <div class="section-head"><h2>Chacun ses droits</h2><p>Voici les droits par défaut de chaque rôle. L'administrateur peut les ajuster individuellement.</p></div>
+      <div class="roles-wrap">
+        <table class="roles">
+          <thead><tr><th>Droit</th><th>Admin</th><th>Modérateur</th><th>Membre</th><th>Invité</th></tr></thead>
+          <tbody>
+            <tr><td>Créer des tâches</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td></tr>
+            <tr><td>Modifier / supprimer ses tâches</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td></tr>
+            <tr><td>Modifier / supprimer toutes les tâches</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td></tr>
+            <tr><td>Envoyer des messages et commenter</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+            <tr><td>Créer, inviter et supprimer des comptes</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Les droits de chaque personne se règlent un par un, depuis le panneau d'administration.</p>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap" style="max-width: 780px">
+      <div class="section-head"><h2>Questions fréquentes</h2></div>
+      <details><summary>Qu'est-ce qu'un « serveur » ?</summary><p>C'est l'espace d'une équipe, d'une famille ou d'un groupe d'amis. Ses tâches et ses membres sont totalement séparés de ceux des autres serveurs.</p></details>
+      <details><summary>Comment inviter quelqu'un ?</summary><p>L'administrateur peut envoyer une invitation par email : la personne crée son compte via le lien reçu. Il peut aussi donner le code du serveur ; la demande d'accès doit alors être approuvée par lui.</p></details>
+      <details><summary>Mes tâches sont-elles visibles par tout le monde ?</summary><p>Non. Seuls les membres approuvés de ton serveur voient ses tâches. Les messages privés ne sont visibles que par les deux personnes concernées.</p></details>
+      <details><summary>Peut-on choisir ce que chaque personne a le droit de faire ?</summary><p>Oui. Chaque personne a un rôle (modérateur, membre ou invité) et l'administrateur peut ajuster ses droits un par un : créer, modifier ou supprimer des tâches, envoyer des messages.</p></details>
+      <details><summary>Faut-il installer quelque chose ?</summary><p>Non. Le Carnet fonctionne dans le navigateur, sur ordinateur comme sur téléphone.</p></details>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="final">
+        <h2>Prêt à mettre de l'ordre ?</h2>
+        <p>Crée ton espace en une minute et invite les personnes avec qui tu t'organises.</p>
+        <div class="cta-row"><a class="btn primary" href="/app/?tab=signup">Créer mon espace</a><a class="btn" href="/app/">J'ai déjà un compte</a></div>
       </div>
     </div>
-  );
-}
+  </section>
+</main>
 
-/* ============================================================
-   Admin
-   ============================================================ */
-function AdminView({ me, session, accounts, tasks, notify }) {
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [server, setServer] = useState(null);
-  const [invites, setInvites] = useState([]);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("member");
-  const [inviting, setInviting] = useState(false);
-
-  useEffect(() => {
-    supabase.from('servers').select('*').eq('id', me.server_id).single().then(({ data }) => setServer(data));
-  }, [me.server_id]);
-
-  const loadInvites = async () => {
-    const { data } = await supabase.from('invites').select('*').is('used_at', null).order('created_at', { ascending: false });
-    setInvites(data || []);
-  };
-  useEffect(() => {
-    loadInvites();
-    const ch = supabase.channel('invites-' + me.server_id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'invites' }, loadInvites)
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [me.server_id]);
-
-  const sendInvite = async () => {
-    if (inviting || !inviteEmail.trim()) return;
-    setInviting(true);
-    try {
-      const r = await callApi('/api/invite', { action: 'send', email: inviteEmail.trim(), role: inviteRole }, session);
-      if (r.emailSent) notify("Invitation envoyée à " + inviteEmail.trim() + ".");
-      else { navigator.clipboard?.writeText(r.link); notify(r.warning || "Email non envoyé : lien copié.", "err"); }
-      setInviteEmail("");
-      loadInvites();
-    } catch (e) { notify(e.message, "err"); }
-    setInviting(false);
-  };
-  const resendInvite = async (inv) => {
-    try {
-      const r = await callApi('/api/invite', { action: 'resend', id: inv.id }, session);
-      notify(r.emailSent ? "Invitation renvoyée." : (r.warning || "Email non envoyé."), r.emailSent ? "ok" : "err");
-      loadInvites();
-    } catch (e) { notify(e.message, "err"); }
-  };
-  const revokeInvite = async (inv) => {
-    const { error } = await supabase.from('invites').delete().eq('id', inv.id);
-    if (error) { notify(error.message, "err"); return; }
-    notify("Invitation annulée.");
-    loadInvites();
-  };
-
-  const pending = accounts.filter(a => a.status === "pending");
-  const approved = accounts.filter(a => a.status !== "pending");
-
-  const approve = async (a) => {
-    const defaults = ROLE_DEFAULT_PERMS.member;
-    const { error } = await supabase.from('profiles').update({ status: "approved", role: "member", permissions: defaults }).eq('id', a.id);
-    if (error) { notify(error.message, "err"); return; }
-    notify(`${a.display_name} a rejoint le serveur.`);
-  };
-  const reject = async (a) => {
-    const { error } = await supabase.from('profiles').delete().eq('id', a.id);
-    if (error) { notify(error.message, "err"); return; }
-    notify("Demande refusée.");
-  };
-
-  const createOrUpdate = async (draft) => {
-    try {
-      if (draft.id) {
-        await callApi('/api/manage-account', { action: 'update', id: draft.id, newPassword: draft.password || null, patch: { username: draft.username, display_name: draft.displayName, color: draft.color, role: draft.role, permissions: draft.permissions } }, session);
-        notify("Compte mis à jour.");
-      } else {
-        await callApi('/api/create-account', { username: draft.username, email: draft.email, password: draft.password, displayName: draft.displayName, color: draft.color, role: draft.role, permissions: draft.permissions }, session);
-        notify(`Compte « ${draft.displayName} » créé.`);
-      }
-      setShowForm(false); setEditing(null);
-    } catch (e) { notify(e.message, "err"); }
-  };
-  const removeUser = async (a) => {
-    if (a.role === "admin") { notify("Impossible de supprimer l'administrateur.", "err"); return; }
-    try { await callApi('/api/manage-account', { action: 'delete', id: a.id }, session); notify(`Compte « ${a.display_name} » supprimé.`); }
-    catch (e) { notify(e.message, "err"); }
-  };
-
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 12 }}>
-        <div><h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 10 }}><I.Shield size={24} color="var(--admin)" /> Administration</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>{approved.length} compte(s) · {tasks.length} tâche(s)</p></div>
-        <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(135deg,var(--admin),#B08CFA)", border: "none", color: "#fff", fontWeight: 600, fontSize: 13.5, padding: "10px 16px", borderRadius: 9, cursor: "pointer", boxShadow: "0 8px 20px rgba(155,126,245,.3)" }}><I.UserPlus size={16} /> Créer un compte</button>
-      </div>
-
-      {server && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 4 }}>Code d'invitation de « {server.name} »</div>
-            <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: "var(--accent-2)", letterSpacing: 1 }}>{server.join_code}</div>
-          </div>
-          <button onClick={() => { navigator.clipboard?.writeText(server.join_code); notify("Code copié."); }} style={secondaryBtn}>Copier le code</button>
-        </div>
-      )}
-
-      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Inviter par email</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input type="email" placeholder="adresse@exemple.com" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} onKeyDown={e => { if (e.key === "Enter") sendInvite(); }} style={{ ...inputStyle, flex: 1, minWidth: 180, width: "auto" }} />
-          <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-            {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-          </select>
-          <button type="button" onClick={sendInvite} disabled={inviting} style={{ ...primaryBtn, width: "auto", padding: "10px 18px", opacity: inviting ? 0.6 : 1 }}>{inviting ? "Envoi…" : "Envoyer"}</button>
-        </div>
-        {invites.length > 0 && (
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>Invitations en attente</div>
-            {invites.map(inv => {
-              const expired = new Date(inv.expires_at) < new Date();
-              return (
-                <div key={inv.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13 }}>
-                  <span style={{ flex: 1, minWidth: 160, wordBreak: "break-all" }}>{inv.email} <span style={{ color: "var(--text-dimmer)" }}>· {(ROLES.find(r => r.id === inv.role) || ROLES[1]).label}{expired ? " · expirée" : ""}</span></span>
-                  <button type="button" onClick={() => resendInvite(inv)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12 }}>Renvoyer</button>
-                  <button type="button" onClick={() => revokeInvite(inv)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12, color: "#FF9A8F" }}>Annuler</button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {pending.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
-            <I.Alert size={14} color="#FFC97A" /> {pending.length} demande(s) en attente
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pending.map(a => (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "#2A2410", border: "1px solid #4A3F1A", borderRadius: 12, padding: "12px 16px", flexWrap: "wrap" }}>
-                <Avatar user={a} size={32} />
-                <div style={{ flex: 1, minWidth: 140 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username} · {a.email}</div>
-                </div>
-                <button onClick={() => approve(a)} style={{ ...primaryBtn, width: "auto", padding: "7px 14px", fontSize: 13 }}>Approuver</button>
-                <button onClick={() => reject(a)} style={{ ...secondaryBtn, width: "auto", padding: "7px 14px", fontSize: 13, color: "#FF9A8F" }}>Refuser</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {approved.map(a => (
-          <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", flexWrap: "wrap" }}>
-            <Avatar user={a} size={34} />
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</span>
-                {a.role === "admin" ? <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--admin)", background: "#9B7EF51A", padding: "2px 7px", borderRadius: 6 }}>ADMIN</span> : <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent-2)", background: "#5B6EF51A", padding: "2px 7px", borderRadius: 6 }}>{(ROLES.find(r => r.id === a.role) || ROLES[1]).label.toUpperCase()}</span>}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username}</div>
-            </div>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{tasks.filter(t => t.assignee === a.id && !t.done).length} tâche(s) en cours</div>
-            <button onClick={() => { setEditing(a); setShowForm(true); }} style={iconBtn} title="Modifier"><I.Settings size={14} /></button>
-            {a.role !== "admin" && <button onClick={() => removeUser(a)} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer"><I.Trash size={15} /></button>}
-          </div>
-        ))}
-      </div>
-      {showForm && <UserForm initial={editing} onCancel={() => { setShowForm(false); setEditing(null); }} onSave={createOrUpdate} />}
-    </div>
-  );
-}
-function UserForm({ initial, onCancel, onSave }) {
-  const [username, setUsername] = useState(initial?.username || "");
-  const [email, setEmail] = useState(initial?.email || "");
-  const [displayName, setDisplayName] = useState(initial?.display_name || "");
-  const [password, setPassword] = useState("");
-  const [color, setColor] = useState(initial?.color || LABELS[3].hex);
-  const [role, setRole] = useState(initial?.role || "member");
-  const [permissions, setPermissions] = useState(() => ({ ...ROLE_DEFAULT_PERMS[initial?.role || "member"], ...(initial?.permissions || {}) }));
-  const changeRole = (r) => { setRole(r); setPermissions({ ...ROLE_DEFAULT_PERMS[r] }); };
-  const togglePerm = (key) => setPermissions(p => ({ ...p, [key]: !p[key] }));
-  const submit = () => {
-    if (!displayName.trim() || !username.trim()) return;
-    if (!initial && (!password || !email.trim())) return;
-    onSave({ id: initial?.id, username: username.trim(), email: email.trim(), displayName: displayName.trim(), color, role, permissions, password });
-  };
-  return (
-    <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
-      <div className="modal-card" style={modalStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>{initial ? "Modifier le compte" : "Nouveau compte"}</h2><button type="button" onClick={onCancel} style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
-        <Field label="Nom affiché"><input autoFocus value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
-        <Field label="Identifiant"><input value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
-        {!initial && <Field label="Email (sert à se connecter)"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="personne@exemple.com" style={inputStyle} /></Field>}
-        <Field label={initial ? "Nouveau mot de passe (laisser vide pour ne pas changer)" : "Mot de passe"}><input type="text" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} /></Field>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Rôle</div>
-          <div style={{ display: "flex", gap: 8 }}>{ROLES.map(r => (<button key={r.id} type="button" onClick={() => changeRole(r.id)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, border: `1.5px solid ${role === r.id ? "var(--accent)" : "var(--border-soft)"}`, background: role === r.id ? "#5B6EF51A" : "transparent", color: role === r.id ? "var(--accent-2)" : "var(--text-dim)" }}>{r.label}</button>))}</div>
-        </div>
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Droits individuels</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--bg)", borderRadius: 10, padding: "10px 12px" }}>
-            {PERM_LABELS.map(p => (<label key={p.key} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13, cursor: "pointer" }}><input type="checkbox" checked={!!permissions[p.key]} onChange={() => togglePerm(p.key)} style={{ width: 15, height: 15, accentColor: "var(--accent)" }} />{p.label}</label>))}
-          </div>
-        </div>
-        <div style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Couleur du profil</div>
-          <div style={{ display: "flex", gap: 9 }}>{LABELS.map(l => (<button key={l.id} type="button" onClick={() => setColor(l.hex)} style={{ width: 28, height: 28, borderRadius: "50%", background: l.hex, cursor: "pointer", border: color === l.hex ? "2.5px solid var(--text)" : "2.5px solid transparent" }} />))}</div>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}><button type="button" onClick={onCancel} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" onClick={submit} style={{ ...primaryBtn, flex: 1 }}>{initial ? "Enregistrer" : "Créer le compte"}</button></div>
-      </div>
-    </div>
-  );
-}
-
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
-}
-</script>
+<footer>
+  <div class="wrap">© 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget</div>
+</footer>
 </body>
 </html>
