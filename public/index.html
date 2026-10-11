@@ -6,6 +6,8 @@
 <script>
   // Anciens liens d'invitation (/?invite=...) : on les envoie vers l'application.
   if (/[?&]invite=/.test(location.search)) location.replace('/app/' + location.search);
+  // Retour d'une connexion Google arrivé par erreur sur l'accueil : on l'envoie vers l'application.
+  else if (/access_token=|[?&]code=/.test(location.hash + location.search)) location.replace('/app/' + location.search + location.hash);
 </script>
 <title>Le Carnet — Gestion de tâches en équipe : priorités, échéances, calendrier</title>
 <meta name="description" content="Le Carnet : organisez vos tâches à plusieurs avec priorités, échéances, rappels par email, calendrier, sous-tâches, commentaires et messagerie. Chaque équipe a son propre espace." />
