@@ -9,10 +9,10 @@
   // Retour d'une connexion Google arrivé par erreur sur l'accueil : on l'envoie vers l'application.
   else if (/access_token=|[?&]code=/.test(location.hash + location.search)) location.replace('/app/' + location.search + location.hash);
   
-  // 1. Système d'alerte et écran de maintenance automatique
+  // Système d'alerte et écran de maintenance automatique autonome (sans script externe)
   async function checkMaintenanceAlert() {
     try {
-      const response = await fetch(https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?id=eq.1&select=message,display_at,is_maintenance', {
+      const response = await fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?id=eq.1&select=message,display_at,is_maintenance', {
         headers: { 
           'apikey': 'sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl',
           'Authorization': 'Bearer sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl'
@@ -20,18 +20,12 @@
       });
       
       const data = await response.json();
-      
-      // DIAGNOSTIC VISUEL : Pour voir exactement ce que le serveur répond
-      console.log("Données reçues de la base :", data);
+      if (!data || data.length === 0) return;
 
-      if (!data || data.length === 0) {
-        console.warn("Attention : La table system_alerts renvoie un tableau vide. Vérifiez l'ID ou le RLS sur Supabase.");
-        return;
-      }
-
+      // On cible le premier élément du tableau
       const alertConfig = data[0]; 
       
-      // 1. Déclenchement de l'écran de maintenance
+      // 1. VERIFICATION : Écran de maintenance actif ?
       if (alertConfig.is_maintenance === true) {
         document.body.innerHTML = `
           <div style="font-family: sans-serif; text-align: center; padding: 150px; background: #14171C; color: #EDEBE3; height: 100vh; margin:0; box-sizing: border-box;">
@@ -40,10 +34,10 @@
           </div>
         `;
         document.body.style.background = "#14171C";
-        return; 
+        return;
       }
 
-      // 2. Déclenchement du bandeau d'avertissement
+      // 2. VERIFICATION : Affichage du bandeau d'avertissement ?
       const now = new Date();
       const displayDate = new Date(alertConfig.display_at);
 
@@ -57,50 +51,13 @@
         }
       }
     } catch (error) {
-      console.error("Erreur réseau lors de la communication avec Supabase :", error);
-    }
-  }
-  // 2. Système de chargement dynamique de vos Patchnotes (Notes de mise à jour)
-  async function loadPatchnotes() {
-    try {
-      const response = await fetch('https://supabase.co', {
-        headers: { 
-          'apikey': 'sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl',
-          'Authorization': 'Bearer sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl'
-        }
-      });
-      
-      const patchnotes = await response.json();
-      const listContainer = document.getElementById('patchnotes-list');
-      if (!listContainer) return;
-
-      if (!patchnotes || patchnotes.length === 0) {
-        listContainer.innerHTML = '<p style="color: var(--text-dim);">Aucune note de mise à jour pour le moment.</p>';
-        return;
-      }
-
-      listContainer.innerHTML = patchnotes.map(patch => {
-        const formattedContent = patch.content.replace(/\n/g, '<br>');
-        return `
-          <div style="background: var(--panel, #1D2128); border: 1px solid var(--border, #262B34); padding: 25px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-soft, #2B303A); padding-bottom: 10px; margin-bottom: 15px;">
-              <span style="background: var(--accent, #5B6EF5); color: var(--text, #EDEBE3); padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 14px;">${patch.version}</span>
-              <span style="color: var(--text-dimmer, #6C7484); font-size: 14px;">${patch.published_at}</span>
-            </div>
-            <h3 style="color: var(--text, #EDEBE3); margin: 0 0 10px 0; font-size: 20px;">${patch.title}</h3>
-            <p style="color: var(--text-dim, #9AA2B2); line-height: 1.6; margin: 0;">${formattedContent}</p>
-          </div>
-        `;
-      }).join('');
-    } catch (error) {
-      console.error("Erreur de chargement des patchnotes :", error);
+      console.error("Erreur de contrôle du site :", error);
     }
   }
 
-  // Déclenchement au chargement global
+  // Configuration des événements après le rendu HTML
   document.addEventListener("DOMContentLoaded", () => {
     checkMaintenanceAlert();
-    loadPatchnotes();
 
     const backToTopButton = document.getElementById("backToTop");
     window.onscroll = function() {
