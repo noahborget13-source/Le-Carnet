@@ -8,6 +8,37 @@
   if (/[?&]invite=/.test(location.search)) location.replace('/app/' + location.search);
   // Retour d'une connexion Google arrivé par erreur sur l'accueil : on l'envoie vers l'application.
   else if (/access_token=|[?&]code=/.test(location.hash + location.search)) location.replace('/app/' + location.search + location.hash);
+  async function checkMaintenanceAlert() {
+  try {
+    // Appel de votre nouvelle table system_alerts
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/system_alerts?id=eq.1&select=message,display_at`, {
+      headers: { 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY }
+    });
+    
+    const data = await response.json();
+    if (!data || data.length === 0) return;
+
+    const alertConfig = data[0];
+    const now = new Date();
+    const displayDate = new Date(alertConfig.display_at);
+
+    // Si la date actuelle a dépassé la date programmée, on affiche le bandeau
+    if (now >= displayDate) {
+      const alertBar = document.getElementById('maintenance-alert');
+      const alertText = document.getElementById('alert-text');
+      
+      if (alertBar && alertText) {
+        alertText.textContent = alertConfig.message;
+        alertBar.style.display = 'block';
+      }
+    }
+  } catch (error) {
+    console.error("Erreur d'affichage du bandeau :", error);
+  }
+}
+
+// Lancement automatique
+checkMaintenanceAlert();
   document.addEventListener("DOMContentLoaded", () => {
   const backToTopButton = document.getElementById("backToTop");
   // Déclencher la fonction à chaque fois que l'utilisateur scrolle
