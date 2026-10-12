@@ -56,6 +56,30 @@
     --text-dim: #9AA2B2; --text-dimmer: #6C7484;
     --accent: #5B6EF5; --accent-2: #6E7BF8; --violet: #9B7EF5;
     color-scheme: dark;
+    scroll-behavior: smooth
+  }
+    /* Bouton Retour en Haut parfaitement intégré à votre thème sombre */
+  #backToTop {
+    display: none;
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 99;
+    border: 1px solid var(--border);
+    outline: none;
+    background-color: var(--accent); /* Utilise le bleu #5B6EF5 de votre site */
+    color: var(--text); /* Utilise votre couleur de texte #EDEBE3 */
+    cursor: pointer;
+    padding: 12px 14px;
+    border-radius: 50%;
+    font-size: 18px;
+    box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.4);
+    transition: background-color 0.2s ease, transform 0.2s ease;
+  }
+
+  #backToTop:hover {
+    background-color: var(--accent-2); /* Devient un peu plus clair au survol */
+    transform: translateY(-3px); /* Petit effet de lévitation vers le haut */
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
