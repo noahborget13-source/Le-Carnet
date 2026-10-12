@@ -12,7 +12,8 @@
   // 1. Système d'alerte et écran de maintenance automatique
    async function checkMaintenanceAlert() {
     try {
-      const response = await fetch('https://supabase.co', {
+      // 🚨 REMPLACE UNIQUEMENT LA PARTIE EN MAJUSCULES PAR TON URL SUPABASE ACTUELLE :
+      const response = await fetch(https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?id=eq.1&select=message,display_at,is_maintenance', {
         headers: { 
           'apikey': 'sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl',
           'Authorization': 'Bearer sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl'
@@ -20,17 +21,12 @@
       });
       
       const data = await response.json();
-      
-      // Sécurité si Supabase renvoie un tableau vide
-      if (!data || data.length === 0) {
-        console.log("Supabase a répondu mais la table est vide ou l'ID n'est pas 1");
-        return;
-      }
+      if (!data || data.length === 0) return;
 
-      // CORRECTION CRITIQUE : On prend le premier élément [0] du tableau
-      const alertConfig = data[0]; 
+      // Extraction de la première ligne
+      const alertConfig = data; 
       
-      // 1. VERIFICATION : Est-ce que la maintenance est activée ?
+      // 1. Si la maintenance est active
       if (alertConfig.is_maintenance === true) {
         document.body.innerHTML = `
           <div style="font-family: sans-serif; text-align: center; padding: 150px; background: #14171C; color: #EDEBE3; height: 100vh; margin:0; box-sizing: border-box;">
@@ -42,7 +38,7 @@
         return; 
       }
 
-      // 2. VERIFICATION : Est-ce qu'on doit afficher le bandeau ?
+      // 2. Si on doit juste afficher le bandeau
       const now = new Date();
       const displayDate = new Date(alertConfig.display_at);
 
