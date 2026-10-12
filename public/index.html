@@ -8,9 +8,11 @@
   if (/[?&]invite=/.test(location.search)) location.replace('/app/' + location.search);
   // Retour d'une connexion Google arrivé par erreur sur l'accueil : on l'envoie vers l'application.
   else if (/access_token=|[?&]code=/.test(location.hash + location.search)) location.replace('/app/' + location.search + location.hash);
+  
+  // 1. Système d'alerte et écran de maintenance automatique
   async function checkMaintenanceAlert() {
     try {
-      const response = await fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co', {
+      const response = await fetch('https://supabase.co', {
         headers: { 
           'apikey': 'sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl',
           'Authorization': 'Bearer sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl'
@@ -20,22 +22,21 @@
       const data = await response.json();
       if (!data || data.length === 0) return;
 
-      const alertConfig = data; // Récupère les configurations
+      const alertConfig = data[0]; // Récupère la première ligne du tableau de données
       
-      // 1. VERIFICATION : Est-ce que la maintenance est activée maintenant ?
+      // VERIFICATION : Est-ce que la maintenance est activée maintenant ?
       if (alertConfig.is_maintenance === true) {
-        // On remplace tout le contenu de la page par l'écran de maintenance
         document.body.innerHTML = `
           <div style="font-family: sans-serif; text-align: center; padding: 150px; background: #14171C; color: #EDEBE3; height: 100vh; margin:0;">
-            <h1 style="font-size: 45px; color: var(--accent, #5B6EF5);">Le Carnet est en cours de mise à jour 🛠️</h1>
+            <h1 style="font-size: 45px; color: #5B6EF5;">Le Carnet est en cours de mise à jour 🛠️</h1>
             <p style="font-size: 18px; color: #9AA2B2; margin-top: 20px;">Nous effectuons quelques modifications sur nos serveurs. Nous revenons dans quelques minutes !</p>
           </div>
         `;
         document.body.style.background = "#14171C";
-        return; // On arrête le script ici pour bloquer le reste du site
+        return;
       }
 
-      // 2. VERIFICATION : Est-ce qu'on doit juste afficher le bandeau pour prévenir ?
+      // VERIFICATION : Est-ce qu'on doit juste afficher le bandeau pour prévenir ?
       const now = new Date();
       const displayDate = new Date(alertConfig.display_at);
 
@@ -52,32 +53,64 @@
       console.error("Erreur de contrôle du site :", error);
     }
   }
-// Lancement automatique
-checkMaintenanceAlert();
-  document.addEventListener("DOMContentLoaded", () => {
-  const backToTopButton = document.getElementById("backToTop");
-  // Déclencher la fonction à chaque fois que l'utilisateur scrolle
-  window.onscroll = function() {
-    scrollFunction();
-  };
 
-  function scrollFunction() {
-    // Si on a scrollé de plus de 300px, on affiche le bouton, sinon on le cache
-    if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
-      backToTopButton.style.display = "block";
-    } else {
-      backToTopButton.style.display = "none";
+  // 2. Système de chargement dynamique de vos Patchnotes (Notes de mise à jour)
+  async function loadPatchnotes() {
+    try {
+      const response = await fetch('https://supabase.co', {
+        headers: { 
+          'apikey': 'sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl',
+          'Authorization': 'Bearer sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl'
+        }
+      });
+      
+      const patchnotes = await response.json();
+      const listContainer = document.getElementById('patchnotes-list');
+      if (!listContainer) return;
+
+      if (!patchnotes || patchnotes.length === 0) {
+        listContainer.innerHTML = '<p style="color: var(--text-dim);">Aucune note de mise à jour pour le moment.</p>';
+        return;
+      }
+
+      listContainer.innerHTML = patchnotes.map(patch => {
+        const formattedContent = patch.content.replace(/\n/g, '<br>');
+        return `
+          <div style="background: var(--panel, #1D2128); border: 1px solid var(--border, #262B34); padding: 25px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-soft, #2B303A); padding-bottom: 10px; margin-bottom: 15px;">
+              <span style="background: var(--accent, #5B6EF5); color: var(--text, #EDEBE3); padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 14px;">${patch.version}</span>
+              <span style="color: var(--text-dimmer, #6C7484); font-size: 14px;">${patch.published_at}</span>
+            </div>
+            <h3 style="color: var(--text, #EDEBE3); margin: 0 0 10px 0; font-size: 20px;">${patch.title}</h3>
+            <p style="color: var(--text-dim, #9AA2B2); line-height: 1.6; margin: 0;">${formattedContent}</p>
+          </div>
+        `;
+      }).join('');
+    } catch (error) {
+      console.error("Erreur de chargement des patchnotes :", error);
     }
   }
 
-  // Action lors du clic sur le bouton
-  backToTopButton.addEventListener("click", function() {
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth" // Remontée fluide
-    });
+  // Déclenchement au chargement global
+  document.addEventListener("DOMContentLoaded", () => {
+    checkMaintenanceAlert();
+    loadPatchnotes();
+
+    const backToTopButton = document.getElementById("backToTop");
+    window.onscroll = function() {
+      if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
+        if (backToTopButton) backToTopButton.style.display = "block";
+      } else {
+        if (backToTopButton) backToTopButton.style.display = "none";
+      }
+    };
+
+    if (backToTopButton) {
+      backToTopButton.addEventListener("click", () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    }
   });
-});
 </script>
 <title>Le Carnet — Gestion de tâches en équipe : priorités, échéances, calendrier</title>
 <meta name="description" content="Le Carnet : organisez vos tâches à plusieurs avec priorités, échéances, rappels par email, calendrier, sous-tâches, commentaires et messagerie. Chaque équipe a son propre espace." />
@@ -128,7 +161,7 @@ checkMaintenanceAlert();
     color-scheme: dark;
     scroll-behavior: smooth
   }
-    /* Bouton Retour en Haut parfaitement intégré à votre thème sombre */
+  /* Bouton Retour en Haut parfaitement intégré à votre thème sombre */
   #backToTop {
     display: none;
     position: fixed;
@@ -320,6 +353,13 @@ checkMaintenanceAlert();
 
   <section id="faq">
     <div class="wrap" style="max-width: 780px">
+      <!-- Section Visuelle des Patchnotes -->
+<div class="patchnotes-container" style="max-width: 800px; margin: 60px auto; padding: 0 20px; text-align: center;">
+  <h2 style="color: var(--accent, #5B6EF5); font-size: 32px; margin-bottom: 30px;">Notes de mise à jour 🚀</h2>
+  <div id="patchnotes-list">
+    <p style="color: var(--text-dim, #9AA2B2);">Chargement des notes...</p>
+  </div>
+</div>
       <div class="section-head"><h2>Questions fréquentes</h2></div>
       <details><summary>Qu'est-ce qu'un « serveur » ?</summary><p>C'est l'espace d'une équipe, d'une famille ou d'un groupe d'amis. Ses tâches et ses membres sont totalement séparés de ceux des autres serveurs.</p></details>
       <details><summary>Comment inviter quelqu'un ?</summary><p>L'administrateur peut envoyer une invitation par email : la personne crée son compte via le lien reçu. Il peut aussi donner le code du serveur ; la demande d'accès doit alors être approuvée par lui.</p></details>
