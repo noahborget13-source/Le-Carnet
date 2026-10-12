@@ -18,14 +18,11 @@
           'Authorization': 'Bearer sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl'
         }
       });
-      
       const data = await response.json();
       // Sécurité si Supabase ne renvoie rien
       if (!data || data.length === 0) return;
-
       // CORRECTION : On extrait la première ligne du tableau renvoyé par Supabase
-      const alertConfig = data[0]; 
-      
+    const alertConfig = data[0]; // Cible la première ligne du tableau
       // 1. VERIFICATION : Est-ce que la maintenance est activée maintenant ?
       if (alertConfig.is_maintenance === true) {
         document.body.innerHTML = `
