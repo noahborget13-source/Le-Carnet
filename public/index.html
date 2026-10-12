@@ -4,13 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <script>
-  // Anciens liens d'invitation (/?invite=...) : on les envoie vers l'application.
-  if (/[?&]invite=/.test(location.search)) location.replace('/app/' + location.search);
-  // Retour d'une connexion Google arrivé par erreur sur l'accueil : on l'envoie vers l'application.
-  else if (/access_token=|[?&]code=/.test(location.hash + location.search)) location.replace('/app/' + location.search + location.hash);
-  
-  // Système d'alerte et écran de maintenance automatique autonome (sans script externe)
-  async function checkMaintenanceAlert() {
+  // 1. BLOCAGE DE SÉCURITÉ IMMÉDIAT (S'exécute avant tout le reste)
+  (async function initSecurity() {
     try {
       const response = await fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?id=eq.1&select=message,display_at,is_maintenance', {
         headers: { 
@@ -20,45 +15,47 @@
       });
       
       const data = await response.json();
-      if (!data || data.length === 0) return;
-
-      // On cible le premier élément du tableau
-      const alertConfig = data[0]; 
-      
-      // 1. VERIFICATION : Écran de maintenance actif ?
-      if (alertConfig.is_maintenance === true) {
-        document.body.innerHTML = `
-          <div style="font-family: sans-serif; text-align: center; padding: 150px; background: #14171C; color: #EDEBE3; height: 100vh; margin:0; box-sizing: border-box;">
-            <h1 style="font-size: 45px; color: #5B6EF5; margin: 0;">Le Carnet est en cours de mise à jour 🛠️</h1>
-            <p style="font-size: 18px; color: #9AA2B2; margin-top: 20px;">Nous effectuons quelques modifications sur nos serveurs. Nous revenons dans quelques minutes !</p>
-          </div>
-        `;
-        document.body.style.background = "#14171C";
-        return;
-      }
-
-      // 2. VERIFICATION : Affichage du bandeau d'avertissement ?
-      const now = new Date();
-      const displayDate = new Date(alertConfig.display_at);
-
-      if (now >= displayDate) {
-        const alertBar = document.getElementById('maintenance-alert');
-        const alertText = document.getElementById('alert-text');
+      if (data && data.length > 0) {
+        const config = data[0];
         
-        if (alertBar && alertText) {
-          alertText.textContent = alertConfig.message;
-          alertBar.style.display = 'block';
+        // Si la maintenance est active, on bloque TOUT immédiatement
+        if (config.is_maintenance === true) {
+          window.stop(); // Arrête net le chargement de tous les autres scripts du site
+          document.documentElement.innerHTML = `
+            <head><meta charset="UTF-8"><title>Maintenance en cours</title></head>
+            <body style="font-family: sans-serif; text-align: center; padding: 150px; background: #14171C; color: #EDEBE3; margin:0; box-sizing: border-box;">
+              <h1 style="font-size: 45px; color: #5B6EF5; margin: 0;">Le Carnet est en cours de mise à jour 🛠️</h1>
+              <p style="font-size: 18px; color: #9AA2B2; margin-top: 20px;">Nous effectuons quelques modifications sur nos serveurs. Nous revenons dans quelques minutes !</p>
+            </body>
+          `;
+          return;
+        }
+
+        // Si on doit juste afficher le bandeau de prévention
+        const now = new Date();
+        const displayDate = new Date(config.display_at);
+        if (now >= displayDate) {
+          document.addEventListener("DOMContentLoaded", () => {
+            const alertBar = document.getElementById('maintenance-alert');
+            const alertText = document.getElementById('alert-text');
+            if (alertBar && alertText) {
+              alertText.textContent = config.message;
+              alertBar.style.display = 'block';
+            }
+          });
         }
       }
-    } catch (error) {
-      console.error("Erreur de contrôle du site :", error);
+    } catch (e) {
+      console.error("Erreur de disjoncteur :", e);
     }
-  }
+  })();
 
-  // Configuration des événements après le rendu HTML
+  // 2. Vos redirections d'origine (invitations et Google)
+  if (/[?&]invite=/.test(location.search)) location.replace('/app/' + location.search);
+  else if (/access_token=|[?&]code=/.test(location.hash + location.search)) location.replace('/app/' + location.search + location.hash);
+
+  // 3. Bouton Retour en haut
   document.addEventListener("DOMContentLoaded", () => {
-    checkMaintenanceAlert();
-
     const backToTopButton = document.getElementById("backToTop");
     window.onscroll = function() {
       if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
@@ -67,7 +64,6 @@
         if (backToTopButton) backToTopButton.style.display = "none";
       }
     };
-
     if (backToTopButton) {
       backToTopButton.addEventListener("click", () => {
         window.scrollTo({ top: 0, behavior: "smooth" });
