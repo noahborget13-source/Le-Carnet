@@ -4,93 +4,31 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <script>
-  // 1. BLOCAGE DE SÉCURITÉ IMMÉDIAT (S'exécute avant tout le reste)
-  (async function initSecurity() {
-    try {
-      const response = await fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?id=eq.1&select=message,display_at,is_maintenance', {
-        headers: { 
-          'apikey': 'sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl',
-          'Authorization': 'Bearer sb_publishable_wHkGWxzT0aUZx-DozRaxCg_6qYiL3cl'
-        }
-      });
-      
-      const data = await response.json();
-      if (data && data.length > 0) {
-        const config = data[0];
-        
-        // Si la maintenance est active, on bloque TOUT immédiatement
-        if (config.is_maintenance === true) {
-          window.stop(); // Arrête net le chargement de tous les autres scripts du site
-          document.documentElement.innerHTML = `
-            <head><meta charset="UTF-8"><title>Maintenance en cours</title></head>
-            <body style="font-family: sans-serif; text-align: center; padding: 150px; background: #14171C; color: #EDEBE3; margin:0; box-sizing: border-box;">
-              <h1 style="font-size: 45px; color: #5B6EF5; margin: 0;">Le Carnet est en cours de mise à jour 🛠️</h1>
-              <p style="font-size: 18px; color: #9AA2B2; margin-top: 20px;">Nous effectuons quelques modifications sur nos serveurs. Nous revenons dans quelques minutes !</p>
-            </body>
-          `;
-          return;
-        }
-
-        // Si on doit juste afficher le bandeau de prévention
-        const now = new Date();
-        const displayDate = new Date(config.display_at);
-        if (now >= displayDate) {
-          document.addEventListener("DOMContentLoaded", () => {
-            const alertBar = document.getElementById('maintenance-alert');
-            const alertText = document.getElementById('alert-text');
-            if (alertBar && alertText) {
-              alertText.textContent = config.message;
-              alertBar.style.display = 'block';
-            }
-          });
-        }
-      }
-    } catch (e) {
-      console.error("Erreur de disjoncteur :", e);
-    }
-  })();
-
-  // 2. Vos redirections d'origine (invitations et Google)
+  // Anciens liens d'invitation (/?invite=...) : on les envoie vers l'application.
   if (/[?&]invite=/.test(location.search)) location.replace('/app/' + location.search);
+  // Retour d'une connexion Google arrivé par erreur sur l'accueil : on l'envoie vers l'application.
   else if (/access_token=|[?&]code=/.test(location.hash + location.search)) location.replace('/app/' + location.search + location.hash);
-
-  // 3. Bouton Retour en haut
-  document.addEventListener("DOMContentLoaded", () => {
-    const backToTopButton = document.getElementById("backToTop");
-    window.onscroll = function() {
-      if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
-        if (backToTopButton) backToTopButton.style.display = "block";
-      } else {
-        if (backToTopButton) backToTopButton.style.display = "none";
-      }
-    };
-    if (backToTopButton) {
-      backToTopButton.addEventListener("click", () => {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      });
-    }
-  });
 </script>
 <title>Le Carnet — Gestion de tâches en équipe : priorités, échéances, calendrier</title>
 <meta name="description" content="Le Carnet : organisez vos tâches à plusieurs avec priorités, échéances, rappels par email, calendrier, sous-tâches, commentaires et messagerie. Chaque équipe a son propre espace." />
-<link rel="canonical" href="https://le-carnet-beta.vercel.app/" />
+<link rel="canonical" href="https://vercel.app" />
 <meta name="theme-color" content="#14171C" />
 <meta property="og:type" content="website" />
 <meta property="og:locale" content="fr_FR" />
 <meta property="og:site_name" content="Le Carnet" />
 <meta property="og:title" content="Le Carnet — Gestion de tâches en équipe" />
 <meta property="og:description" content="Priorités, échéances, rappels par email, calendrier et messagerie : organisez vos tâches à plusieurs, dans votre propre espace." />
-<meta property="og:url" content="https://le-carnet-beta.vercel.app/" />
+<meta property="og:url" content="https://vercel.app" />
 <meta name="twitter:card" content="summary" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://googleapis.com">
+<link rel="preconnect" href="https://gstatic.com" crossorigin>
+<link href="https://googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "WebApplication",
   "name": "Le Carnet",
-  "url": "https://le-carnet-beta.vercel.app/",
+  "url": "https://vercel.app",
   "applicationCategory": "BusinessApplication",
   "operatingSystem": "Tous (navigateur web)",
   "inLanguage": "fr",
@@ -119,6 +57,9 @@
     --accent: #5B6EF5; --accent-2: #6E7BF8; --violet: #9B7EF5;
     color-scheme: dark;
     scroll-behavior: smooth
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   }
   /* Bouton Retour en Haut parfaitement intégré à votre thème sombre */
   #backToTop {
