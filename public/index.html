@@ -10,7 +10,7 @@
   else if (/access_token=|[?&]code=/.test(location.hash + location.search)) location.replace('/app/' + location.search + location.hash);
   
   // 1. Système d'alerte et écran de maintenance automatique
-  async function checkMaintenanceAlert() {
+   async function checkMaintenanceAlert() {
     try {
       const response = await fetch('https://supabase.co', {
         headers: { 
@@ -20,11 +20,13 @@
       });
       
       const data = await response.json();
+      // Sécurité si Supabase ne renvoie rien
       if (!data || data.length === 0) return;
 
-      const alertConfig = data[0]; // Récupère la première ligne du tableau de données
+      // CORRECTION : On extrait la première ligne du tableau renvoyé par Supabase
+      const alertConfig = data[0]; 
       
-      // VERIFICATION : Est-ce que la maintenance est activée maintenant ?
+      // 1. VERIFICATION : Est-ce que la maintenance est activée maintenant ?
       if (alertConfig.is_maintenance === true) {
         document.body.innerHTML = `
           <div style="font-family: sans-serif; text-align: center; padding: 150px; background: #14171C; color: #EDEBE3; height: 100vh; margin:0;">
@@ -33,10 +35,10 @@
           </div>
         `;
         document.body.style.background = "#14171C";
-        return;
+        return; 
       }
 
-      // VERIFICATION : Est-ce qu'on doit juste afficher le bandeau pour prévenir ?
+      // 2. VERIFICATION : Est-ce qu'on doit juste afficher le bandeau pour prévenir ?
       const now = new Date();
       const displayDate = new Date(alertConfig.display_at);
 
