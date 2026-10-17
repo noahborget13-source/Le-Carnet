@@ -82,7 +82,7 @@
     .show-mobile { display: grid !important; }
 
     /* Conversation ouverte : plein écran, sans barre de navigation ni pied de page */
-    body.chat-open .app-sidebar, body.chat-open .site-footer, body.chat-open .chat-title { display: none !important; }
+    body.chat-open .app-sidebar, body.chat-open .site-footer, body.chat-open .chat-title, body.chat-open .alert-banner { display: none !important; }
     body.chat-open .app-shell { height: 100dvh; min-height: 0 !important; }
     body.chat-open .app-main { padding: 0 !important; display: flex; flex-direction: column; min-height: 0; overflow: hidden !important; }
     body.chat-open .app-main > div { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -333,7 +333,42 @@ function SiteFooter({ floating }) {
     </div>
   );
 }
-function Shell({ children, footer }) { return <div style={{ minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden" }}><GrainOverlay />{children}{footer && <SiteFooter floating />}</div>; }
+/* ---------------- Annonce programmée (table system_alerts : message + display_at) ---------------- */
+function AlertBanner({ inline }) {
+  const [alert, setAlert] = useState(null);
+  const [hidden, setHidden] = useState(false);
+  const keyOf = (a) => a.id + "|" + a.display_at + "|" + a.message;
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const { data, error } = await supabase.from('system_alerts').select('id,message,display_at,is_maintenance')
+          .lte('display_at', new Date().toISOString()).order('display_at', { ascending: false }).limit(5);
+        if (error || !alive) return;
+        const a = (data || []).find(r => !r.is_maintenance && r.message && r.message.trim());
+        if (!a) { setAlert(null); return; }
+        let dismissed = null;
+        try { dismissed = localStorage.getItem("carnet-alert-dismissed"); } catch (_) {}
+        setAlert(a); setHidden(dismissed === keyOf(a));
+      } catch (_) {}
+    };
+    load();
+    const id = setInterval(load, 5 * 60 * 1000);
+    const onVis = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
+  if (!alert || hidden) return null;
+  const close = () => { try { localStorage.setItem("carnet-alert-dismissed", keyOf(alert)); } catch (_) {} setHidden(true); };
+  return (
+    <div className="alert-banner" role="status" style={{ ...(inline ? { marginBottom: 18 } : { position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 45, width: "min(560px, 92vw)", boxShadow: "0 12px 30px rgba(0,0,0,.45)" }), display: "flex", alignItems: "flex-start", gap: 10, background: "#2A2410", border: "1px solid #6B5A1E", color: "#FFE3A0", borderRadius: 12, padding: "11px 14px", fontSize: 13.5, lineHeight: 1.45 }}>
+      <I.Alert size={17} style={{ flexShrink: 0, marginTop: 1, color: "#FFC97A" }} />
+      <div style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{alert.message}</div>
+      <button type="button" onClick={close} aria-label="Fermer l'annonce" style={{ background: "none", border: "none", color: "#FFE3A0", cursor: "pointer", padding: 2, flexShrink: 0 }}><I.X size={16} /></button>
+    </div>
+  );
+}
+function Shell({ children, footer, noAlert }) { return <div style={{ minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden" }}><GrainOverlay />{children}{!noAlert && <AlertBanner />}{footer && <SiteFooter floating />}</div>; }
 
 /* ============================================================
    App racine
@@ -409,7 +444,7 @@ function App() {
   }
 
   return (
-    <Shell>
+    <Shell noAlert>
       <Workspace me={profile} session={session} onLogout={() => supabase.auth.signOut()} notify={notify} onProfileChanged={() => setReloadKey(k => k + 1)} />
       {toast && <Toast toast={toast} />}
     </Shell>
@@ -956,6 +991,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         </div>
       </aside>
       <main className="app-main" style={{ flex: 1, minWidth: 0, padding: "26px 34px", overflowY: "auto" }}>
+        <AlertBanner inline />
         {tab === "home" && <HomeView me={me} accounts={people} tasks={tasks} comments={comments} onOpen={openFromAnywhere} goTo={setTab} />}
         {tab === "tasks" && <TasksView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} onOpen={openFromAnywhere} />}
