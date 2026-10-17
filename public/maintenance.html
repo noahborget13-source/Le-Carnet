@@ -20,7 +20,7 @@
 <script>
   // Toutes les 15 s, on regarde si la maintenance est terminée et on ramène le visiteur sur le site.
   function check() {
-    fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id&is_maintenance=eq.true&limit=1&_=' + Date.now(), {
+    fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id&is_maintenance=eq.true&limit=1', {
       headers: { apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4', Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4' }, cache: 'no-store'
     }).then(function (r) { return r.ok ? r.json() : null; })
       .then(function (rows) { if (rows && rows.length === 0) location.replace('/'); })
