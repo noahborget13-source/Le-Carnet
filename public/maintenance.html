@@ -1,16 +1,32 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Maintenance en cours</title>
-    <style>
-        body { font-family: sans-serif; text-align: center; padding: 150px; background: #f4f4f4; color: #333; }
-        h1 { font-size: 50px; }
-        p { font-size: 20px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Maintenance en cours — Le Carnet</title>
+<style>
+  body { font-family: sans-serif; text-align: center; padding: 150px 20px; background: #f4f4f4; color: #333; margin: 0; }
+  h1 { font-size: 44px; margin: 0 0 16px; }
+  p { font-size: 20px; margin: 0; }
+  small { display: block; margin-top: 28px; color: #888; font-size: 13px; }
+  @media (max-width: 600px) { body { padding-top: 90px; } h1 { font-size: 32px; } p { font-size: 17px; } }
+</style>
 </head>
 <body>
-    <h1>Nous revenons très vite !</h1>
-    <p>Le site est actuellement en cours de mise à jour. Merci de votre patience.</p>
+  <h1>Nous revenons très vite !</h1>
+  <p>Le site est actuellement en cours de mise à jour. Merci de votre patience.</p>
+  <small>Cette page se rafraîchit toute seule : tu seras redirigé dès que c'est terminé.</small>
+<script>
+  // Toutes les 15 s, on regarde si la maintenance est terminée et on ramène le visiteur sur le site.
+  function check() {
+    fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id&is_maintenance=eq.true&limit=1&_=' + Date.now(), {
+      headers: { apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4', Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4' }, cache: 'no-store'
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) { if (rows && rows.length === 0) location.replace('/'); })
+      .catch(function () {});
+  }
+  setInterval(check, 15000);
+</script>
 </body>
 </html>
