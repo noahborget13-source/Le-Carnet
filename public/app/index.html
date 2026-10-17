@@ -3,6 +3,22 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<script>
+  // Mode maintenance : si une ligne de la table system_alerts a is_maintenance = true,
+  // on envoie tout le monde vers /maintenance.html. En cas d'erreur réseau, le site reste accessible.
+  (function () {
+    if (location.pathname.indexOf('maintenance') !== -1) return;
+    var root = document.documentElement, done = false;
+    root.style.visibility = 'hidden';                       // évite de voir l'appli clignoter avant la redirection
+    function reveal() { if (!done) { done = true; root.style.visibility = ''; } }
+    setTimeout(reveal, 2500);                               // jamais bloqué plus de 2,5 s
+    fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id&is_maintenance=eq.true&limit=1&_=' + Date.now(), {
+      headers: { apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4', Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4' }, cache: 'no-store'
+    }).then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) { if (rows && rows.length) { done = true; location.replace('/maintenance.html'); } else reveal(); })
+      .catch(reveal);
+  })();
+</script>
 <title>Le Carnet — Application</title>
 <meta name="robots" content="noindex" />
 <meta name="description" content="Le Carnet — organisez vos tâches en équipe : priorités, échéances, couleurs et messagerie." />
@@ -52,6 +68,12 @@
     .app-main { padding: 16px 14px !important; order: 1; }
     .task-toolbar { gap: 8px !important; }
     .modal-card { padding: 20px 18px !important; }
+    .app-sidebar nav button { padding: 6px 5px !important; font-size: 10px !important; min-width: 0; }
+    .hide-mobile { display: none; }
+    .kanban { grid-template-columns: 1fr !important; }
+    .chat-wrap { flex-direction: column; height: calc(100vh - 210px) !important; min-height: 380px; }
+    .chat-list { width: 100% !important; display: flex; flex-direction: row; overflow-x: auto !important; overflow-y: hidden; border-right: none !important; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .chat-list button { width: auto !important; min-width: 150px; border-bottom: none !important; border-right: 1px solid #21252d; }
   }
 </style>
 </head>
@@ -160,6 +182,11 @@ function parseTags(text) {
   }
   return out.slice(0, 8);
 }
+const assigneeIds = (t) => (t.assignees && t.assignees.length ? t.assignees : (t.assignee ? [t.assignee] : []));
+const fileSizeLabel = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " Mo" : Math.max(1, Math.round(n / 1024)) + " Ko";
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_FILES_PER_TASK = 10;
+function notifyMention(kind, id, session) { callApi('/api/notify-mention', { kind, id }, session).catch(() => {}); }
 async function callApi(path, body, session) {
   const res = await fetch(path, {
     method: "POST",
@@ -198,6 +225,15 @@ const I = {
   Lock: p => <Icon {...p} path={<><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>} />,
   Eye: p => <Icon {...p} path={<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>} />,
   EyeOff: p => <Icon {...p} path={<><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.6 21.6 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>} />,
+  Home: p => <Icon {...p} path={<><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></>} />,
+  User: p => <Icon {...p} path={<><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>} />,
+  Columns: p => <Icon {...p} path={<><rect x="3" y="3" width="6" height="18" rx="1"/><rect x="15" y="3" width="6" height="12" rx="1"/></>} />,
+  List: p => <Icon {...p} path={<><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r=".6" fill="currentColor"/><circle cx="3.5" cy="12" r=".6" fill="currentColor"/><circle cx="3.5" cy="18" r=".6" fill="currentColor"/></>} />,
+  Paperclip: p => <Icon {...p} path={<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>} />,
+  Undo: p => <Icon {...p} path={<><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></>} />,
+  Download: p => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />,
+  Hash: p => <Icon {...p} path={<><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></>} />,
+  Copy: p => <Icon {...p} path={<><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>} />,
 };
 function NotebookMark({ size = 22 }) {
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -225,8 +261,55 @@ function Avatar({ user, size = 28 }) {
   const initials = ((user && (user.display_name || user.username)) || "?").slice(0, 2).toUpperCase();
   return (<div style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: (user && user.color) || "#5B6EF5", display: "grid", placeItems: "center", fontSize: size * 0.38, fontWeight: 700, color: "#14171C" }}>{initials}</div>);
 }
+function RichText({ text, accounts }) {
+  const parts = [];
+  const re = /(^|[^A-Za-z0-9._-])@([A-Za-z0-9._-]{3,30})/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    const name = m[2].replace(/[._-]+$/, "");
+    if (!accounts.some(a => a.username && a.username.toLowerCase() === name.toLowerCase())) continue;
+    const start = m.index + m[1].length;
+    parts.push(text.slice(last, start));
+    parts.push(<span key={start} style={{ color: "var(--accent-2)", fontWeight: 600, background: "#5B6EF51F", borderRadius: 4, padding: "0 3px" }}>@{name}</span>);
+    last = start + 1 + name.length;
+  }
+  parts.push(text.slice(last));
+  return <>{parts}</>;
+}
+function MentionInput({ value, onChange, onSubmit, placeholder, people, disabled, style }) {
+  const m = /(^|\s)@([A-Za-z0-9._-]*)$/.exec(value);
+  const q = m ? m[2].toLowerCase() : null;
+  const options = q === null ? [] : people.filter(p => (p.username || "").toLowerCase().startsWith(q) || (p.display_name || "").toLowerCase().startsWith(q)).slice(0, 5);
+  const pick = (p) => onChange(value.replace(/@([A-Za-z0-9._-]*)$/, "@" + p.username + " "));
+  return (
+    <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+      {options.length > 0 && (
+        <div style={{ position: "absolute", bottom: "100%", left: 0, marginBottom: 6, background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 10, overflow: "hidden", zIndex: 5, minWidth: 210, boxShadow: "0 12px 30px rgba(0,0,0,.4)" }}>
+          {options.map(p => (
+            <button key={p.id} type="button" onMouseDown={e => { e.preventDefault(); pick(p); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", background: "transparent", border: "none", color: "var(--text)", cursor: "pointer", fontSize: 13, textAlign: "left" }}>
+              <Avatar user={p} size={20} /> <span>{p.display_name}</span> <span style={{ color: "var(--text-dimmer)" }}>@{p.username}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <input value={value} disabled={disabled} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={style || inputStyle}
+        onKeyDown={e => { if (options.length && (e.key === "Tab" || e.key === "Enter")) { e.preventDefault(); pick(options[0]); return; } if (e.key === "Enter") onSubmit(); }} />
+    </div>
+  );
+}
+function AvatarStack({ users, size = 24, max = 3 }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center" }}>
+      {users.slice(0, max).map((u, i) => <div key={u.id} title={u.display_name} style={{ marginLeft: i ? -8 : 0, border: "2px solid var(--panel)", borderRadius: "50%" }}><Avatar user={u} size={size} /></div>)}
+      {users.length > max && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--text-dim)" }}>+{users.length - max}</span>}
+    </div>
+  );
+}
 function Toast({ toast }) {
-  return (<div key={toast.key} style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: toast.kind === "err" ? "#3A1F1E" : "var(--panel-2)", border: `1px solid ${toast.kind === "err" ? "#FF6B5E" : "var(--border-soft)"}`, color: "var(--text)", padding: "10px 18px", borderRadius: 10, fontSize: 14, zIndex: 50, animation: "riseIn .25s ease", boxShadow: "0 12px 30px rgba(0,0,0,.4)" }}>{toast.text}</div>);
+  return (<div key={toast.key} style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: toast.kind === "err" ? "#3A1F1E" : "var(--panel-2)", border: `1px solid ${toast.kind === "err" ? "#FF6B5E" : "var(--border-soft)"}`, color: "var(--text)", padding: "10px 18px", borderRadius: 10, fontSize: 14, zIndex: 60, animation: "riseIn .25s ease", boxShadow: "0 12px 30px rgba(0,0,0,.4)", display: "flex", alignItems: "center", gap: 14, maxWidth: "92vw" }}>
+    <span>{toast.text}</span>
+    {toast.action && <button type="button" onClick={toast.action.onClick} style={{ background: "none", border: "none", color: "var(--accent-2)", fontWeight: 700, fontSize: 14, cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>{toast.action.label}</button>}
+  </div>);
 }
 function Spinner() { return <div style={{ width: 26, height: 26, borderRadius: "50%", border: "3px solid #2B303A", borderTopColor: "var(--accent)", animation: "spin .8s linear infinite" }} />; }
 function SiteFooter({ floating }) {
@@ -245,20 +328,21 @@ function App() {
   const [session, setSession] = useState(undefined); // undefined = chargement, null = déconnecté
   const [profile, setProfile] = useState(null);
   const [toast, setToast] = useState(null);
-  const notify = (text, kind = "ok") => {
-    setToast({ text, kind, key: uid() });
+  const notify = (text, kind = "ok", action) => {
+    setToast({ text, kind, action: action && { label: action.label, onClick: () => { setToast(null); action.onClick(); } }, key: uid() });
     clearTimeout(notify._t);
-    notify._t = setTimeout(() => setToast(null), 3200);
+    notify._t = setTimeout(() => setToast(null), action ? 8000 : 3200);
   };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => { if (event === "PASSWORD_RECOVERY") setRecovery(true); setSession(s); });
     return () => sub.subscription.unsubscribe();
   }, []);
 
   const [profileChecked, setProfileChecked] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [recovery, setRecovery] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -275,6 +359,10 @@ function App() {
 
   if (session === undefined || !profileChecked) {
     return <Shell><div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><Spinner /></div></Shell>;
+  }
+
+  if (session && recovery) {
+    return <Shell footer><ResetPassword notify={notify} onDone={() => setRecovery(false)} />{toast && <Toast toast={toast} />}</Shell>;
   }
 
   if (!session) {
@@ -308,7 +396,7 @@ function App() {
 
   return (
     <Shell>
-      <Workspace me={profile} session={session} onLogout={() => supabase.auth.signOut()} notify={notify} />
+      <Workspace me={profile} session={session} onLogout={() => supabase.auth.signOut()} notify={notify} onProfileChanged={() => setReloadKey(k => k + 1)} />
       {toast && <Toast toast={toast} />}
     </Shell>
   );
@@ -448,7 +536,8 @@ function CompleteProfile({ session, notify, onDone, onLogout }) {
     if (!joinCode.trim() || needIdentity()) { setErr("Remplis tous les champs."); return; }
     setBusy(true); setErr("");
     try {
-      const { data: server, error: sErr } = await supabase.from('servers').select('id,name').eq('join_code', joinCode.trim().toLowerCase()).single();
+      const { data: found, error: sErr } = await supabase.rpc('server_for_code', { p_code: joinCode });
+      const server = Array.isArray(found) ? found[0] : found;
       if (sErr || !server) throw new Error("Code d'invitation introuvable.");
       const { error: pErr } = await supabase.from('profiles').insert({ id: user.id, server_id: server.id, username: username.trim(), email, display_name: displayName.trim(), color: "#5B9EF5" });
       if (pErr) throw pErr;
@@ -539,6 +628,64 @@ function AuthGate({ notify }) {
   );
 }
 
+/* ---------------- Mot de passe oublié / nouveau mot de passe ---------------- */
+function ForgotPassword({ initial, onBack }) {
+  const [identifier, setIdentifier] = useState(initial || "");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [err, setErr] = useState("");
+  const send = async () => {
+    if (!identifier.trim() || busy) return;
+    setBusy(true); setErr("");
+    try { await callApi('/api/forgot-password', { identifier: identifier.trim() }); setSent(true); }
+    catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+  return (
+    <div onKeyDown={e => { if (e.key === "Enter") send(); }} style={{ width: "100%", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" }}>
+      <button type="button" onClick={onBack} style={{ background: "none", border: "none", color: "var(--text-dimmer)", fontSize: 12.5, cursor: "pointer", padding: 0, marginBottom: 14 }}>← Retour</button>
+      <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 21, margin: "0 0 6px" }}>Mot de passe oublié</h1>
+      {sent ? (
+        <p style={{ color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6 }}>Si un compte correspond à « {identifier} », un email avec un lien vient de partir. Pense à regarder dans les spams. Le lien est valable peu de temps.</p>
+      ) : (<div>
+        <p style={{ color: "var(--text-dim)", fontSize: 13, margin: "0 0 18px" }}>Entre ton email ou ton identifiant : on t'envoie un lien pour choisir un nouveau mot de passe.</p>
+        <Field label="Email ou identifiant"><input autoFocus value={identifier} onChange={e => setIdentifier(e.target.value)} style={inputStyle} /></Field>
+        {err && <div style={{ color: "#FF9A8F", fontSize: 13, marginBottom: 14 }}>{err}</div>}
+        <button type="button" onClick={send} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Envoi…" : "Envoyer le lien"}</button>
+      </div>)}
+    </div>
+  );
+}
+function ResetPassword({ onDone, notify }) {
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (busy) return;
+    if (pw.length < 8) { setErr("Le mot de passe doit faire au moins 8 caractères."); return; }
+    if (pw !== pw2) { setErr("Les deux mots de passe sont différents."); return; }
+    setBusy(true); setErr("");
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    notify("Mot de passe modifié.");
+    onDone();
+  };
+  return (
+    <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+      <div onKeyDown={e => { if (e.key === "Enter") save(); }} style={{ width: 400, maxWidth: "92vw", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><NotebookMark size={32} /></div>
+        <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 21, textAlign: "center", margin: "0 0 18px" }}>Nouveau mot de passe</h1>
+        <Field label="Nouveau mot de passe (8 caractères minimum)"><input autoFocus type="password" value={pw} onChange={e => setPw(e.target.value)} style={inputStyle} /></Field>
+        <Field label="Confirme le mot de passe"><input type="password" value={pw2} onChange={e => setPw2(e.target.value)} style={inputStyle} /></Field>
+        {err && <div style={{ color: "#FF9A8F", fontSize: 13, marginBottom: 14 }}>{err}</div>}
+        <button type="button" onClick={save} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "…" : "Enregistrer"}</button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Login ---------------- */
 function Login({ notify }) {
   const [identifier, setIdentifier] = useState(""); // username OU email
@@ -546,6 +693,7 @@ function Login({ notify }) {
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState("login"); // login | forgot
 
   const submit = async () => {
     if (busy) return;
@@ -563,6 +711,7 @@ function Login({ notify }) {
     setBusy(false);
   };
   const onKey = (e) => { if (e.key === "Enter") submit(); };
+  if (mode === "forgot") return <ForgotPassword initial={identifier} onBack={() => setMode("login")} />;
 
   return (
     <div onKeyDown={onKey} style={{ width: "100%", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" }}>
@@ -577,6 +726,7 @@ function Login({ notify }) {
         </div>
       </Field>
       {err && <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#FF9A8F", fontSize: 13, margin: "4px 0 14px" }}><I.Alert size={14} /> {err}</div>}
+      <div style={{ textAlign: "right", margin: "-6px 0 12px" }}><button type="button" onClick={() => setMode("forgot")} style={{ background: "none", border: "none", color: "var(--accent-2)", fontSize: 12.5, cursor: "pointer", padding: 0 }}>Mot de passe oublié ?</button></div>
       <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Connexion…" : "Se connecter"}</button>
       <OrDivider />
       <GoogleButton label="Continuer avec Google" onError={setErr} />
@@ -632,7 +782,8 @@ function Signup({ notify }) {
     setBusy(true); setErr("");
     try {
       const session = await doSignupCore();
-      const { data: server, error: sErr } = await supabase.from('servers').select('id,name').eq('join_code', joinCode.trim().toLowerCase()).single();
+      const { data: found, error: sErr } = await supabase.rpc('server_for_code', { p_code: joinCode });
+      const server = Array.isArray(found) ? found[0] : found;
       if (sErr || !server) throw new Error("Code d'invitation introuvable.");
       const { error: pErr } = await supabase.from('profiles').insert({
         id: session.user.id, server_id: server.id, username: username.trim(), email: email.trim(),
@@ -713,85 +864,264 @@ function PendingScreen({ onLogout }) {
 /* ============================================================
    Workspace
    ============================================================ */
-function Workspace({ me, session, onLogout, notify }) {
-  const [tab, setTab] = useState("tasks");
-  const [tasks, setTasks] = useState([]);
+function useLiveTable(table, setRows, shape) {
+  const loadRef = useRef(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      let q = supabase.from(table).select('*');
+      if (shape) q = shape(q);
+      q.then(({ data }) => { if (alive) setRows(data || []); });
+    };
+    loadRef.current = load;
+    load();
+    const ch = supabase.channel(table + '-live').on('postgres_changes', { event: '*', schema: 'public', table }, load).subscribe();
+    return () => { alive = false; supabase.removeChannel(ch); };
+  }, []);
+  return () => loadRef.current && loadRef.current();
+}
+
+function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
+  const [tab, setTab] = useState("home");
+  const [tasksAll, setTasksAll] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [channelMsgs, setChannelMsgs] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [comments, setComments] = useState([]);
+  const [attachments, setAttachments] = useState([]);
+  const [templates, setTemplates] = useState([]);
   const [openId, setOpenId] = useState(null);
   const myPerms = useMemo(() => effectivePerms(me), [me]);
   const isAdmin = me.role === "admin";
 
-  useEffect(() => {
-    supabase.from('profiles').select('*').then(({ data }) => setAccounts(data || []));
-    const ch = supabase.channel('profiles-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-      supabase.from('profiles').select('*').then(({ data }) => setAccounts(data || []));
-    }).subscribe();
-    return () => supabase.removeChannel(ch);
-  }, []);
+  useLiveTable('profiles', setAccounts);
+  useLiveTable('tasks', setTasksAll);
+  useLiveTable('task_comments', setComments);
+  useLiveTable('messages', setMessages);
+  useLiveTable('channel_messages', setChannelMsgs, q => q.order('ts', { ascending: false }).limit(300));
+  const reloadAttachments = useLiveTable('task_attachments', setAttachments);
+  useLiveTable('task_templates', setTemplates);
 
-  useEffect(() => {
-    supabase.from('tasks').select('*').then(({ data }) => setTasks(data || []));
-    const ch = supabase.channel('tasks-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-      supabase.from('tasks').select('*').then(({ data }) => setTasks(data || []));
-    }).subscribe();
-    return () => supabase.removeChannel(ch);
-  }, []);
-
-  useEffect(() => {
-    const load = () => supabase.from('task_comments').select('*').then(({ data }) => setComments(data || []));
-    load();
-    const ch = supabase.channel('comments-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'task_comments' }, load).subscribe();
-    return () => supabase.removeChannel(ch);
-  }, []);
-
-  useEffect(() => {
-    supabase.from('messages').select('*').then(({ data }) => setMessages(data || []));
-    const ch = supabase.channel('messages-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
-      supabase.from('messages').select('*').then(({ data }) => setMessages(data || []));
-    }).subscribe();
-    return () => supabase.removeChannel(ch);
-  }, []);
+  useEffect(() => { if (tab === "admin" && !isAdmin) setTab("home"); }, [tab, isAdmin]);
+  const tasks = useMemo(() => tasksAll.filter(t => !t.deleted_at), [tasksAll]);
+  const trashed = useMemo(() => tasksAll.filter(t => t.deleted_at).sort((a, b) => b.deleted_at.localeCompare(a.deleted_at)), [tasksAll]);
+  const people = useMemo(() => accounts.filter(a => a.status !== "pending"), [accounts]);
+  const openTask = openId ? tasks.find(t => t.id === openId) : null;
 
   const tabs = [
+    { id: "home", label: "Accueil", icon: I.Home },
     { id: "tasks", label: "Tâches", icon: I.Check },
     { id: "calendar", label: "Calendrier", icon: I.Calendar },
-    { id: "messages", label: "Messagerie", icon: I.Message },
-    ...(isAdmin ? [{ id: "admin", label: "Administration", icon: I.Shield }] : []),
+    { id: "messages", label: "Messages", icon: I.Message },
+    { id: "profile", label: "Profil", icon: I.User },
+    ...(isAdmin ? [{ id: "admin", label: "Admin", icon: I.Shield }] : []),
   ];
+  const openFromAnywhere = (id) => setOpenId(id);
 
   return (
     <div className="app-shell" style={{ position: "relative", zIndex: 1, display: "flex", minHeight: "100vh" }}>
       <aside className="paper app-sidebar" style={{ width: 236, flexShrink: 0, borderRight: "1px solid var(--border)", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 18 }}>
         <div className="app-sidebar-brand" style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 8px" }}><NotebookMark size={24} /><span style={{ fontFamily: "Fraunces, serif", fontSize: 18 }}>Le Carnet</span></div>
         <nav style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
-          {tabs.map(t => (<button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", cursor: "pointer", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: 500, textAlign: "left" }}><t.icon size={16} /> {t.label}</button>))}
+          {tabs.map(t => (<button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: tab === t.id ? 600 : 500, cursor: "pointer", textAlign: "left" }}><t.icon size={17} /> {t.label}</button>))}
         </nav>
-        <a className="app-sidebar-footer-label" href="https://mousticheck.netlify.app/" target="_blank" rel="noopener" style={{ display: "block", marginTop: "auto", textDecoration: "none", color: "var(--text)", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "10px 12px", fontSize: 12.5, lineHeight: 1.45 }}>
+        <a className="app-sidebar-footer-label" href="https://mousticheck.netlify.app/" target="_blank" rel="noopener" style={{ display: "block", marginTop: "auto", textDecoration: "none", color: "var(--text)", background: "var(--bg-2)", border: "1px dashed var(--border-soft)", borderRadius: 10, padding: "10px 12px", fontSize: 12 }}>
           <div style={{ fontSize: 10, letterSpacing: 1, color: "var(--text-dimmer)", marginBottom: 3 }}>PUB</div>
           <div style={{ fontWeight: 600 }}>🦟 MoustiCheck</div>
           <div style={{ color: "var(--text-dim)" }}>Le suivi du risque moustiques près de chez toi.</div>
         </a>
         <div className="app-sidebar-footer" style={{ marginTop: 0, paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
-          <div className="app-sidebar-footer-label" style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", marginBottom: 10 }}>
+          <button type="button" onClick={() => setTab("profile")} className="app-sidebar-footer-label" style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", marginBottom: 10, background: "none", border: "none", cursor: "pointer", textAlign: "left", color: "inherit" }}>
             <Avatar user={me} size={30} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{me.display_name}</div>
               <div style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>{isAdmin ? "Administrateur" : (ROLES.find(r => r.id === me.role) || {}).label || "Membre"}</div>
             </div>
-          </div>
-          <button onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", background: "transparent", border: "1px solid var(--border-soft)", borderRadius: 9, color: "var(--text-dim)", fontSize: 13, cursor: "pointer" }}><I.LogOut size={14} /> <span className="app-sidebar-footer-label">Se déconnecter</span></button>
+          </button>
+          <button onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", background: "transparent", border: "1px solid var(--border-soft)", borderRadius: 9, color: "var(--text-dim)", fontSize: 13, cursor: "pointer" }}><I.LogOut size={14} /> <span className="app-sidebar-footer-label">Déconnexion</span></button>
         </div>
       </aside>
       <main className="app-main" style={{ flex: 1, minWidth: 0, padding: "26px 34px", overflowY: "auto" }}>
-        {tab === "tasks" && <TasksView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={accounts.filter(a => a.status !== "pending")} tasks={tasks} comments={comments} onOpen={setOpenId} notify={notify} />}
-        {tab === "calendar" && <CalendarView tasks={tasks} accounts={accounts.filter(a => a.status !== "pending")} onOpen={setOpenId} />}
-        {tab === "messages" && <MessagesView me={me} myPerms={myPerms} accounts={accounts.filter(a => a.status !== "pending")} messages={messages} />}
-        {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} notify={notify} />}
+        {tab === "home" && <HomeView me={me} accounts={people} tasks={tasks} comments={comments} onOpen={openFromAnywhere} goTo={setTab} />}
+        {tab === "tasks" && <TasksView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
+        {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} onOpen={openFromAnywhere} />}
+        {tab === "messages" && <MessagesView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} messages={messages} channelMsgs={channelMsgs} notify={notify} />}
+        {tab === "profile" && <ProfileView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} tasks={tasks} notify={notify} onChanged={onProfileChanged} onLogout={onLogout} />}
+        {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} notify={notify} onChanged={onProfileChanged} />}
         <SiteFooter />
       </main>
-      {openId && tasks.find(t => t.id === openId) && <TaskDetail task={tasks.find(t => t.id === openId)} accounts={accounts.filter(a => a.status !== "pending")} me={me} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openId)} notify={notify} onClose={() => setOpenId(null)} />}
+      {openTask && <TaskDetail task={openTask} accounts={people} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openTask.id)} attachments={attachments.filter(a => a.task_id === openTask.id)} onAttachmentsChanged={reloadAttachments} notify={notify} onClose={() => setOpenId(null)} />}
+    </div>
+  );
+}
+
+/* ============================================================
+   Accueil : tableau de bord personnel
+   ============================================================ */
+function StatCard({ value, label, hex, onClick }) {
+  return (
+    <button type="button" onClick={onClick} style={{ flex: "1 1 140px", textAlign: "left", background: "var(--panel)", border: "1px solid var(--border)", borderTop: `3px solid ${hex}`, borderRadius: 12, padding: "14px 16px", cursor: onClick ? "pointer" : "default", color: "var(--text)" }}>
+      <div style={{ fontFamily: "Fraunces, serif", fontSize: 30, fontWeight: 600, lineHeight: 1.1, color: hex }}>{value}</div>
+      <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 4 }}>{label}</div>
+    </button>
+  );
+}
+function HomeView({ me, accounts, tasks, comments, onOpen, goTo }) {
+  const mine = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id));
+  const late = mine.filter(t => t.due && daysUntil(t.due) < 0);
+  const today = mine.filter(t => t.due && daysUntil(t.due) === 0);
+  const soon = mine.filter(t => t.due && daysUntil(t.due) > 0 && daysUntil(t.due) <= 3);
+  const doing = mine.filter(t => t.doing && !(t.due && daysUntil(t.due) <= 3));
+  const weekAgo = Date.now() - 7 * 86400000;
+  const doneWeek = tasks.filter(t => t.done && t.done_at && new Date(t.done_at).getTime() >= weekAgo);
+  const myDoneWeek = doneWeek.filter(t => assigneeIds(t).includes(me.id));
+  const createdWeek = tasks.filter(t => t.created_at && new Date(t.created_at).getTime() >= weekAgo);
+  const urgent = [...late, ...today, ...soon].sort((a, b) => a.due.localeCompare(b.due) || b.priority - a.priority);
+  const perPerson = new Map();
+  for (const t of doneWeek) for (const id of assigneeIds(t)) perPerson.set(id, (perPerson.get(id) || 0) + 1);
+  const top = [...perPerson.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, n]) => ({ user: accounts.find(a => a.id === id), n })).filter(x => x.user);
+  const first = (me.display_name || "").split(" ")[0];
+  const dateLabel = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+
+  const Row = ({ t }) => {
+    const label = LABELS.find(l => l.id === t.label) || LABELS[0];
+    const d = daysUntil(t.due);
+    return (
+      <button type="button" onClick={() => onOpen(t.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "var(--panel)", border: "1px solid var(--border)", borderLeft: `5px solid ${label.hex}`, borderRadius: 10, padding: "10px 14px", cursor: "pointer", color: "var(--text)" }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}>{t.title}</span>
+        {t.due && <span style={{ fontSize: 12, color: d < 0 ? "#FF9A8F" : d === 0 ? "#FFC97A" : "var(--text-dim)", whiteSpace: "nowrap" }}>{formatDue(t.due, d)}</span>}
+      </button>
+    );
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 22 }}>
+        <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Bonjour {first} 👋</h1>
+        <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", textTransform: "capitalize" }}>{dateLabel}</p>
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 26 }}>
+        <StatCard value={mine.length} label="À faire pour moi" hex="#5B9EF5" onClick={() => goTo("tasks")} />
+        <StatCard value={late.length} label="En retard" hex="#FF6B5E" onClick={() => goTo("tasks")} />
+        <StatCard value={today.length} label="Pour aujourd'hui" hex="#FFB648" onClick={() => goTo("calendar")} />
+        <StatCard value={myDoneWeek.length} label="Terminées cette semaine" hex="#5FBF8B" />
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>À traiter en priorité</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 26 }}>
+        {urgent.length === 0 && <EmptyState text={mine.length ? "Rien d'urgent dans les 3 prochains jours. 🎉" : "Aucune tâche ne t'est assignée pour l'instant."} />}
+        {urgent.map(t => <Row key={t.id} t={t} />)}
+      </div>
+
+      {doing.length > 0 && (<>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>En cours</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 26 }}>{doing.map(t => <Row key={t.id} t={t} />)}</div>
+      </>)}
+
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>Récap de la semaine</div>
+      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 18px", display: "flex", gap: 28, flexWrap: "wrap", alignItems: "center" }}>
+        <div><div style={{ fontFamily: "Fraunces, serif", fontSize: 24, fontWeight: 600 }}>{doneWeek.length}</div><div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>tâche(s) terminée(s) sur le serveur</div></div>
+        <div><div style={{ fontFamily: "Fraunces, serif", fontSize: 24, fontWeight: 600 }}>{createdWeek.length}</div><div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>nouvelle(s) tâche(s)</div></div>
+        {top.length > 0 && (
+          <div style={{ marginLeft: "auto" }}>
+            <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginBottom: 6 }}>Les plus actifs</div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>{top.map(({ user, n }) => <div key={user.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}><Avatar user={user} size={22} /> {user.display_name} <span style={{ color: "var(--text-dimmer)" }}>· {n}</span></div>)}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Mon profil : nom, couleur, mot de passe, suppression du compte
+   ============================================================ */
+function ProfileView({ me, session, isAdmin, myPerms, tasks, notify, onChanged, onLogout }) {
+  const [displayName, setDisplayName] = useState(me.display_name || "");
+  const [username, setUsername] = useState(me.username || "");
+  const [color, setColor] = useState(me.color || LABELS[3].hex);
+  const [busy, setBusy] = useState(false);
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [delBusy, setDelBusy] = useState(false);
+  const dirty = displayName.trim() !== me.display_name || username.trim() !== me.username || color !== me.color;
+  const preview = { ...me, display_name: displayName || me.display_name, color };
+  const roleLabel = isAdmin ? "Administrateur" : (ROLES.find(r => r.id === me.role) || {}).label || "Membre";
+  const mineOpen = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id)).length;
+  const created = tasks.filter(t => t.created_by === me.id).length;
+
+  const saveProfile = async () => {
+    if (busy || !dirty) return;
+    setBusy(true);
+    try {
+      await callApi('/api/manage-account', { action: 'update-self', patch: { display_name: displayName.trim(), username: username.trim(), color } }, session);
+      notify("Profil mis à jour.");
+      onChanged();
+    } catch (e) { notify(e.message, "err"); }
+    setBusy(false);
+  };
+  const savePassword = async () => {
+    if (pwBusy) return;
+    if (pw.length < 8) { notify("Le mot de passe doit faire au moins 8 caractères.", "err"); return; }
+    if (pw !== pw2) { notify("Les deux mots de passe sont différents.", "err"); return; }
+    setPwBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setPwBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    setPw(""); setPw2("");
+    notify("Mot de passe modifié.");
+  };
+  const deleteAccount = async () => {
+    if (delBusy || confirmText.trim().toUpperCase() !== "SUPPRIMER") return;
+    setDelBusy(true);
+    try {
+      await callApi('/api/manage-account', { action: 'delete-self' }, session);
+      await supabase.auth.signOut();
+    } catch (e) { notify(e.message, "err"); setDelBusy(false); }
+  };
+  const card = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "20px 22px", marginBottom: 18, maxWidth: 560 };
+
+  return (
+    <div>
+      <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: "0 0 20px" }}>Mon profil</h1>
+
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
+          <Avatar user={preview} size={52} />
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 16 }}>{me.display_name}</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{roleLabel} · {me.email}</div>
+            <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 2 }}>{mineOpen} tâche(s) en cours · {created} créée(s)</div>
+          </div>
+        </div>
+        <Field label="Nom affiché"><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
+        <Field label="Identifiant (pour te connecter et être mentionné avec @)"><input value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Couleur du profil</div>
+          <div style={{ display: "flex", gap: 9 }}>{LABELS.map(l => (<button key={l.id} type="button" onClick={() => setColor(l.hex)} title={l.name} style={{ width: 28, height: 28, borderRadius: "50%", background: l.hex, cursor: "pointer", border: color === l.hex ? "2.5px solid var(--text)" : "2.5px solid transparent" }} />))}</div>
+        </div>
+        <button type="button" onClick={saveProfile} disabled={busy || !dirty} style={{ ...primaryBtn, padding: "10px 22px", opacity: busy || !dirty ? 0.5 : 1, cursor: dirty ? "pointer" : "default" }}>{busy ? "Enregistrement…" : "Enregistrer"}</button>
+      </div>
+
+      <div style={card}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Changer de mot de passe</div>
+        <Field label="Nouveau mot de passe (8 caractères minimum)"><input type="password" value={pw} onChange={e => setPw(e.target.value)} style={inputStyle} /></Field>
+        <Field label="Confirme le mot de passe"><input type="password" value={pw2} onChange={e => setPw2(e.target.value)} onKeyDown={e => { if (e.key === "Enter") savePassword(); }} style={inputStyle} /></Field>
+        <button type="button" onClick={savePassword} disabled={pwBusy || !pw} style={{ ...secondaryBtn, padding: "10px 22px", opacity: pwBusy || !pw ? 0.5 : 1 }}>{pwBusy ? "…" : "Modifier le mot de passe"}</button>
+      </div>
+
+      <div style={{ ...card, borderColor: "#4A2A28" }}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6, color: "#FF9A8F" }}>Supprimer mon compte</div>
+        {isAdmin ? (
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6, margin: 0 }}>Tu es l'administrateur de ce serveur. Pour pouvoir supprimer ton compte, transfère d'abord l'administration à quelqu'un d'autre (onglet Admin → « Transférer l'administration »).</p>
+        ) : (<>
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6, margin: "0 0 12px" }}>Cette action est définitive : ton compte et ton accès au serveur disparaissent. Les tâches que tu as créées restent sur le serveur.</p>
+          <Field label="Tape SUPPRIMER pour confirmer"><input value={confirmText} onChange={e => setConfirmText(e.target.value)} style={inputStyle} /></Field>
+          <button type="button" onClick={deleteAccount} disabled={delBusy || confirmText.trim().toUpperCase() !== "SUPPRIMER"} style={{ ...secondaryBtn, padding: "10px 22px", color: "#FF9A8F", borderColor: "#6A3532", opacity: confirmText.trim().toUpperCase() === "SUPPRIMER" ? 1 : 0.5 }}>{delBusy ? "Suppression…" : "Supprimer définitivement mon compte"}</button>
+        </>)}
+      </div>
     </div>
   );
 }
@@ -799,21 +1129,33 @@ function Workspace({ me, session, onLogout, notify }) {
 /* ============================================================
    Tasks
    ============================================================ */
-function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, comments, onOpen, notify }) {
+const statusOf = (t) => t.done ? "done" : t.doing ? "doing" : "todo";
+const COLUMNS = [
+  { id: "todo", label: "À faire", hex: "#9098A8" },
+  { id: "doing", label: "En cours", hex: "#FFB648" },
+  { id: "done", label: "Terminé", hex: "#5FBF8B" },
+];
+
+function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, templates, comments, attachments, onOpen, notify }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [showTrash, setShowTrash] = useState(false);
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("priority");
   const [filterLabel, setFilterLabel] = useState(null);
   const [filterDone, setFilterDone] = useState("open");
   const [filterMine, setFilterMine] = useState(false);
+  const [view, setView] = useState(() => { try { return localStorage.getItem("carnet-view") === "kanban" ? "kanban" : "list"; } catch (_) { return "list"; } });
+  const changeView = (v) => { setView(v); try { localStorage.setItem("carnet-view", v); } catch (_) {} };
 
   const visible = useMemo(() => {
     let list = tasks.filter(t => {
-      if (filterDone === "open" && t.done) return false;
-      if (filterDone === "done" && !t.done) return false;
+      if (view === "list") {
+        if (filterDone === "open" && t.done) return false;
+        if (filterDone === "done" && !t.done) return false;
+      }
       if (filterLabel && t.label !== filterLabel) return false;
-      if (filterMine && t.assignee !== me.id) return false;
+      if (filterMine && !assigneeIds(t).includes(me.id)) return false;
       if (query && ![t.title, t.notes || "", ...(t.tags || [])].join(" ").toLowerCase().includes(query.toLowerCase())) return false;
       return true;
     });
@@ -824,80 +1166,240 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, comments, o
       return 0;
     });
     return list;
-  }, [tasks, query, sortBy, filterLabel, filterDone, filterMine, me.id]);
+  }, [tasks, query, sortBy, filterLabel, filterDone, filterMine, view, me.id]);
 
-  const tellAssignee = async (taskId) => {
-    try {
-      const r = await callApi('/api/notify-task', { taskId }, session);
-      return r.sent;
-    } catch (_) { return false; }
+  const canEditTask = (t) => isAdmin || myPerms.editAnyTask || (t.created_by === me.id && myPerms.editOwnTask);
+  const tellAssignees = async (taskId, userIds) => {
+    if (!userIds.length) return 0;
+    try { const r = await callApi('/api/notify-task', { taskId, userIds }, session); return r.sent || 0; }
+    catch (_) { return 0; }
+  };
+  const saveTemplate = async (draft, name) => {
+    const { error } = await supabase.from('task_templates').insert({
+      server_id: me.server_id, created_by: me.id, name: name.slice(0, 80), title: draft.title, notes: draft.notes || "",
+      label: draft.label, priority: draft.priority, tags: draft.tags || [], recurrence: draft.recurrence || null,
+      subtasks: (draft.subtasks || []).map(x => ({ ...x, done: false })),
+    });
+    return error ? error.message : null;
   };
   const saveTask = async (draft) => {
-    if (draft.id) {
-      const { id, ...data } = draft;
-      const { error } = await supabase.from('tasks').update(data).eq('id', id);
+    const { saveAsTemplate, ...data } = draft;
+    data.assignee = (data.assignees || [])[0] || null;
+    let message = "";
+    if (data.id) {
+      const { id, ...rest } = data;
+      const { error } = await supabase.from('tasks').update(rest).eq('id', id);
       if (error) { notify(error.message, "err"); return; }
-      const reassigned = editing && data.assignee && data.assignee !== editing.assignee && data.assignee !== me.id;
-      const sent = reassigned ? await tellAssignee(id) : false;
-      notify(sent ? "Tâche mise à jour · email envoyé." : "Tâche mise à jour.");
+      const added = (rest.assignees || []).filter(x => x !== me.id && !(editing ? assigneeIds(editing) : []).includes(x));
+      const sent = await tellAssignees(id, added);
+      message = sent ? "Tâche mise à jour · email envoyé." : "Tâche mise à jour.";
     } else {
-      const { data: created, error } = await supabase.from('tasks').insert({ ...draft, created_by: me.id, server_id: me.server_id }).select().single();
+      const { data: created, error } = await supabase.from('tasks').insert({ ...data, done: false, created_by: me.id, server_id: me.server_id }).select().single();
       if (error) { notify(error.message, "err"); return; }
-      const sent = created && draft.assignee && draft.assignee !== me.id ? await tellAssignee(created.id) : false;
-      notify(sent ? "Tâche créée · email envoyé." : "Tâche créée.");
+      const sent = created ? await tellAssignees(created.id, (data.assignees || []).filter(x => x !== me.id)) : 0;
+      message = sent ? "Tâche créée · email envoyé." : "Tâche créée.";
     }
+    if (saveAsTemplate) {
+      const err = await saveTemplate(data, saveAsTemplate);
+      message += err ? " (Modèle non enregistré : " + err + ")" : " Modèle enregistré.";
+    }
+    notify(message);
     setShowForm(false); setEditing(null);
   };
-  const removeTask = async (id) => { const { error } = await supabase.from('tasks').delete().eq('id', id); notify(error ? error.message : "Tâche supprimée.", error ? "err" : "ok"); };
-  const toggleDone = async (t) => {
-    const { error } = await supabase.from('tasks').update({ done: !t.done }).eq('id', t.id);
+  const deleteTemplate = async (id) => {
+    const { error } = await supabase.from('task_templates').delete().eq('id', id);
+    notify(error ? error.message : "Modèle supprimé.", error ? "err" : "ok");
+  };
+
+  const restoreTask = async (id) => {
+    const { error } = await supabase.rpc('restore_task', { p_id: id });
+    notify(error ? error.message : "Tâche restaurée.", error ? "err" : "ok");
+  };
+  const removeTask = async (t) => {
+    const { error } = await supabase.rpc('trash_task', { p_id: t.id });
     if (error) { notify(error.message, "err"); return; }
-    if (!t.done && t.recurrence) {
-      const next = nextOccurrence(t.due, t.recurrence);
-      const { error: e2 } = await supabase.from('tasks').insert({
-        title: t.title, notes: t.notes, label: t.label, priority: t.priority, due: next, assignee: t.assignee,
-        tags: t.tags || [], subtasks: (t.subtasks || []).map(x => ({ ...x, done: false })), recurrence: t.recurrence,
-        done: false, created_by: t.created_by, server_id: me.server_id,
-      });
+    notify("Tâche placée dans la corbeille.", "ok", { label: "Annuler", onClick: () => restoreTask(t.id) });
+  };
+  const purgeTask = async (t) => {
+    const paths = attachments.filter(a => a.task_id === t.id).map(a => a.path);
+    const { error } = await supabase.from('tasks').delete().eq('id', t.id);
+    if (error) { notify(error.message, "err"); return; }
+    if (paths.length) await supabase.storage.from('task-files').remove(paths);
+    notify("Tâche supprimée définitivement.");
+  };
+
+  const spawnNext = async (t) => {
+    const next = nextOccurrence(t.due, t.recurrence);
+    const ids = assigneeIds(t);
+    const { error } = await supabase.from('tasks').insert({
+      title: t.title, notes: t.notes, label: t.label, priority: t.priority, due: next, assignee: ids[0] || null, assignees: ids,
+      tags: t.tags || [], subtasks: (t.subtasks || []).map(x => ({ ...x, done: false })), recurrence: t.recurrence,
+      done: false, created_by: t.created_by, server_id: me.server_id,
+    });
+    return { next, error };
+  };
+  const setStatus = async (t, status) => {
+    if (statusOf(t) === status) return;
+    const patch = status === "done" ? { done: true } : status === "doing" ? { done: false, doing: true } : { done: false, doing: false };
+    const { error } = await supabase.from('tasks').update(patch).eq('id', t.id);
+    if (error) { notify(error.message, "err"); return; }
+    if (status === "done" && !t.done && t.recurrence) {
+      const { next, error: e2 } = await spawnNext(t);
       notify(e2 ? "Terminée, mais la prochaine occurrence n'a pas pu être créée." : `Terminée · prochaine échéance : ${formatDue(next, daysUntil(next))}.`, e2 ? "err" : "ok");
     }
   };
+  const toggleDone = (t) => setStatus(t, t.done ? "todo" : "done");
+
   const counts = { open: tasks.filter(t => !t.done).length, late: tasks.filter(t => !t.done && t.due && daysUntil(t.due) < 0).length };
+  const viewBtn = (id, Icon, title) => (
+    <button key={id} type="button" title={title} onClick={() => changeView(id)} style={{ ...chipBtn, display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", background: view === id ? "var(--panel-2)" : "var(--bg-2)", color: view === id ? "var(--text)" : "var(--text-dim)", borderColor: view === id ? "var(--accent)" : "var(--border-soft)" }}><Icon size={14} /> <span className="hide-mobile">{title}</span></button>
+  );
+  const openEdit = (t) => { setEditing(t); setShowForm(true); };
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 12 }}>
         <div><h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Tâches</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>{counts.open} en cours{counts.late > 0 && <span style={{ color: "#FF9A8F" }}> · {counts.late} en retard</span>}</p></div>
-        <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: (isAdmin || myPerms.createTasks) ? "flex" : "none", alignItems: "center", gap: 7, ...primaryBtn, padding: "10px 16px", width: "auto" }}><I.Plus size={16} /> Nouvelle tâche</button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {trashed.length > 0 && <button type="button" onClick={() => setShowTrash(true)} style={{ ...chipBtn, display: "flex", alignItems: "center", gap: 6 }}><I.Trash size={14} /> Corbeille ({trashed.length})</button>}
+          <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: (isAdmin || myPerms.createTasks) ? "flex" : "none", alignItems: "center", gap: 7, ...primaryBtn, padding: "10px 16px", width: "auto" }}><I.Plus size={16} /> Nouvelle tâche</button>
+        </div>
       </div>
       <div className="task-toolbar" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 6 }}>{viewBtn("list", I.List, "Liste")}{viewBtn("kanban", I.Columns, "Kanban")}</div>
         <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}><I.Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)" }} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher (titre, notes, #étiquette)…" style={{ ...inputStyle, paddingLeft: 32, background: "var(--bg-2)" }} /></div>
         <SelectPill icon={I.Sort} value={sortBy} onChange={setSortBy} options={[{ value: "priority", label: "Trier : priorité" }, { value: "due", label: "Trier : échéance" }, { value: "title", label: "Trier : titre" }]} />
-        <SelectPill icon={I.Filter} value={filterDone} onChange={setFilterDone} options={[{ value: "open", label: "À faire" }, { value: "done", label: "Terminées" }, { value: "all", label: "Toutes" }]} />
+        {view === "list" && <SelectPill icon={I.Filter} value={filterDone} onChange={setFilterDone} options={[{ value: "open", label: "À faire" }, { value: "done", label: "Terminées" }, { value: "all", label: "Toutes" }]} />}
         <button onClick={() => setFilterMine(m => !m)} style={{ ...chipBtn, background: filterMine ? "var(--panel-2)" : "var(--bg-2)", color: filterMine ? "var(--text)" : "var(--text-dim)", borderColor: filterMine ? "var(--accent)" : "var(--border-soft)" }}>Assignées à moi</button>
         <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>{LABELS.map(l => (<button key={l.id} title={l.name} onClick={() => setFilterLabel(f => f === l.id ? null : l.id)} style={{ width: 22, height: 22, borderRadius: "50%", background: l.hex, cursor: "pointer", border: filterLabel === l.id ? "2px solid var(--text)" : "2px solid transparent" }} />))}</div>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {visible.length === 0 && <EmptyState text="Aucune tâche ici." />}
-        {visible.map(t => (<TaskCard key={t.id} task={t} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} commentCount={comments.filter(c => c.task_id === t.id).length} onOpen={() => onOpen(t.id)} onTagClick={setQuery} onToggle={() => toggleDone(t)} onEdit={() => { setEditing(t); setShowForm(true); }} onDelete={() => removeTask(t.id)} />))}
-      </div>
-      {showForm && <TaskForm initial={editing} accounts={accounts} onCancel={() => { setShowForm(false); setEditing(null); }} onSave={saveTask} />}
+
+      {view === "list" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {visible.length === 0 && <EmptyState text="Aucune tâche ici." />}
+          {visible.map(t => (<TaskCard key={t.id} task={t} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} commentCount={comments.filter(c => c.task_id === t.id).length} attachCount={attachments.filter(a => a.task_id === t.id).length} onOpen={() => onOpen(t.id)} onTagClick={setQuery} onToggle={() => toggleDone(t)} onEdit={() => openEdit(t)} onDelete={() => removeTask(t)} />))}
+        </div>
+      ) : (
+        <KanbanBoard tasks={visible} accounts={accounts} canEditTask={canEditTask} onOpen={onOpen} onMove={setStatus} />
+      )}
+
+      {showForm && <TaskForm initial={editing} meId={me.id} accounts={accounts} templates={templates} onDeleteTemplate={deleteTemplate} onCancel={() => { setShowForm(false); setEditing(null); }} onSave={saveTask} />}
+      {showTrash && <TrashModal trashed={trashed} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} onRestore={restoreTask} onPurge={purgeTask} onClose={() => setShowTrash(false)} />}
     </div>
   );
 }
 function SelectPill({ icon: Icon, value, onChange, options }) {
   return (<div style={{ position: "relative" }}><Icon size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)", pointerEvents: "none" }} /><select value={value} onChange={e => onChange(e.target.value)} style={{ ...chipBtn, paddingLeft: 28, paddingRight: 26, appearance: "none", cursor: "pointer" }}>{options.map(o => <option key={o.value} value={o.value} style={{ background: "var(--bg-2)" }}>{o.label}</option>)}</select><I.Chevron size={12} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)", pointerEvents: "none" }} /></div>);
 }
-function TaskCard({ task, accounts, me, isAdmin, myPerms, commentCount, onOpen, onTagClick, onToggle, onEdit, onDelete }) {
+
+/* ---------------- Vue Kanban ---------------- */
+function KanbanBoard({ tasks, accounts, canEditTask, onOpen, onMove }) {
+  const [overCol, setOverCol] = useState(null);
+  const byCol = { todo: [], doing: [], done: [] };
+  for (const t of tasks) byCol[statusOf(t)].push(t);
+  byCol.done.sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
+  const DONE_LIMIT = 15;
+  const drop = (e, col) => {
+    e.preventDefault(); setOverCol(null);
+    const id = e.dataTransfer.getData("text/plain");
+    const t = tasks.find(x => x.id === id);
+    if (t) onMove(t, col);
+  };
+  return (
+    <div className="kanban" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14, alignItems: "start" }}>
+      {COLUMNS.map((col, ci) => {
+        const list = col.id === "done" ? byCol.done.slice(0, DONE_LIMIT) : byCol[col.id];
+        return (
+          <div key={col.id} onDragOver={e => { e.preventDefault(); if (overCol !== col.id) setOverCol(col.id); }} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setOverCol(null); }} onDrop={e => drop(e, col.id)}
+            style={{ background: overCol === col.id ? "#5B6EF514" : "var(--bg-2)", border: `1px solid ${overCol === col.id ? "var(--accent)" : "var(--border)"}`, borderRadius: 14, padding: 10, minHeight: 140 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px 10px", fontSize: 13, fontWeight: 700 }}>
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: col.hex }} /> {col.label}
+              <span style={{ color: "var(--text-dimmer)", fontWeight: 500 }}>{byCol[col.id].length}</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {list.length === 0 && <div style={{ fontSize: 12.5, color: "var(--text-dimmer)", textAlign: "center", padding: "18px 0" }}>Glisse une tâche ici</div>}
+              {list.map(t => {
+                const label = LABELS.find(l => l.id === t.label) || LABELS[0];
+                const prio = PRIORITIES.find(p => p.id === t.priority) || PRIORITIES[1];
+                const dleft = t.due ? daysUntil(t.due) : null;
+                const late = dleft !== null && dleft < 0 && !t.done;
+                const people = assigneeIds(t).map(id => accounts.find(a => a.id === id)).filter(Boolean);
+                const editable = canEditTask(t);
+                return (
+                  <div key={t.id} draggable={editable} onDragStart={e => { e.dataTransfer.setData("text/plain", t.id); e.dataTransfer.effectAllowed = "move"; }}
+                    style={{ background: "var(--panel)", border: "1px solid var(--border)", borderLeft: `4px solid ${label.hex}`, borderRadius: 10, padding: "10px 12px", cursor: editable ? "grab" : "default", opacity: t.done ? 0.65 : 1 }}>
+                    <div onClick={() => onOpen(t.id)} style={{ fontSize: 13.5, fontWeight: 600, cursor: "pointer", wordBreak: "break-word", textDecoration: t.done ? "line-through" : "none" }}>{t.title}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 600, color: prio.hex }}><I.Flag size={10} /> {prio.label}</span>
+                      {t.due && <span style={{ fontSize: 11.5, color: late ? "#FF9A8F" : "var(--text-dim)" }}>{formatDue(t.due, dleft)}</span>}
+                      {(t.subtasks || []).length > 0 && <span style={{ fontSize: 11.5, color: "var(--text-dim)" }}>☑ {t.subtasks.filter(x => x.done).length}/{t.subtasks.length}</span>}
+                      <span style={{ marginLeft: "auto" }}><AvatarStack users={people} size={20} max={3} /></span>
+                    </div>
+                    {editable && (
+                      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                        {ci > 0 && <button type="button" onClick={() => onMove(t, COLUMNS[ci - 1].id)} style={{ ...iconBtn, padding: "2px 8px", fontSize: 11 }} title={"Déplacer vers « " + COLUMNS[ci - 1].label + " »"}>←</button>}
+                        {ci < 2 && <button type="button" onClick={() => onMove(t, COLUMNS[ci + 1].id)} style={{ ...iconBtn, padding: "2px 8px", fontSize: 11, marginLeft: ci === 0 ? "auto" : 0 }} title={"Déplacer vers « " + COLUMNS[ci + 1].label + " »"}>→</button>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {col.id === "done" && byCol.done.length > DONE_LIMIT && <div style={{ fontSize: 12, color: "var(--text-dimmer)", textAlign: "center" }}>+ {byCol.done.length - DONE_LIMIT} plus ancienne(s) — voir la vue Liste</div>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------------- Corbeille ---------------- */
+function TrashModal({ trashed, accounts, me, isAdmin, myPerms, onRestore, onPurge, onClose }) {
+  const can = (t) => isAdmin || me.role === "moderator" || myPerms.deleteAnyTask || (t.created_by === me.id && myPerms.deleteOwnTask);
+  const [confirmId, setConfirmId] = useState(null);
+  return (
+    <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ ...modalStyle, width: 520 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>Corbeille</h2><button type="button" onClick={onClose} style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
+        <p style={{ fontSize: 12.5, color: "var(--text-dimmer)", margin: "0 0 16px" }}>Les tâches supprimées sont conservées 30 jours, puis effacées automatiquement.</p>
+        {trashed.length === 0 && <EmptyState text="La corbeille est vide." />}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {trashed.map(t => {
+            const who = accounts.find(a => a.id === t.deleted_by);
+            const daysLeft = Math.max(0, 30 - Math.floor((Date.now() - new Date(t.deleted_at).getTime()) / 86400000));
+            return (
+              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, wordBreak: "break-word" }}>{t.title}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>Supprimée {who ? "par " + who.display_name + " " : ""}· encore {daysLeft} j</div>
+                </div>
+                {can(t) ? (confirmId === t.id ? (<>
+                  <button type="button" onClick={() => { setConfirmId(null); onPurge(t); }} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12, color: "#FF9A8F" }}>Confirmer</button>
+                  <button type="button" onClick={() => setConfirmId(null)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12 }}>Non</button>
+                </>) : (<>
+                  <button type="button" onClick={() => onRestore(t.id)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12, display: "flex", alignItems: "center", gap: 5 }}><I.Undo size={12} /> Restaurer</button>
+                  <button type="button" onClick={() => setConfirmId(t.id)} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer définitivement"><I.Trash size={13} /></button>
+                </>)) : <span style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>Pas les droits</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskCard({ task, accounts, me, isAdmin, myPerms, commentCount, attachCount, onOpen, onTagClick, onToggle, onEdit, onDelete }) {
   const label = LABELS.find(l => l.id === task.label) || LABELS[0];
   const prio = PRIORITIES.find(p => p.id === task.priority) || PRIORITIES[1];
-  const assignee = accounts.find(a => a.id === task.assignee);
+  const people = assigneeIds(task).map(id => accounts.find(a => a.id === id)).filter(Boolean);
   const dleft = task.due ? daysUntil(task.due) : null;
   const late = dleft !== null && dleft < 0 && !task.done;
   const soon = dleft !== null && dleft >= 0 && dleft <= 2 && !task.done;
   const own = task.created_by === me.id;
   const canEdit = isAdmin || myPerms.editAnyTask || (own && myPerms.editOwnTask);
   const canDelete = isAdmin || myPerms.deleteAnyTask || (own && myPerms.deleteOwnTask);
+  const hasMeta = (task.tags || []).length > 0 || (task.subtasks || []).length > 0 || task.recurrence || commentCount > 0 || attachCount > 0 || task.doing;
   return (
     <div className="fade-in" style={{ display: "flex", alignItems: "stretch", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", opacity: task.done ? 0.55 : 1 }}>
       <div style={{ width: 5, background: label.hex, flexShrink: 0 }} />
@@ -906,56 +1408,91 @@ function TaskCard({ task, accounts, me, isAdmin, myPerms, commentCount, onOpen, 
         <div style={{ flex: 1, minWidth: 140 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}><span onClick={onOpen} style={{ cursor: "pointer", fontSize: 14.5, fontWeight: 600, textDecoration: task.done ? "line-through" : "none", color: task.done ? "#7A8190" : "var(--text)" }}>{task.title}</span><span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: prio.hex, background: `${prio.hex}1A`, padding: "2px 7px", borderRadius: 6 }}><I.Flag size={10} /> {prio.label}</span></div>
           {task.notes && <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 3 }}>{task.notes}</div>}
-          {((task.tags || []).length > 0 || (task.subtasks || []).length > 0 || task.recurrence || commentCount > 0) && (
+          {hasMeta && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+              {task.doing && !task.done && <span style={{ fontSize: 11, fontWeight: 600, color: "#FFB648", background: "#FFB6481A", padding: "1px 7px", borderRadius: 6 }}>En cours</span>}
               {(task.tags || []).map(tag => <button key={tag} type="button" onClick={() => onTagClick(tag)} style={{ background: "var(--bg-2)", border: "1px solid var(--border-soft)", color: "var(--text-dim)", fontSize: 11, padding: "1px 7px", borderRadius: 6, cursor: "pointer" }}>#{tag}</button>)}
               {(task.subtasks || []).length > 0 && <span onClick={onOpen} style={{ cursor: "pointer", fontSize: 11.5, color: "var(--text-dim)" }}>☑ {(task.subtasks || []).filter(x => x.done).length}/{(task.subtasks || []).length}</span>}
               {task.recurrence && <span style={{ fontSize: 11.5, color: "var(--text-dim)" }}>↻ {(RECURRENCES.find(r => r.value === task.recurrence) || {}).label}</span>}
               {commentCount > 0 && <span onClick={onOpen} style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11.5, color: "var(--text-dim)" }}><I.Message size={11} /> {commentCount}</span>}
+              {attachCount > 0 && <span onClick={onOpen} style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11.5, color: "var(--text-dim)" }}><I.Paperclip size={11} /> {attachCount}</span>}
             </div>
           )}
         </div>
         {task.due && (<div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, flexShrink: 0, color: late ? "#FF9A8F" : soon ? "#FFC97A" : "var(--text-dim)" }}>{late ? <I.Alert size={13} /> : <I.Calendar size={13} />}{formatDue(task.due, dleft)}</div>)}
-        {assignee && <div title={assignee.display_name}><Avatar user={assignee} size={26} /></div>}
+        {people.length > 0 && <AvatarStack users={people} size={26} max={3} />}
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
           {canEdit && <button onClick={onEdit} style={iconBtn} title="Modifier"><I.Settings size={14} /></button>}
-          {canDelete && <button onClick={onDelete} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer"><I.Trash size={14} /></button>}
+          {canDelete && <button onClick={onDelete} style={{ ...iconBtn, color: "#FF9A8F" }} title="Mettre à la corbeille"><I.Trash size={14} /></button>}
         </div>
       </div>
     </div>
   );
 }
-function TaskForm({ initial, accounts, onCancel, onSave }) {
+function TaskForm({ initial, meId, accounts, templates, onDeleteTemplate, onCancel, onSave }) {
   const [title, setTitle] = useState(initial?.title || "");
   const [notes, setNotes] = useState(initial?.notes || "");
   const [label, setLabel] = useState(initial?.label || LABELS[0].id);
   const [priority, setPriority] = useState(initial?.priority || 2);
   const [due, setDue] = useState(initial?.due || "");
-  const [assignee, setAssignee] = useState(initial?.assignee || accounts[0]?.id || "");
+  const [assignees, setAssignees] = useState(() => initial ? assigneeIds(initial) : (accounts.some(a => a.id === meId) ? [meId] : []));
   const [tagsText, setTagsText] = useState((initial?.tags || []).join(", "));
   const [subtasks, setSubtasks] = useState(initial?.subtasks || []);
   const [newSub, setNewSub] = useState("");
   const [recurrence, setRecurrence] = useState(initial?.recurrence || "");
+  const [tplId, setTplId] = useState("");
+  const [asTemplate, setAsTemplate] = useState(false);
+  const [tplName, setTplName] = useState("");
+  const toggleAssignee = (id) => setAssignees(l => l.includes(id) ? l.filter(x => x !== id) : [...l, id]);
   const addSub = () => { const v = newSub.trim(); if (!v) return; setSubtasks(l => [...l, { id: uid(), text: v.slice(0, 120), done: false }]); setNewSub(""); };
+  const applyTemplate = (id) => {
+    setTplId(id);
+    const t = (templates || []).find(x => x.id === id);
+    if (!t) return;
+    setTitle(t.title); setNotes(t.notes || ""); setLabel(t.label || LABELS[0].id); setPriority(t.priority || 2);
+    setTagsText((t.tags || []).join(", ")); setRecurrence(t.recurrence || "");
+    setSubtasks((t.subtasks || []).map(x => ({ ...x, id: uid(), done: false })));
+  };
   const submit = () => {
     if (!title.trim()) return;
     const pendingSub = newSub.trim() ? [...subtasks, { id: uid(), text: newSub.trim().slice(0, 120), done: false }] : subtasks;
-    onSave({ ...(initial || {}), title: title.trim(), notes: notes.trim(), label, priority: Number(priority), due: due || null, assignee, done: initial?.done || false, tags: parseTags(tagsText), subtasks: pendingSub, recurrence: recurrence || null });
+    onSave({
+      ...(initial?.id ? { id: initial.id } : {}),
+      title: title.trim(), notes: notes.trim(), label, priority: Number(priority), due: due || null,
+      assignees, assignee: assignees[0] || null,
+      tags: parseTags(tagsText), subtasks: pendingSub, recurrence: recurrence || null,
+      saveAsTemplate: asTemplate ? (tplName.trim() || title.trim()) : null,
+    });
   };
+  const selectedTpl = (templates || []).find(x => x.id === tplId);
   return (
     <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
       <div className="modal-card" style={{ ...modalStyle, maxHeight: "92vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>{initial ? "Modifier la tâche" : "Nouvelle tâche"}</h2><button type="button" onClick={onCancel} style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
+        {!initial && (templates || []).length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <select value={tplId} onChange={e => applyTemplate(e.target.value)} style={inputStyle}>
+              <option value="">Partir d'un modèle…</option>
+              {templates.map(t => <option key={t.id} value={t.id} style={{ background: "var(--bg-2)" }}>{t.name}</option>)}
+            </select>
+            {selectedTpl && <button type="button" onClick={() => { onDeleteTemplate(selectedTpl.id); setTplId(""); }} style={{ background: "none", border: "none", color: "#FF9A8F", fontSize: 12, cursor: "pointer", padding: "6px 0 0" }}>Supprimer le modèle « {selectedTpl.name} »</button>}
+          </div>
+        )}
         <Field label="Titre"><input autoFocus value={title} onChange={e => setTitle(e.target.value)} style={inputStyle} /></Field>
         <Field label="Notes (optionnel)"><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></Field>
         <div style={{ display: "flex", gap: 12 }}>
           <div style={{ flex: 1 }}><Field label="Échéance"><input type="date" value={due} onChange={e => setDue(e.target.value)} style={inputStyle} /></Field></div>
-          <div style={{ flex: 1 }}><Field label="Assignée à"><select value={assignee} onChange={e => setAssignee(e.target.value)} style={inputStyle}>{accounts.map(a => <option key={a.id} value={a.id} style={{ background: "var(--bg-2)" }}>{a.display_name}</option>)}</select></Field></div>
-        </div>
-        <div style={{ display: "flex", gap: 12 }}>
           <div style={{ flex: 1 }}><Field label="Répétition"><select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={inputStyle}>{RECURRENCES.map(r => <option key={r.value} value={r.value} style={{ background: "var(--bg-2)" }}>{r.label}</option>)}</select></Field></div>
-          <div style={{ flex: 1 }}><Field label="Étiquettes (séparées par des virgules)"><input value={tagsText} onChange={e => setTagsText(e.target.value)} placeholder="maison, courses" style={inputStyle} /></Field></div>
         </div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Assignée à {assignees.length > 1 ? `(${assignees.length} personnes)` : ""}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {accounts.map(a => { const on = assignees.includes(a.id); return (
+              <button key={a.id} type="button" onClick={() => toggleAssignee(a.id)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 11px 5px 6px", borderRadius: 20, cursor: "pointer", fontSize: 13, border: `1.5px solid ${on ? a.color : "var(--border-soft)"}`, background: on ? `${a.color}22` : "transparent", color: on ? "var(--text)" : "var(--text-dim)" }}><Avatar user={a} size={20} /> {a.display_name}</button>
+            ); })}
+          </div>
+        </div>
+        <Field label="Étiquettes (séparées par des virgules)"><input value={tagsText} onChange={e => setTagsText(e.target.value)} placeholder="maison, courses" style={inputStyle} /></Field>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Sous-tâches</div>
           {subtasks.map(st => (
@@ -973,9 +1510,13 @@ function TaskForm({ initial, accounts, onCancel, onSave }) {
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Priorité</div>
           <div style={{ display: "flex", gap: 8 }}>{PRIORITIES.map(p => (<button key={p.id} type="button" onClick={() => setPriority(p.id)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, border: `1.5px solid ${priority === p.id ? p.hex : "var(--border-soft)"}`, background: priority === p.id ? `${p.hex}1A` : "transparent", color: priority === p.id ? p.hex : "var(--text-dim)" }}>{p.label}</button>))}</div>
         </div>
-        <div style={{ marginBottom: 22 }}>
+        <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}><I.Palette size={13} /> Étiquette de couleur</div>
           <div style={{ display: "flex", gap: 9 }}>{LABELS.map(l => (<button key={l.id} type="button" title={l.name} onClick={() => setLabel(l.id)} style={{ width: 28, height: 28, borderRadius: "50%", background: l.hex, cursor: "pointer", border: label === l.id ? "2.5px solid var(--text)" : "2.5px solid transparent" }} />))}</div>
+        </div>
+        <div style={{ marginBottom: 22, background: "var(--bg)", borderRadius: 10, padding: "10px 12px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13, cursor: "pointer" }}><input type="checkbox" checked={asTemplate} onChange={e => setAsTemplate(e.target.checked)} style={{ width: 15, height: 15, accentColor: "var(--accent)" }} /> Enregistrer aussi comme modèle réutilisable</label>
+          {asTemplate && <input value={tplName} onChange={e => setTplName(e.target.value)} placeholder={"Nom du modèle (par défaut : " + (title.trim() || "titre") + ")"} style={{ ...inputStyle, marginTop: 10 }} />}
         </div>
         <div style={{ display: "flex", gap: 10 }}><button type="button" onClick={onCancel} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" onClick={submit} style={{ ...primaryBtn, flex: 1 }}>{initial ? "Enregistrer" : "Créer la tâche"}</button></div>
       </div>
@@ -984,14 +1525,43 @@ function TaskForm({ initial, accounts, onCancel, onSave }) {
 }
 
 /* ============================================================
-   Détail d'une tâche : sous-tâches + commentaires
+   Détail d'une tâche : sous-tâches + pièces jointes + commentaires
    ============================================================ */
-function TaskDetail({ task, accounts, me, isAdmin, myPerms, comments, notify, onClose }) {
+function AttachmentRow({ att, canDelete, onDelete, notify }) {
+  const [thumb, setThumb] = useState(null);
+  const isImage = (att.mime || "").startsWith("image/");
+  useEffect(() => {
+    let alive = true;
+    if (isImage) supabase.storage.from('task-files').createSignedUrl(att.path, 3600).then(({ data }) => { if (alive && data) setThumb(data.signedUrl); });
+    return () => { alive = false; };
+  }, [att.path]);
+  const open = async () => {
+    const { data, error } = await supabase.storage.from('task-files').createSignedUrl(att.path, 120, { download: isImage ? undefined : att.filename });
+    if (error || !data) { notify("Impossible d'ouvrir ce fichier.", "err"); return; }
+    const a = document.createElement("a");
+    a.href = data.signedUrl; a.target = "_blank"; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 9, padding: "7px 10px" }}>
+      {isImage && thumb ? <img src={thumb} alt="" onClick={open} style={{ width: 38, height: 38, objectFit: "cover", borderRadius: 6, cursor: "pointer", flexShrink: 0 }} /> : <div style={{ width: 38, height: 38, borderRadius: 6, background: "var(--panel-2)", display: "grid", placeItems: "center", color: "var(--text-dim)", flexShrink: 0 }}><I.Paperclip size={16} /></div>}
+      <button type="button" onClick={open} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", color: "var(--text)", cursor: "pointer", padding: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.filename}</div>
+        <div style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>{fileSizeLabel(att.size || 0)}</div>
+      </button>
+      <button type="button" onClick={open} style={{ ...iconBtn, border: "none" }} title="Télécharger"><I.Download size={14} /></button>
+      {canDelete && <button type="button" onClick={onDelete} style={{ ...iconBtn, border: "none", color: "#FF9A8F" }} title="Retirer"><I.Trash size={14} /></button>}
+    </div>
+  );
+}
+function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, attachments, onAttachmentsChanged, notify, onClose }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
   const label = LABELS.find(l => l.id === task.label) || LABELS[0];
   const prio = PRIORITIES.find(p => p.id === task.priority) || PRIORITIES[1];
-  const assignee = accounts.find(a => a.id === task.assignee);
+  const people = assigneeIds(task).map(id => accounts.find(a => a.id === id)).filter(Boolean);
   const own = task.created_by === me.id;
   const canEdit = isAdmin || myPerms.editAnyTask || (own && myPerms.editOwnTask);
   const canComment = isAdmin || myPerms.sendMessages;
@@ -1007,12 +1577,40 @@ function TaskDetail({ task, accounts, me, isAdmin, myPerms, comments, notify, on
     const v = text.trim();
     if (!v || busy) return;
     setBusy(true);
-    const { error } = await supabase.from('task_comments').insert({ task_id: task.id, server_id: me.server_id, author_id: me.id, text: v.slice(0, 2000) });
+    const { data, error } = await supabase.from('task_comments').insert({ task_id: task.id, server_id: me.server_id, author_id: me.id, text: v.slice(0, 2000) }).select().single();
     setBusy(false);
     if (error) { notify(error.message, "err"); return; }
     setText("");
+    if (data && v.includes("@")) notifyMention('comment', data.id, session);
   };
   const del = async (id) => { const { error } = await supabase.from('task_comments').delete().eq('id', id); if (error) notify(error.message, "err"); };
+
+  const upload = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length || uploading) return;
+    setUploading(true);
+    let count = attachments.length;
+    for (const f of files) {
+      if (count >= MAX_FILES_PER_TASK) { notify(`Maximum ${MAX_FILES_PER_TASK} fichiers par tâche.`, "err"); break; }
+      if (f.size > MAX_FILE_BYTES) { notify(`« ${f.name} » dépasse 5 Mo.`, "err"); continue; }
+      const safe = f.name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80) || "fichier";
+      const path = `${me.server_id}/${task.id}/${uid()}-${safe}`;
+      const up = await supabase.storage.from('task-files').upload(path, f, { contentType: f.type || undefined, upsert: false });
+      if (up.error) { notify(up.error.message, "err"); continue; }
+      const { error } = await supabase.from('task_attachments').insert({ task_id: task.id, server_id: me.server_id, uploader_id: me.id, path, filename: f.name, size: f.size, mime: f.type || null });
+      if (error) { await supabase.storage.from('task-files').remove([path]); notify(error.message, "err"); continue; }
+      count++;
+    }
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
+    onAttachmentsChanged();
+  };
+  const removeAttachment = async (att) => {
+    const { error } = await supabase.from('task_attachments').delete().eq('id', att.id);
+    if (error) { notify(error.message, "err"); return; }
+    await supabase.storage.from('task-files').remove([att.path]);
+    onAttachmentsChanged();
+  };
 
   return (
     <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -1024,10 +1622,15 @@ function TaskDetail({ task, accounts, me, isAdmin, myPerms, comments, notify, on
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 600, color: prio.hex }}><I.Flag size={11} /> {prio.label}</span>
           {task.due && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><I.Calendar size={12} /> {formatDue(task.due, daysUntil(task.due))}</span>}
-          {assignee && <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Avatar user={assignee} size={20} /> {assignee.display_name}</span>}
           {task.recurrence && <span>↻ {(RECURRENCES.find(r => r.value === task.recurrence) || {}).label}</span>}
+          {task.doing && !task.done && <span style={{ color: "#FFB648", fontWeight: 600 }}>En cours</span>}
           {task.done && <span style={{ color: "#5FBF8B", fontWeight: 600 }}>Terminée</span>}
         </div>
+        {people.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {people.map(p => <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, background: "var(--bg-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "3px 10px 3px 4px" }}><Avatar user={p} size={20} /> {p.display_name}</span>)}
+          </div>
+        )}
         {task.notes && <p style={{ fontSize: 13.5, lineHeight: 1.55, margin: "0 0 12px", whiteSpace: "pre-wrap" }}>{task.notes}</p>}
         {(task.tags || []).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{task.tags.map(t => <span key={t} style={{ background: "var(--bg-2)", border: "1px solid var(--border-soft)", color: "var(--text-dim)", fontSize: 11.5, padding: "1px 8px", borderRadius: 6 }}>#{t}</span>)}</div>}
 
@@ -1043,8 +1646,22 @@ function TaskDetail({ task, accounts, me, isAdmin, myPerms, comments, notify, on
           </div>
         )}
 
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", fontWeight: 600 }}>Pièces jointes · {attachments.length}</div>
+            {canEdit && (<>
+              <input ref={fileRef} type="file" multiple onChange={e => upload(e.target.files)} style={{ display: "none" }} />
+              <button type="button" onClick={() => fileRef.current && fileRef.current.click()} disabled={uploading} style={{ ...secondaryBtn, width: "auto", padding: "5px 11px", fontSize: 12, display: "flex", alignItems: "center", gap: 6, opacity: uploading ? 0.6 : 1 }}><I.Paperclip size={12} /> {uploading ? "Envoi…" : "Ajouter"}</button>
+            </>)}
+          </div>
+          {attachments.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>{canEdit ? "Aucun fichier. Photos, PDF, documents… (5 Mo max chacun)" : "Aucun fichier."}</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {attachments.map(a => <AttachmentRow key={a.id} att={a} notify={notify} canDelete={a.uploader_id === me.id || isAdmin} onDelete={() => removeAttachment(a)} />)}
+          </div>
+        </div>
+
         <div style={{ fontSize: 12.5, color: "var(--text-dim)", fontWeight: 600, marginBottom: 8, borderTop: "1px solid var(--border)", paddingTop: 14 }}>Commentaires · {sorted.length}</div>
-        {sorted.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)", marginBottom: 10 }}>Aucun commentaire pour l'instant.</div>}
+        {sorted.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)", marginBottom: 10 }}>Aucun commentaire pour l'instant. Tape @ pour mentionner quelqu'un.</div>}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
           {sorted.map(c => {
             const author = accounts.find(a => a.id === c.author_id);
@@ -1053,7 +1670,7 @@ function TaskDetail({ task, accounts, me, isAdmin, myPerms, comments, notify, on
                 <Avatar user={author} size={26} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}><strong style={{ color: "var(--text)" }}>{author ? author.display_name : "Ancien membre"}</strong> · {new Date(c.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
-                  <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{c.text}</div>
+                  <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}><RichText text={c.text} accounts={accounts} /></div>
                 </div>
                 {(c.author_id === me.id || isAdmin) && <button type="button" onClick={() => del(c.id)} title="Supprimer" style={{ ...iconBtn, padding: 4, alignSelf: "flex-start", border: "none", color: "var(--text-dimmer)" }}><I.Trash size={13} /></button>}
               </div>
@@ -1062,7 +1679,7 @@ function TaskDetail({ task, accounts, me, isAdmin, myPerms, comments, notify, on
         </div>
         {canComment ? (
           <div style={{ display: "flex", gap: 8 }}>
-            <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") send(); }} placeholder="Écrire un commentaire…" style={inputStyle} />
+            <MentionInput value={text} onChange={setText} onSubmit={send} people={accounts.filter(a => a.id !== me.id)} placeholder="Écrire un commentaire… (@ pour mentionner)" />
             <button type="button" onClick={send} disabled={busy} style={{ ...primaryBtn, width: "auto", padding: "0 14px", opacity: busy ? 0.6 : 1 }}><I.Send size={15} /></button>
           </div>
         ) : <div style={{ fontSize: 12.5, color: "var(--text-dimmer)" }}>Tu n'as pas le droit de commenter.</div>}
@@ -1129,11 +1746,11 @@ function CalendarView({ tasks, accounts, onOpen }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {dayTasks.map(t => {
             const label = LABELS.find(l => l.id === t.label) || LABELS[0];
-            const a = accounts.find(x => x.id === t.assignee);
+            const who = assigneeIds(t).map(id => accounts.find(x => x.id === id)).filter(Boolean);
             return (
               <button key={t.id} type="button" onClick={() => onOpen(t.id)} style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left", background: "var(--panel)", border: "1px solid var(--border)", borderLeft: `5px solid ${label.hex}`, borderRadius: 10, padding: "10px 14px", cursor: "pointer", color: "var(--text)", opacity: t.done ? 0.55 : 1 }}>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 600, textDecoration: t.done ? "line-through" : "none" }}>{t.title}</span>
-                {a && <Avatar user={a} size={24} />}
+                {who.length > 0 && <AvatarStack users={who} size={24} max={3} />}
               </button>
             );
           })}
@@ -1144,50 +1761,90 @@ function CalendarView({ tasks, accounts, onOpen }) {
 }
 
 /* ============================================================
-   Messages
+   Messages : salon du serveur + conversations privées
    ============================================================ */
-function MessagesView({ me, myPerms, accounts, messages }) {
+function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, channelMsgs, notify }) {
   const contacts = useMemo(() => accounts.filter(a => a.id !== me.id), [accounts, me.id]);
-  const [activeId, setActiveId] = useState(null);
-  useEffect(() => { if (!activeId && contacts.length) setActiveId(contacts[0].id); }, [contacts, activeId]);
+  const [activeId, setActiveId] = useState("channel");
   const [draft, setDraft] = useState("");
   const bottomRef = useRef(null);
+  const isChannel = activeId === "channel";
+  const canSend = isAdmin || myPerms.sendMessages;
   const thread = messages.filter(m => (m.from_id === me.id && m.to_id === activeId) || (m.from_id === activeId && m.to_id === me.id)).sort((a, b) => new Date(a.ts) - new Date(b.ts));
-  useEffect(() => { bottomRef.current && bottomRef.current.scrollIntoView({ behavior: "smooth" }); }, [thread.length, activeId]);
+  const channel = useMemo(() => [...channelMsgs].sort((a, b) => new Date(a.ts) - new Date(b.ts)), [channelMsgs]);
+  const shownLen = isChannel ? channel.length : thread.length;
+  useEffect(() => { bottomRef.current && bottomRef.current.scrollIntoView({ behavior: "smooth" }); }, [shownLen, activeId]);
   const lastMsgFor = (id) => messages.filter(m => (m.from_id === me.id && m.to_id === id) || (m.from_id === id && m.to_id === me.id)).sort((a, b) => new Date(b.ts) - new Date(a.ts))[0];
+  const lastChannel = channel[channel.length - 1];
+
   const send = async () => {
-    if (!draft.trim() || !activeId || !myPerms.sendMessages) return;
-    const text = draft.trim(); setDraft("");
-    await supabase.from('messages').insert({ from_id: me.id, to_id: activeId, text, server_id: me.server_id });
+    const text = draft.trim();
+    if (!text || !canSend) return;
+    setDraft("");
+    if (isChannel) {
+      const { data, error } = await supabase.from('channel_messages').insert({ server_id: me.server_id, from_id: me.id, text: text.slice(0, 2000) }).select().single();
+      if (error) { notify(error.message, "err"); setDraft(text); return; }
+      if (data && text.includes("@")) notifyMention('channel', data.id, session);
+    } else {
+      const { error } = await supabase.from('messages').insert({ from_id: me.id, to_id: activeId, text, server_id: me.server_id });
+      if (error) { notify(error.message, "err"); setDraft(text); }
+    }
   };
-  const onKey = (e) => { if (e.key === "Enter") send(); };
+  const delChannel = async (id) => { const { error } = await supabase.from('channel_messages').delete().eq('id', id); if (error) notify(error.message, "err"); };
   const activeUser = accounts.find(a => a.id === activeId);
+  const fmt = (ts) => new Date(ts).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const listBtn = (selected) => ({ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "12px 14px", background: selected ? "var(--panel-2)" : "transparent", border: "none", borderBottom: "1px solid #21252d", cursor: "pointer", textAlign: "left" });
+
   return (
     <div>
       <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: "0 0 20px" }}>Messagerie</h1>
-      <div style={{ display: "flex", height: "calc(100vh - 150px)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
-        <div className="paper" style={{ width: 250, flexShrink: 0, borderRight: "1px solid var(--border)", overflowY: "auto" }}>
-          {contacts.length === 0 && <EmptyState text="Aucun autre membre pour l'instant." />}
+      <div className="chat-wrap" style={{ display: "flex", height: "calc(100vh - 150px)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
+        <div className="paper chat-list" style={{ width: 250, flexShrink: 0, borderRight: "1px solid var(--border)", overflowY: "auto" }}>
+          <button onClick={() => setActiveId("channel")} style={listBtn(isChannel)}>
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: "#5B6EF526", color: "var(--accent-2)", display: "grid", placeItems: "center", flexShrink: 0 }}><I.Hash size={16} /></div>
+            <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>Général</div><div style={{ fontSize: 11.5, color: "var(--text-dimmer)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lastChannel ? lastChannel.text : "Salon de tout le serveur"}</div></div>
+          </button>
           {contacts.map(u => { const last = lastMsgFor(u.id); return (
-            <button key={u.id} onClick={() => setActiveId(u.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "12px 14px", background: activeId === u.id ? "var(--panel-2)" : "transparent", border: "none", borderBottom: "1px solid #21252d", cursor: "pointer", textAlign: "left" }}>
+            <button key={u.id} onClick={() => setActiveId(u.id)} style={listBtn(activeId === u.id)}>
               <Avatar user={u} size={32} />
               <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{u.display_name}</div><div style={{ fontSize: 11.5, color: "var(--text-dimmer)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{last ? last.text : "Aucun message"}</div></div>
             </button>
           );})}
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-          {activeUser ? (<>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--border)" }}><Avatar user={activeUser} size={28} /><span style={{ fontWeight: 600, fontSize: 14 }}>{activeUser.display_name}</span></div>
-            <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--border)" }}>
+            {isChannel ? (<><I.Hash size={18} color="var(--accent-2)" /><span style={{ fontWeight: 600, fontSize: 14 }}>Général</span><span style={{ fontSize: 12, color: "var(--text-dimmer)" }}>· tout le serveur</span></>)
+              : activeUser ? (<><Avatar user={activeUser} size={28} /><span style={{ fontWeight: 600, fontSize: 14 }}>{activeUser.display_name}</span></>) : null}
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: isChannel ? 12 : 8 }}>
+            {isChannel ? (<>
+              {channel.length === 0 && <EmptyState text="Aucun message dans le salon. Lance la discussion !" />}
+              {channel.map(m => {
+                const author = accounts.find(a => a.id === m.from_id);
+                const mentionsMe = new RegExp("(^|[^A-Za-z0-9._-])@" + (me.username || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![A-Za-z0-9_-])", "i").test(m.text);
+                return (
+                  <div key={m.id} style={{ display: "flex", gap: 10, padding: mentionsMe ? "6px 8px" : 0, margin: mentionsMe ? "0 -8px" : 0, background: mentionsMe ? "#5B6EF514" : "transparent", borderRadius: 8 }}>
+                    <Avatar user={author} size={30} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}><strong style={{ color: "var(--text)", fontSize: 13 }}>{author ? author.display_name : "Ancien membre"}</strong> · {fmt(m.ts)}</div>
+                      <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}><RichText text={m.text} accounts={accounts} /></div>
+                    </div>
+                    {(m.from_id === me.id || isAdmin) && <button type="button" onClick={() => delChannel(m.id)} title="Supprimer" style={{ ...iconBtn, padding: 4, alignSelf: "flex-start", border: "none", color: "var(--text-dimmer)" }}><I.Trash size={13} /></button>}
+                  </div>
+                );
+              })}
+            </>) : activeUser ? (<>
               {thread.length === 0 && <EmptyState text="Aucun message. Dites bonjour !" />}
-              {thread.map(m => (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", maxWidth: "70%", background: m.from_id === me.id ? "linear-gradient(135deg,var(--accent),var(--accent-2))" : "var(--panel-2)", color: m.from_id === me.id ? "#fff" : "var(--text)", padding: "9px 13px", borderRadius: 12, borderBottomRightRadius: m.from_id === me.id ? 3 : 12, borderBottomLeftRadius: m.from_id === me.id ? 12 : 3, fontSize: 13.5 }}>{m.text}<div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>{new Date(m.ts).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div></div>))}
-              <div ref={bottomRef} />
-            </div>
-            <div style={{ display: "flex", gap: 10, padding: 14, borderTop: "1px solid var(--border)" }}>
-              <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={onKey} disabled={!myPerms.sendMessages} placeholder={myPerms.sendMessages ? "Écrire un message…" : "Ton rôle ne permet pas d'envoyer de messages"} style={{ ...inputStyle, flex: 1, background: "var(--bg)", opacity: myPerms.sendMessages ? 1 : 0.5 }} />
-              <button type="button" onClick={send} disabled={!myPerms.sendMessages} style={{ background: "linear-gradient(135deg,var(--accent),var(--accent-2))", border: "none", color: "#fff", borderRadius: 9, padding: "0 16px", cursor: myPerms.sendMessages ? "pointer" : "not-allowed", opacity: myPerms.sendMessages ? 1 : 0.5, display: "grid", placeItems: "center" }}><I.Send size={16} /></button>
-            </div>
-          </>) : <EmptyState text="Choisissez une personne pour démarrer une conversation." />}
+              {thread.map(m => (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", maxWidth: "70%", background: m.from_id === me.id ? "linear-gradient(135deg,var(--accent),var(--accent-2))" : "var(--panel-2)", color: m.from_id === me.id ? "#fff" : "var(--text)", padding: "9px 13px", borderRadius: 12, borderBottomRightRadius: m.from_id === me.id ? 3 : 12, borderBottomLeftRadius: m.from_id === me.id ? 12 : 3, fontSize: 13.5, wordBreak: "break-word" }}>{m.text}<div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>{fmt(m.ts)}</div></div>))}
+            </>) : <EmptyState text="Choisis une conversation." />}
+            <div ref={bottomRef} />
+          </div>
+          <div style={{ display: "flex", gap: 10, padding: 14, borderTop: "1px solid var(--border)" }}>
+            {isChannel
+              ? <MentionInput value={draft} onChange={setDraft} onSubmit={send} disabled={!canSend} people={contacts} placeholder={canSend ? "Écrire dans le salon… (@ pour mentionner)" : "Ton rôle ne permet pas d'envoyer de messages"} style={{ ...inputStyle, background: "var(--bg)", opacity: canSend ? 1 : 0.5 }} />
+              : <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") send(); }} disabled={!canSend || !activeUser} placeholder={canSend ? "Écrire un message…" : "Ton rôle ne permet pas d'envoyer de messages"} style={{ ...inputStyle, flex: 1, background: "var(--bg)", opacity: canSend ? 1 : 0.5 }} />}
+            <button type="button" onClick={send} disabled={!canSend} style={{ background: "linear-gradient(135deg,var(--accent),var(--accent-2))", border: "none", color: "#fff", borderRadius: 9, padding: "0 16px", cursor: canSend ? "pointer" : "not-allowed", opacity: canSend ? 1 : 0.5, display: "grid", placeItems: "center" }}><I.Send size={16} /></button>
+          </div>
         </div>
       </div>
     </div>
@@ -1197,7 +1854,131 @@ function MessagesView({ me, myPerms, accounts, messages }) {
 /* ============================================================
    Admin
    ============================================================ */
-function AdminView({ me, session, accounts, tasks, notify }) {
+/* ---------------- Réglages du serveur : nom, code, transfert d'administration ---------------- */
+function ServerSettings({ server, setServer, me, session, approved, notify, onChanged }) {
+  const [name, setName] = useState(server.name || "");
+  const [savingName, setSavingName] = useState(false);
+  const [confirmCode, setConfirmCode] = useState(false);
+  const [transferTo, setTransferTo] = useState("");
+  const [confirmTransfer, setConfirmTransfer] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const candidates = approved.filter(a => a.id !== me.id);
+
+  const saveName = async () => {
+    const v = name.trim();
+    if (!v || v === server.name || savingName) return;
+    if (v.length > 60) { notify("Le nom du serveur doit faire 60 caractères maximum.", "err"); return; }
+    setSavingName(true);
+    const { data, error } = await supabase.from('servers').update({ name: v }).eq('id', server.id).select().single();
+    setSavingName(false);
+    if (error || !data) { notify(error ? error.message : "Modification refusée.", "err"); return; }
+    setServer(data);
+    notify("Serveur renommé.");
+  };
+  const newCode = async () => {
+    const code = Array.from(crypto.getRandomValues(new Uint8Array(4))).map(b => b.toString(16).padStart(2, "0")).join("");
+    const { data, error } = await supabase.from('servers').update({ join_code: code }).eq('id', server.id).select().single();
+    setConfirmCode(false);
+    if (error || !data) { notify(error ? error.message : "Modification refusée.", "err"); return; }
+    setServer(data);
+    notify("Nouveau code généré. L'ancien ne fonctionne plus.");
+  };
+  const transfer = async () => {
+    if (!transferTo || busy) return;
+    setBusy(true);
+    try {
+      await callApi('/api/manage-account', { action: 'transfer-admin', id: transferTo }, session);
+      notify("Administration transférée. Tu es maintenant modérateur.");
+      onChanged();
+    } catch (e) { notify(e.message, "err"); }
+    setBusy(false); setConfirmTransfer(false);
+  };
+  const box = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 };
+  const target = candidates.find(c => c.id === transferTo);
+
+  return (
+    <div style={box}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Réglages du serveur</div>
+      <Field label="Nom du serveur">
+        <div style={{ display: "flex", gap: 8 }}>
+          <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") saveName(); }} style={inputStyle} />
+          <button type="button" onClick={saveName} disabled={savingName || !name.trim() || name.trim() === server.name} style={{ ...primaryBtn, width: "auto", padding: "0 16px", opacity: name.trim() && name.trim() !== server.name ? 1 : 0.5 }}>Renommer</button>
+        </div>
+      </Field>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 4 }}>Code d'invitation</div>
+          <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: "var(--accent-2)", letterSpacing: 1 }}>{server.join_code}</div>
+        </div>
+        <button type="button" onClick={() => { navigator.clipboard?.writeText(server.join_code); notify("Code copié."); }} style={{ ...secondaryBtn, display: "flex", alignItems: "center", gap: 6, padding: "8px 12px" }}><I.Copy size={13} /> Copier</button>
+        {confirmCode ? (<>
+          <button type="button" onClick={newCode} style={{ ...secondaryBtn, padding: "8px 12px", color: "#FF9A8F" }}>Confirmer : l'ancien code sera invalide</button>
+          <button type="button" onClick={() => setConfirmCode(false)} style={{ ...secondaryBtn, padding: "8px 12px" }}>Annuler</button>
+        </>) : <button type="button" onClick={() => setConfirmCode(true)} style={{ ...secondaryBtn, padding: "8px 12px" }}>Nouveau code</button>}
+      </div>
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+        <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8 }}>Transférer l'administration à un autre membre (tu deviendras modérateur)</div>
+        {candidates.length === 0 ? <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucun autre membre pour l'instant.</div> : (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <select value={transferTo} onChange={e => { setTransferTo(e.target.value); setConfirmTransfer(false); }} style={{ ...inputStyle, flex: 1, minWidth: 180, width: "auto" }}>
+              <option value="">Choisir une personne…</option>
+              {candidates.map(c => <option key={c.id} value={c.id}>{c.display_name} (@{c.username})</option>)}
+            </select>
+            {!confirmTransfer
+              ? <button type="button" disabled={!transferTo} onClick={() => setConfirmTransfer(true)} style={{ ...secondaryBtn, padding: "0 16px", opacity: transferTo ? 1 : 0.5 }}>Transférer</button>
+              : <button type="button" disabled={busy} onClick={transfer} style={{ ...secondaryBtn, padding: "0 16px", color: "#FF9A8F" }}>{busy ? "…" : `Confirmer : ${target ? target.display_name : ""} devient admin`}</button>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Journal d'activité ---------------- */
+const ACTIVITY_TEXT = {
+  "task.create": "a créé la tâche", "task.update": "a modifié la tâche", "task.done": "a terminé la tâche", "task.reopen": "a rouvert la tâche",
+  "task.trash": "a mis à la corbeille", "task.restore": "a restauré", "task.delete": "a supprimé définitivement",
+  "member.join": "a rejoint le serveur", "member.request": "a demandé à rejoindre le serveur", "member.approve": "a approuvé", "member.reject": "a refusé la demande de",
+  "member.remove": "a retiré du serveur", "member.role": "a changé le rôle :", "server.rename": "a renommé le serveur en", "server.code": "a renouvelé le code d'invitation",
+};
+function ActivityLog({ accounts }) {
+  const [rows, setRows] = useState(null);
+  const [open, setOpen] = useState(false);
+  const load = () => supabase.from('activity').select('*').order('created_at', { ascending: false }).limit(100).then(({ data }) => setRows(data || []));
+  useEffect(() => { if (open) load(); }, [open]);
+  const standalone = (a) => a === "member.join" || a === "member.request";
+  return (
+    <div style={{ marginTop: 24 }}>
+      <button type="button" onClick={() => setOpen(o => !o)} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+        <I.Chevron size={14} style={{ transform: open ? "none" : "rotate(-90deg)" }} /> Journal d'activité
+      </button>
+      {open && (
+        <div style={{ marginTop: 12, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "6px 14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+            <span style={{ fontSize: 12, color: "var(--text-dimmer)" }}>100 dernières actions · conservées 90 jours</span>
+            <button type="button" onClick={load} style={{ ...secondaryBtn, width: "auto", padding: "4px 10px", fontSize: 12 }}>Actualiser</button>
+          </div>
+          {rows === null && <div style={{ padding: 16, display: "grid", placeItems: "center" }}><Spinner /></div>}
+          {rows && rows.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)", padding: "10px 0 14px" }}>Rien à signaler pour l'instant.</div>}
+          {rows && rows.map(r => {
+            const actor = accounts.find(a => a.id === r.actor_id);
+            const text = ACTIVITY_TEXT[r.action] || r.action;
+            return (
+              <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "7px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
+                <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>
+                  {standalone(r.action) ? <><strong>{r.label}</strong> {text}</> : <><strong>{actor ? actor.display_name : "Quelqu'un"}</strong> {text}{r.label ? <> « {r.label} »</> : null}</>}
+                </span>
+                <span style={{ fontSize: 11.5, color: "var(--text-dimmer)", whiteSpace: "nowrap" }}>{new Date(r.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [server, setServer] = useState(null);
@@ -1288,15 +2069,7 @@ function AdminView({ me, session, accounts, tasks, notify }) {
         <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(135deg,var(--admin),#B08CFA)", border: "none", color: "#fff", fontWeight: 600, fontSize: 13.5, padding: "10px 16px", borderRadius: 9, cursor: "pointer", boxShadow: "0 8px 20px rgba(155,126,245,.3)" }}><I.UserPlus size={16} /> Créer un compte</button>
       </div>
 
-      {server && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 4 }}>Code d'invitation de « {server.name} »</div>
-            <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: "var(--accent-2)", letterSpacing: 1 }}>{server.join_code}</div>
-          </div>
-          <button onClick={() => { navigator.clipboard?.writeText(server.join_code); notify("Code copié."); }} style={secondaryBtn}>Copier le code</button>
-        </div>
-      )}
+      {server && <ServerSettings server={server} setServer={setServer} me={me} session={session} approved={approved} notify={notify} onChanged={onChanged} />}
 
       <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Inviter par email</div>
@@ -1356,12 +2129,13 @@ function AdminView({ me, session, accounts, tasks, notify }) {
               </div>
               <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username}</div>
             </div>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{tasks.filter(t => t.assignee === a.id && !t.done).length} tâche(s) en cours</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{tasks.filter(t => assigneeIds(t).includes(a.id) && !t.done).length} tâche(s) en cours</div>
             <button onClick={() => { setEditing(a); setShowForm(true); }} style={iconBtn} title="Modifier"><I.Settings size={14} /></button>
             {a.role !== "admin" && <button onClick={() => removeUser(a)} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer"><I.Trash size={15} /></button>}
           </div>
         ))}
       </div>
+      <ActivityLog accounts={accounts} />
       {showForm && <UserForm initial={editing} onCancel={() => { setShowForm(false); setEditing(null); }} onSave={createOrUpdate} />}
     </div>
   );
