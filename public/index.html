@@ -265,5 +265,32 @@
 <footer>
   <div class="wrap">© 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget · <a href="/confidentialite.html">Confidentialité</a></div>
 </footer>
+<script>
+  // Annonce programmée (table system_alerts : message + display_at). Même règle que dans l'application.
+  (function () {
+    var KEYNAME = 'carnet-alert-dismissed';
+    function run() {
+      fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id,message,display_at,is_maintenance&display_at=lte.' + encodeURIComponent(new Date().toISOString()) + '&order=display_at.desc&limit=5', {
+        headers: { apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4', Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4' }, cache: 'no-store'
+      }).then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+        var a = null;
+        for (var i = 0; i < rows.length; i++) { if (!rows[i].is_maintenance && rows[i].message && rows[i].message.trim()) { a = rows[i]; break; } }
+        if (!a) return;
+        var key = a.id + '|' + a.display_at + '|' + a.message, done = null;
+        try { done = localStorage.getItem(KEYNAME); } catch (e) {}
+        if (done === key) return;
+        var bar = document.createElement('div');
+        bar.className = 'alert-banner'; bar.setAttribute('role', 'status');
+        bar.style.cssText = 'display:flex;align-items:flex-start;gap:10px;background:#2A2410;border-bottom:1px solid #6B5A1E;color:#FFE3A0;padding:11px 16px;font:14px/1.45 Inter,system-ui,sans-serif;position:relative;z-index:50';
+        var txt = document.createElement('div'); txt.style.cssText = 'flex:1;min-width:0;text-align:center;word-break:break-word'; txt.textContent = '\u26A0\uFE0F ' + a.message;
+        var x = document.createElement('button'); x.type = 'button'; x.textContent = '\u2715'; x.setAttribute('aria-label', "Fermer l'annonce");
+        x.style.cssText = 'background:none;border:none;color:#FFE3A0;cursor:pointer;font-size:16px;line-height:1;padding:2px 4px';
+        x.onclick = function () { try { localStorage.setItem(KEYNAME, key); } catch (e) {} bar.remove(); };
+        bar.appendChild(txt); bar.appendChild(x); document.body.insertBefore(bar, document.body.firstChild);
+      }).catch(function () {});
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+  })();
+</script>
 </body>
 </html>
