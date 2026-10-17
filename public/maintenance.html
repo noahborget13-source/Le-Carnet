@@ -9,24 +9,40 @@
   body { font-family: sans-serif; text-align: center; padding: 150px 20px; background: #f4f4f4; color: #333; margin: 0; }
   h1 { font-size: 44px; margin: 0 0 16px; }
   p { font-size: 20px; margin: 0; }
+  button { margin-top: 18px; padding: 9px 18px; border: 1px solid #bbb; border-radius: 8px; background: #fff; color: #333; font-size: 14px; cursor: pointer; }
   small { display: block; margin-top: 28px; color: #888; font-size: 13px; }
   @media (max-width: 600px) { body { padding-top: 90px; } h1 { font-size: 32px; } p { font-size: 17px; } }
 </style>
 </head>
 <body>
-  <h1>Nous revenons très vite !</h1>
+  <h1> Le site est en cours de maintenance, nous revenons très vite !</h1>
   <p>Le site est actuellement en cours de mise à jour. Merci de votre patience.</p>
-  <small>Cette page se rafraîchit toute seule : tu seras redirigé dès que c'est terminé.</small>
+  <small id="status">Cette page se rafraîchit toute seule : vous serez redirigé dès que ce sera terminé.</small>
+  <button id="retry" type="button">Vérifier maintenant</button>
 <script>
-  // Toutes les 15 s, on regarde si la maintenance est terminée et on ramène le visiteur sur le site.
+  var BASE = 'https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id&is_maintenance=eq.true&limit=1';
+  var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4';
+  var statusEl = document.getElementById('status'), busy = false;
+  function hhmmss() { return new Date().toLocaleTimeString('fr-FR'); }
+  // Regarde si la maintenance est terminée ; si oui, on ramène le visiteur sur le site.
   function check() {
-    fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id&is_maintenance=eq.true&limit=1', {
-      headers: { apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4', Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4' }, cache: 'no-store'
-    }).then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (rows) { if (rows && rows.length === 0) location.replace('/'); })
-      .catch(function () {});
+    if (busy) return; busy = true;
+    fetch(BASE, { headers: { apikey: KEY, Authorization: 'Bearer ' + KEY }, cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('erreur ' + r.status); return r.json(); })
+      .then(function (rows) {
+        if (rows.length === 0) { statusEl.textContent = 'Maintenance terminée, redirection…'; location.replace('/'); }
+        else statusEl.textContent = 'Toujours en maintenance · dernière vérification à ' + hhmmss();
+      })
+      .catch(function (e) { statusEl.textContent = 'Vérification impossible (' + e.message + ') · nouvel essai automatique'; })
+      .then(function () { busy = false; });
   }
-  setInterval(check, 15000);
+  setInterval(check, 10000);
+  // Les navigateurs ralentissent les onglets en arrière-plan : on revérifie dès qu'on revient dessus.
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+  window.addEventListener('focus', check);
+  window.addEventListener('online', check);
+  document.getElementById('retry').addEventListener('click', check);
+  check();
 </script>
 </body>
 </html>
