@@ -153,7 +153,7 @@ function effectivePerms(account) {
   return { ...base, ...(account.permissions || {}) };
 }
 const uid = () => Math.random().toString(36).slice(2, 10);
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => isoLocal(new Date()); // date locale (et non UTC : sinon « aujourd'hui » est faux après minuit)
 function daysUntil(dateStr) {
   if (!dateStr) return null;
   const d = new Date(dateStr + "T00:00:00");
@@ -167,6 +167,23 @@ function formatDue(due, dleft) {
   if (dleft <= 7) return `Dans ${dleft} j`;
   const d = new Date(due + "T00:00:00");
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+}
+const hhmm = (t) => (t ? String(t).slice(0, 5) : "");
+const timeLabel = (t) => hhmm(t).replace(":", "h");
+const durationLabel = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); if (m < 60) return m + " min"; const h = Math.floor(m / 60), r = m % 60; return r ? `${h} h ${String(r).padStart(2, "0")}` : `${h} h`; };
+// Instant de l'échéance (heure du navigateur). Sans heure précise : la fin de la journée.
+const dueMoment = (t) => new Date(t.due + "T" + (t.due_time ? hhmm(t.due_time) + ":00" : "23:59:59")).getTime();
+// Clé de tri : date puis heure (les tâches « toute la journée » comptent pour 23h59).
+const dueKey = (t) => (t.due ? t.due + " " + (t.due_time ? hhmm(t.due_time) : "23:59") : "9999-99-99 99:99");
+function dueInfo(t) {
+  if (!t.due) return null;
+  const dleft = daysUntil(t.due), timed = Boolean(t.due_time), msLeft = dueMoment(t) - Date.now();
+  const late = !t.done && msLeft < 0;
+  let label;
+  if (timed && dleft === 0) label = late ? `En retard · ${timeLabel(t.due_time)}` : (!t.done && msLeft <= 3 * 3600000) ? `Dans ${durationLabel(msLeft)} · ${timeLabel(t.due_time)}` : `Aujourd'hui · ${timeLabel(t.due_time)}`;
+  else label = formatDue(t.due, dleft) + (timed ? ` · ${timeLabel(t.due_time)}` : "");
+  const soon = !t.done && !late && (timed && dleft === 0 ? msLeft <= 2 * 3600000 : dleft <= 2);
+  return { dleft, timed, late, soon, label, msLeft };
 }
 const RECURRENCES = [
   { value: "", label: "Ne se répète pas" },
@@ -247,6 +264,9 @@ const I = {
   Undo: p => <Icon {...p} path={<><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></>} />,
   Download: p => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />,
   Hash: p => <Icon {...p} path={<><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></>} />,
+  Clock: p => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />,
+  Poll: p => <Icon {...p} path={<><line x1="6" y1="20" x2="6" y2="11"/><line x1="12" y1="20" x2="12" y2="5"/><line x1="18" y1="20" x2="18" y2="14"/></>} />,
+  Mail: p => <Icon {...p} path={<><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/></>} />,
   Copy: p => <Icon {...p} path={<><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>} />,
 };
 function NotebookMark({ size = 22 }) {
@@ -939,6 +959,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [comments, setComments] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [templates, setTemplates] = useState([]);
+  const [pollVotes, setPollVotes] = useState([]);
+  const [, setClock] = useState(0);
   const [openId, setOpenId] = useState(null);
   const myPerms = useMemo(() => effectivePerms(me), [me]);
   const isAdmin = me.role === "admin";
@@ -950,6 +972,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   useLiveTable('channel_messages', setChannelMsgs, q => q.order('ts', { ascending: false }).limit(300));
   const reloadAttachments = useLiveTable('task_attachments', setAttachments);
   useLiveTable('task_templates', setTemplates);
+  const reloadVotes = useLiveTable('poll_votes', setPollVotes);
+  useEffect(() => { const id = setInterval(() => setClock(c => c + 1), 60000); return () => clearInterval(id); }, []);
 
   useEffect(() => { if (tab === "admin" && !isAdmin) setTab("home"); }, [tab, isAdmin]);
   const tasks = useMemo(() => tasksAll.filter(t => !t.deleted_at), [tasksAll]);
@@ -995,7 +1019,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "home" && <HomeView me={me} accounts={people} tasks={tasks} comments={comments} onOpen={openFromAnywhere} goTo={setTab} />}
         {tab === "tasks" && <TasksView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} onOpen={openFromAnywhere} />}
-        {tab === "messages" && <MessagesView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} messages={messages} channelMsgs={channelMsgs} notify={notify} />}
+        {tab === "messages" && <MessagesView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} messages={messages} channelMsgs={channelMsgs} pollVotes={pollVotes} reloadVotes={reloadVotes} notify={notify} />}
         {tab === "profile" && <ProfileView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} tasks={tasks} notify={notify} onChanged={onProfileChanged} onLogout={onLogout} />}
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} notify={notify} onChanged={onProfileChanged} />}
         <SiteFooter />
@@ -1018,15 +1042,15 @@ function StatCard({ value, label, hex, onClick }) {
 }
 function HomeView({ me, accounts, tasks, comments, onOpen, goTo }) {
   const mine = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id));
-  const late = mine.filter(t => t.due && daysUntil(t.due) < 0);
-  const today = mine.filter(t => t.due && daysUntil(t.due) === 0);
+  const late = mine.filter(t => t.due && dueInfo(t).late);
+  const today = mine.filter(t => t.due && !dueInfo(t).late && daysUntil(t.due) === 0);
   const soon = mine.filter(t => t.due && daysUntil(t.due) > 0 && daysUntil(t.due) <= 3);
   const doing = mine.filter(t => t.doing && !(t.due && daysUntil(t.due) <= 3));
   const weekAgo = Date.now() - 7 * 86400000;
   const doneWeek = tasks.filter(t => t.done && t.done_at && new Date(t.done_at).getTime() >= weekAgo);
   const myDoneWeek = doneWeek.filter(t => assigneeIds(t).includes(me.id));
   const createdWeek = tasks.filter(t => t.created_at && new Date(t.created_at).getTime() >= weekAgo);
-  const urgent = [...late, ...today, ...soon].sort((a, b) => a.due.localeCompare(b.due) || b.priority - a.priority);
+  const urgent = [...late, ...today, ...soon].sort((a, b) => dueKey(a).localeCompare(dueKey(b)) || b.priority - a.priority);
   const perPerson = new Map();
   for (const t of doneWeek) for (const id of assigneeIds(t)) perPerson.set(id, (perPerson.get(id) || 0) + 1);
   const top = [...perPerson.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, n]) => ({ user: accounts.find(a => a.id === id), n })).filter(x => x.user);
@@ -1035,11 +1059,11 @@ function HomeView({ me, accounts, tasks, comments, onOpen, goTo }) {
 
   const Row = ({ t }) => {
     const label = LABELS.find(l => l.id === t.label) || LABELS[0];
-    const d = daysUntil(t.due);
+    const di = dueInfo(t);
     return (
       <button type="button" onClick={() => onOpen(t.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", background: "var(--panel)", border: "1px solid var(--border)", borderLeft: `5px solid ${label.hex}`, borderRadius: 10, padding: "10px 14px", cursor: "pointer", color: "var(--text)" }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}>{t.title}</span>
-        {t.due && <span style={{ fontSize: 12, color: d < 0 ? "#FF9A8F" : d === 0 ? "#FFC97A" : "var(--text-dim)", whiteSpace: "nowrap" }}>{formatDue(t.due, d)}</span>}
+        {t.due && <span style={{ fontSize: 12, color: di.late ? "#FF9A8F" : di.dleft === 0 ? "#FFC97A" : "var(--text-dim)", whiteSpace: "nowrap" }}>{di.label}</span>}
       </button>
     );
   };
@@ -1155,6 +1179,8 @@ function ProfileView({ me, session, isAdmin, myPerms, tasks, notify, onChanged, 
         <button type="button" onClick={saveProfile} disabled={busy || !dirty} style={{ ...primaryBtn, padding: "10px 22px", opacity: busy || !dirty ? 0.5 : 1, cursor: dirty ? "pointer" : "default" }}>{busy ? "Enregistrement…" : "Enregistrer"}</button>
       </div>
 
+      <NotificationPrefs me={me} session={session} notify={notify} onChanged={onChanged} card={card} />
+
       <div style={card}>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Changer de mot de passe</div>
         <Field label="Nouveau mot de passe (8 caractères minimum)"><input type="password" value={pw} onChange={e => setPw(e.target.value)} style={inputStyle} /></Field>
@@ -1172,6 +1198,50 @@ function ProfileView({ me, session, isAdmin, myPerms, tasks, notify, onChanged, 
           <button type="button" onClick={deleteAccount} disabled={delBusy || confirmText.trim().toUpperCase() !== "SUPPRIMER"} style={{ ...secondaryBtn, padding: "10px 22px", color: "#FF9A8F", borderColor: "#6A3532", opacity: confirmText.trim().toUpperCase() === "SUPPRIMER" ? 1 : 0.5 }}>{delBusy ? "Suppression…" : "Supprimer définitivement mon compte"}</button>
         </>)}
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Notifications par email : une case par type ---------------- */
+const NOTIF_OPTIONS = [
+  { key: "notify_assigned", label: "Quand une tâche m'est assignée" },
+  { key: "notify_soon", label: "Quand il me reste peu de temps avant l'heure limite d'une tâche" },
+  { key: "notify_overdue", label: "Quand une de mes tâches est en retard" },
+  { key: "notify_digest", label: "Chaque matin : récapitulatif d'aujourd'hui et de demain" },
+];
+const LEAD_OPTIONS = [{ v: 15, l: "15 minutes" }, { v: 30, l: "30 minutes" }, { v: 60, l: "1 heure" }, { v: 120, l: "2 heures" }, { v: 240, l: "4 heures" }, { v: 720, l: "12 heures" }, { v: 1440, l: "1 jour" }];
+function NotificationPrefs({ me, session, notify, onChanged, card }) {
+  const read = () => ({ notify_assigned: me.notify_assigned !== false, notify_soon: me.notify_soon !== false, notify_overdue: me.notify_overdue !== false, notify_digest: me.notify_digest !== false, remind_lead_minutes: me.remind_lead_minutes || 120 });
+  const [prefs, setPrefs] = useState(read);
+  const [busy, setBusy] = useState(false);
+  const save = async (patch) => {
+    const prev = prefs;
+    setPrefs(p => ({ ...p, ...patch })); setBusy(true);
+    try { await callApi('/api/manage-account', { action: 'update-self', patch }, session); notify("Préférences enregistrées."); onChanged(); }
+    catch (e) { setPrefs(prev); notify(e.message, "err"); }
+    setBusy(false);
+  };
+  return (
+    <div style={card}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><I.Mail size={16} /> Notifications par email</div>
+      <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 12px" }}>Envoyées à {me.email}. Les changements sont enregistrés tout de suite.</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {NOTIF_OPTIONS.map(o => (
+          <label key={o.key} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13.5, cursor: "pointer", padding: "6px 0" }}>
+            <input type="checkbox" checked={prefs[o.key]} disabled={busy} onChange={e => save({ [o.key]: e.target.checked })} style={{ width: 16, height: 16, marginTop: 2, accentColor: "var(--accent)", flexShrink: 0 }} />
+            <span>{o.label}</span>
+          </label>
+        ))}
+      </div>
+      {prefs.notify_soon && (
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13.5 }}>
+          <span style={{ color: "var(--text-dim)" }}>Me prévenir</span>
+          <select value={prefs.remind_lead_minutes} disabled={busy} onChange={e => save({ remind_lead_minutes: Number(e.target.value) })} style={{ ...inputStyle, width: "auto", padding: "7px 10px" }}>
+            {LEAD_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+          </select>
+          <span style={{ color: "var(--text-dim)" }}>avant l'heure limite</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -1210,8 +1280,8 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
       return true;
     });
     list.sort((a, b) => {
-      if (sortBy === "priority") return b.priority - a.priority || (a.due || "9999").localeCompare(b.due || "9999");
-      if (sortBy === "due") return (a.due || "9999-99-99").localeCompare(b.due || "9999-99-99");
+      if (sortBy === "priority") return b.priority - a.priority || dueKey(a).localeCompare(dueKey(b));
+      if (sortBy === "due") return dueKey(a).localeCompare(dueKey(b));
       if (sortBy === "title") return a.title.localeCompare(b.title, "fr");
       return 0;
     });
@@ -1282,7 +1352,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
     const next = nextOccurrence(t.due, t.recurrence);
     const ids = assigneeIds(t);
     const { error } = await supabase.from('tasks').insert({
-      title: t.title, notes: t.notes, label: t.label, priority: t.priority, due: next, assignee: ids[0] || null, assignees: ids,
+      title: t.title, notes: t.notes, label: t.label, priority: t.priority, due: next, due_time: t.due_time || null, assignee: ids[0] || null, assignees: ids,
       tags: t.tags || [], subtasks: (t.subtasks || []).map(x => ({ ...x, done: false })), recurrence: t.recurrence,
       done: false, created_by: t.created_by, server_id: me.server_id,
     });
@@ -1300,7 +1370,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
   };
   const toggleDone = (t) => setStatus(t, t.done ? "todo" : "done");
 
-  const counts = { open: tasks.filter(t => !t.done).length, late: tasks.filter(t => !t.done && t.due && daysUntil(t.due) < 0).length };
+  const counts = { open: tasks.filter(t => !t.done).length, late: tasks.filter(t => !t.done && t.due && dueInfo(t).late).length };
   const viewBtn = (id, Icon, title) => (
     <button key={id} type="button" title={title} onClick={() => changeView(id)} style={{ ...chipBtn, display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", background: view === id ? "var(--panel-2)" : "var(--bg-2)", color: view === id ? "var(--text)" : "var(--text-dim)", borderColor: view === id ? "var(--accent)" : "var(--border-soft)" }}><Icon size={14} /> <span className="hide-mobile">{title}</span></button>
   );
@@ -1371,8 +1441,8 @@ function KanbanBoard({ tasks, accounts, canEditTask, onOpen, onMove }) {
               {list.map(t => {
                 const label = LABELS.find(l => l.id === t.label) || LABELS[0];
                 const prio = PRIORITIES.find(p => p.id === t.priority) || PRIORITIES[1];
-                const dleft = t.due ? daysUntil(t.due) : null;
-                const late = dleft !== null && dleft < 0 && !t.done;
+                const di = dueInfo(t);
+                const late = Boolean(di && di.late);
                 const people = assigneeIds(t).map(id => accounts.find(a => a.id === id)).filter(Boolean);
                 const editable = canEditTask(t);
                 return (
@@ -1381,7 +1451,7 @@ function KanbanBoard({ tasks, accounts, canEditTask, onOpen, onMove }) {
                     <div onClick={() => onOpen(t.id)} style={{ fontSize: 13.5, fontWeight: 600, cursor: "pointer", wordBreak: "break-word", textDecoration: t.done ? "line-through" : "none" }}>{t.title}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 600, color: prio.hex }}><I.Flag size={10} /> {prio.label}</span>
-                      {t.due && <span style={{ fontSize: 11.5, color: late ? "#FF9A8F" : "var(--text-dim)" }}>{formatDue(t.due, dleft)}</span>}
+                      {t.due && <span style={{ fontSize: 11.5, color: late ? "#FF9A8F" : "var(--text-dim)" }}>{di.label}</span>}
                       {(t.subtasks || []).length > 0 && <span style={{ fontSize: 11.5, color: "var(--text-dim)" }}>☑ {t.subtasks.filter(x => x.done).length}/{t.subtasks.length}</span>}
                       <span style={{ marginLeft: "auto" }}><AvatarStack users={people} size={20} max={3} /></span>
                     </div>
@@ -1443,9 +1513,9 @@ function TaskCard({ task, accounts, me, isAdmin, myPerms, commentCount, attachCo
   const label = LABELS.find(l => l.id === task.label) || LABELS[0];
   const prio = PRIORITIES.find(p => p.id === task.priority) || PRIORITIES[1];
   const people = assigneeIds(task).map(id => accounts.find(a => a.id === id)).filter(Boolean);
-  const dleft = task.due ? daysUntil(task.due) : null;
-  const late = dleft !== null && dleft < 0 && !task.done;
-  const soon = dleft !== null && dleft >= 0 && dleft <= 2 && !task.done;
+  const di = dueInfo(task);
+  const late = Boolean(di && di.late);
+  const soon = Boolean(di && di.soon);
   const own = task.created_by === me.id;
   const canEdit = isAdmin || myPerms.editAnyTask || (own && myPerms.editOwnTask);
   const canDelete = isAdmin || myPerms.deleteAnyTask || (own && myPerms.deleteOwnTask);
@@ -1469,7 +1539,7 @@ function TaskCard({ task, accounts, me, isAdmin, myPerms, commentCount, attachCo
             </div>
           )}
         </div>
-        {task.due && (<div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, flexShrink: 0, color: late ? "#FF9A8F" : soon ? "#FFC97A" : "var(--text-dim)" }}>{late ? <I.Alert size={13} /> : <I.Calendar size={13} />}{formatDue(task.due, dleft)}</div>)}
+        {task.due && (<div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, flexShrink: 0, color: late ? "#FF9A8F" : soon ? "#FFC97A" : "var(--text-dim)" }}>{late ? <I.Alert size={13} /> : di.timed ? <I.Clock size={13} /> : <I.Calendar size={13} />}{di.label}</div>)}
         {people.length > 0 && <AvatarStack users={people} size={26} max={3} />}
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
           {canEdit && <button onClick={onEdit} style={iconBtn} title="Modifier"><I.Settings size={14} /></button>}
@@ -1485,6 +1555,8 @@ function TaskForm({ initial, meId, accounts, templates, onDeleteTemplate, onCanc
   const [label, setLabel] = useState(initial?.label || LABELS[0].id);
   const [priority, setPriority] = useState(initial?.priority || 2);
   const [due, setDue] = useState(initial?.due || "");
+  const [timed, setTimed] = useState(Boolean(initial?.due_time));
+  const [dueTime, setDueTime] = useState(initial?.due_time ? hhmm(initial.due_time) : "");
   const [assignees, setAssignees] = useState(() => initial ? assigneeIds(initial) : (accounts.some(a => a.id === meId) ? [meId] : []));
   const [tagsText, setTagsText] = useState((initial?.tags || []).join(", "));
   const [subtasks, setSubtasks] = useState(initial?.subtasks || []);
@@ -1508,7 +1580,7 @@ function TaskForm({ initial, meId, accounts, templates, onDeleteTemplate, onCanc
     const pendingSub = newSub.trim() ? [...subtasks, { id: uid(), text: newSub.trim().slice(0, 120), done: false }] : subtasks;
     onSave({
       ...(initial?.id ? { id: initial.id } : {}),
-      title: title.trim(), notes: notes.trim(), label, priority: Number(priority), due: due || null,
+      title: title.trim(), notes: notes.trim(), label, priority: Number(priority), due: due || null, due_time: due && timed && dueTime ? dueTime : null,
       assignees, assignee: assignees[0] || null,
       tags: parseTags(tagsText), subtasks: pendingSub, recurrence: recurrence || null,
       saveAsTemplate: asTemplate ? (tplName.trim() || title.trim()) : null,
@@ -1534,6 +1606,17 @@ function TaskForm({ initial, meId, accounts, templates, onDeleteTemplate, onCanc
           <div style={{ flex: 1 }}><Field label="Échéance"><input type="date" value={due} onChange={e => setDue(e.target.value)} style={inputStyle} /></Field></div>
           <div style={{ flex: 1 }}><Field label="Répétition"><select value={recurrence} onChange={e => setRecurrence(e.target.value)} style={inputStyle}>{RECURRENCES.map(r => <option key={r.value} value={r.value} style={{ background: "var(--bg-2)" }}>{r.label}</option>)}</select></Field></div>
         </div>
+        {due && (
+          <div style={{ marginBottom: 14, marginTop: -4 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              {[[false, "Toute la journée"], [true, "À une heure précise"]].map(([val, lab]) => (
+                <button key={lab} type="button" onClick={() => { setTimed(val); if (val && !dueTime) setDueTime("18:00"); }} style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, border: `1.5px solid ${timed === val ? "var(--accent)" : "var(--border-soft)"}`, background: timed === val ? "#5B6EF51A" : "transparent", color: timed === val ? "var(--accent-2)" : "var(--text-dim)" }}>{lab}</button>
+              ))}
+              {timed && <input type="time" value={dueTime} onChange={e => setDueTime(e.target.value)} aria-label="Heure limite" style={{ ...inputStyle, width: 120 }} />}
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--text-dimmer)", marginTop: 6 }}>{timed ? "Les personnes assignées sont prévenues par email avant l'heure limite." : "La tâche est à terminer avant la fin de la journée."}</div>
+          </div>
+        )}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Assignée à {assignees.length > 1 ? `(${assignees.length} personnes)` : ""}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1671,7 +1754,7 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 600, color: prio.hex }}><I.Flag size={11} /> {prio.label}</span>
-          {task.due && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><I.Calendar size={12} /> {formatDue(task.due, daysUntil(task.due))}</span>}
+          {task.due && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{dueInfo(task).timed ? <I.Clock size={12} /> : <I.Calendar size={12} />} {dueInfo(task).label}{!dueInfo(task).timed && <span style={{ color: "var(--text-dimmer)" }}> · toute la journée</span>}</span>}
           {task.recurrence && <span>↻ {(RECURRENCES.find(r => r.value === task.recurrence) || {}).label}</span>}
           {task.doing && !task.done && <span style={{ color: "#FFB648", fontWeight: 600 }}>En cours</span>}
           {task.done && <span style={{ color: "#5FBF8B", fontWeight: 600 }}>Terminée</span>}
@@ -1754,7 +1837,7 @@ function CalendarView({ tasks, accounts, onOpen }) {
   const byDay = {};
   for (const t of tasks) if (t.due) (byDay[t.due] = byDay[t.due] || []).push(t);
   const noDue = tasks.filter(t => !t.due && !t.done).length;
-  const dayTasks = (byDay[selected] || []).slice().sort((a, b) => b.priority - a.priority);
+  const dayTasks = (byDay[selected] || []).slice().sort((a, b) => dueKey(a).localeCompare(dueKey(b)) || b.priority - a.priority);
   const title = first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
   const go = (n) => setMonth(m => new Date(m.getFullYear(), m.getMonth() + n, 1));
 
@@ -1799,6 +1882,7 @@ function CalendarView({ tasks, accounts, onOpen }) {
             const who = assigneeIds(t).map(id => accounts.find(x => x.id === id)).filter(Boolean);
             return (
               <button key={t.id} type="button" onClick={() => onOpen(t.id)} style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left", background: "var(--panel)", border: "1px solid var(--border)", borderLeft: `5px solid ${label.hex}`, borderRadius: 10, padding: "10px 14px", cursor: "pointer", color: "var(--text)", opacity: t.done ? 0.55 : 1 }}>
+                <span style={{ minWidth: 48, fontSize: 12, fontWeight: 600, color: t.due_time ? "var(--accent-2)" : "var(--text-dimmer)" }}>{t.due_time ? timeLabel(t.due_time) : "Journée"}</span>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 600, textDecoration: t.done ? "line-through" : "none" }}>{t.title}</span>
                 {who.length > 0 && <AvatarStack users={who} size={24} max={3} />}
               </button>
@@ -1811,13 +1895,103 @@ function CalendarView({ tasks, accounts, onOpen }) {
 }
 
 /* ============================================================
+   Sondages dans la messagerie
+   ============================================================ */
+function PollForm({ onCancel, onSubmit }) {
+  const [question, setQuestion] = useState("");
+  const [options, setOptions] = useState(["", ""]);
+  const [multiple, setMultiple] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const clean = options.map(o => o.trim()).filter(Boolean);
+  const valid = question.trim().length > 0 && clean.length >= 2;
+  const setOpt = (i, v) => setOptions(l => l.map((x, k) => k === i ? v : x));
+  const submit = async () => {
+    if (!valid || busy) return;
+    setBusy(true);
+    const ok = await onSubmit({ question: question.trim().slice(0, 200), options: clean.slice(0, 8).map(o => o.slice(0, 80)), multiple });
+    if (!ok) setBusy(false);
+  };
+  return (
+    <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div className="modal-card" style={modalStyle}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><I.Poll size={18} /> Nouveau sondage</h2><button type="button" onClick={onCancel} style={{ ...iconBtn, border: "none" }} aria-label="Fermer"><I.X size={18} /></button></div>
+        <Field label="Question"><input autoFocus value={question} maxLength={200} onChange={e => setQuestion(e.target.value)} placeholder="Réunion mardi ou jeudi ?" style={inputStyle} /></Field>
+        <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 6, fontWeight: 500 }}>Réponses (2 à 8)</div>
+        {options.map((o, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <input value={o} maxLength={80} onChange={e => setOpt(i, e.target.value)} placeholder={"Réponse " + (i + 1)} style={inputStyle} />
+            {options.length > 2 && <button type="button" onClick={() => setOptions(l => l.filter((_, k) => k !== i))} style={{ ...iconBtn, flexShrink: 0 }} aria-label="Retirer cette réponse"><I.X size={14} /></button>}
+          </div>
+        ))}
+        {options.length < 8 && <button type="button" onClick={() => setOptions(l => [...l, ""])} style={{ background: "none", border: "none", color: "var(--accent-2)", fontSize: 13, cursor: "pointer", padding: "2px 0 12px" }}>+ Ajouter une réponse</button>}
+        <label style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, cursor: "pointer", marginBottom: 20 }}><input type="checkbox" checked={multiple} onChange={e => setMultiple(e.target.checked)} style={{ width: 15, height: 15, accentColor: "var(--accent)" }} /> Autoriser plusieurs réponses</label>
+        <div style={{ display: "flex", gap: 10 }}><button type="button" onClick={onCancel} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" onClick={submit} disabled={!valid || busy} style={{ ...primaryBtn, flex: 1, opacity: valid && !busy ? 1 : 0.5 }}>{busy ? "Envoi…" : "Publier"}</button></div>
+      </div>
+    </div>
+  );
+}
+function PollCard({ kind, msg, me, isAdmin, accounts, votes, onChanged, notify }) {
+  const poll = msg.poll;
+  const options = poll.options || [];
+  const closed = Boolean(poll.closed);
+  const mine = votes.filter(v => v.user_id === me.id).map(v => v.option_idx);
+  const voters = new Set(votes.map(v => v.user_id)).size;
+  const canClose = !closed && (msg.from_id === me.id || isAdmin);
+  const [busy, setBusy] = useState(false);
+  const toggle = async (i) => {
+    if (closed || busy) return;
+    setBusy(true);
+    const { error } = mine.includes(i)
+      ? await supabase.from('poll_votes').delete().eq('msg_kind', kind).eq('msg_id', msg.id).eq('user_id', me.id).eq('option_idx', i)
+      : await supabase.from('poll_votes').insert({ msg_kind: kind, msg_id: msg.id, option_idx: i, server_id: me.server_id });
+    if (error) notify(error.message, "err");
+    if (onChanged) await onChanged();
+    setBusy(false);
+  };
+  const close = async () => {
+    const { error } = await supabase.rpc('close_poll', { p_kind: kind, p_id: msg.id });
+    if (error) notify(error.message, "err"); else notify("Sondage terminé.");
+  };
+  return (
+    <div style={{ background: "var(--panel)", border: "1px solid var(--border-soft)", borderRadius: 12, padding: "12px 14px", color: "var(--text)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
+        <I.Poll size={15} style={{ marginTop: 3, color: "var(--accent-2)", flexShrink: 0 }} />
+        <div style={{ fontSize: 14, fontWeight: 600, wordBreak: "break-word" }}>{poll.question}</div>
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--text-dimmer)", marginBottom: 10 }}>{closed ? "Sondage terminé" : poll.multiple ? "Plusieurs réponses possibles" : "Une seule réponse"} · {voters} vote{voters > 1 ? "s" : ""}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {options.map((label, i) => {
+          const who = votes.filter(v => v.option_idx === i).map(v => accounts.find(a => a.id === v.user_id)).filter(Boolean);
+          const n = votes.filter(v => v.option_idx === i).length;
+          const pct = voters ? Math.round((n / voters) * 100) : 0;
+          const on = mine.includes(i);
+          return (
+            <button key={i} type="button" onClick={() => toggle(i)} disabled={closed} aria-pressed={on} style={{ position: "relative", overflow: "hidden", textAlign: "left", padding: "8px 11px", borderRadius: 9, border: `1.5px solid ${on ? "var(--accent)" : "var(--border-soft)"}`, background: "var(--bg-2)", color: "var(--text)", cursor: closed ? "default" : "pointer", fontSize: 13.5 }}>
+              <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pct + "%", background: on ? "#5B6EF53D" : "#5B6EF51F", transition: "width .25s" }} />
+              <span style={{ position: "relative", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 16, height: 16, borderRadius: poll.multiple ? 4 : "50%", border: `2px solid ${on ? "var(--accent)" : "var(--text-dimmer)"}`, background: on ? "var(--accent)" : "transparent", flexShrink: 0, display: "grid", placeItems: "center", color: "#fff", fontSize: 10, lineHeight: 1 }}>{on ? "✓" : ""}</span>
+                <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{label}</span>
+                <span style={{ fontSize: 12, color: "var(--text-dim)", whiteSpace: "nowrap" }}>{n}{voters ? ` · ${pct} %` : ""}</span>
+              </span>
+              {who.length > 0 && <span style={{ position: "relative", display: "flex", gap: 3, marginTop: 6, flexWrap: "wrap" }}>{who.slice(0, 8).map(u => <span key={u.id} title={u.display_name}><Avatar user={u} size={17} /></span>)}{who.length > 8 && <span style={{ fontSize: 11, color: "var(--text-dimmer)" }}>+{who.length - 8}</span>}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {canClose && <button type="button" onClick={close} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 12, cursor: "pointer", padding: "10px 0 0", textDecoration: "underline" }}>Terminer le sondage</button>}
+    </div>
+  );
+}
+
+/* ============================================================
    Messages : salon du serveur + conversations privées
    ============================================================ */
-function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, channelMsgs, notify }) {
+function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, channelMsgs, pollVotes, reloadVotes, notify }) {
   const contacts = useMemo(() => accounts.filter(a => a.id !== me.id), [accounts, me.id]);
   const [activeId, setActiveId] = useState("channel");
   const [draft, setDraft] = useState("");
   const [open, setOpen] = useState(false);          // mobile : conversation ouverte en plein écran
+  const [showPoll, setShowPoll] = useState(false);
   const scrollRef = useRef(null);
   const isChannel = activeId === "channel";
   useEffect(() => { document.body.classList.toggle("chat-open", open); return () => document.body.classList.remove("chat-open"); }, [open]);
@@ -1843,6 +2017,17 @@ function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, chann
       if (error) { notify(error.message, "err"); setDraft(text); }
     }
   };
+  const sendPoll = async ({ question, options, multiple }) => {
+    const text = ("📊 " + question).slice(0, 2000);
+    const poll = { question, options, multiple, closed: false };
+    const { error } = isChannel
+      ? await supabase.from('channel_messages').insert({ server_id: me.server_id, from_id: me.id, text, poll })
+      : await supabase.from('messages').insert({ from_id: me.id, to_id: activeId, text, server_id: me.server_id, poll });
+    if (error) { notify(error.message, "err"); return false; }
+    setShowPoll(false);
+    return true;
+  };
+  const votesFor = (kind, id) => (pollVotes || []).filter(v => v.msg_kind === kind && v.msg_id === id);
   const delChannel = async (id) => { const { error } = await supabase.from('channel_messages').delete().eq('id', id); if (error) notify(error.message, "err"); };
   const activeUser = accounts.find(a => a.id === activeId);
   const fmt = (ts) => new Date(ts).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -1851,6 +2036,7 @@ function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, chann
   return (
     <div>
       <h1 className="chat-title" style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: "0 0 20px" }}>Messagerie</h1>
+      {showPoll && <PollForm onCancel={() => setShowPoll(false)} onSubmit={sendPoll} />}
       <div className={"chat-wrap" + (open ? " is-open" : "")} style={{ display: "flex", height: "calc(100vh - 150px)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
         <div className="paper chat-list" style={{ width: 250, flexShrink: 0, borderRight: "1px solid var(--border)", overflowY: "auto" }}>
           <button onClick={() => pick("channel")} style={listBtn(isChannel)}>
@@ -1881,7 +2067,9 @@ function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, chann
                     <Avatar user={author} size={30} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}><strong style={{ color: "var(--text)", fontSize: 13 }}>{author ? author.display_name : "Ancien membre"}</strong> · {fmt(m.ts)}</div>
-                      <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}><RichText text={m.text} accounts={accounts} /></div>
+                      {m.poll
+                        ? <PollCard kind="channel" msg={m} me={me} isAdmin={isAdmin} accounts={accounts} votes={votesFor("channel", m.id)} onChanged={reloadVotes} notify={notify} />
+                        : <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}><RichText text={m.text} accounts={accounts} /></div>}
                     </div>
                     {(m.from_id === me.id || isAdmin) && <button type="button" onClick={() => delChannel(m.id)} title="Supprimer" style={{ ...iconBtn, padding: 4, alignSelf: "flex-start", border: "none", color: "var(--text-dimmer)" }}><I.Trash size={13} /></button>}
                   </div>
@@ -1889,13 +2077,14 @@ function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, chann
               })}
             </>) : activeUser ? (<>
               {thread.length === 0 && <EmptyState text="Aucun message. Dites bonjour !" />}
-              {thread.map(m => (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", maxWidth: "70%", background: m.from_id === me.id ? "linear-gradient(135deg,var(--accent),var(--accent-2))" : "var(--panel-2)", color: m.from_id === me.id ? "#fff" : "var(--text)", padding: "9px 13px", borderRadius: 12, borderBottomRightRadius: m.from_id === me.id ? 3 : 12, borderBottomLeftRadius: m.from_id === me.id ? 12 : 3, fontSize: 13.5, wordBreak: "break-word" }}>{m.text}<div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>{fmt(m.ts)}</div></div>))}
+              {thread.map(m => m.poll ? (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", width: "min(400px, 94%)" }}><div style={{ fontSize: 10.5, color: "var(--text-dimmer)", margin: "0 0 3px 4px", textAlign: m.from_id === me.id ? "right" : "left" }}>{fmt(m.ts)}</div><PollCard kind="dm" msg={m} me={me} isAdmin={isAdmin} accounts={accounts} votes={votesFor("dm", m.id)} onChanged={reloadVotes} notify={notify} /></div>) : (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", maxWidth: "70%", background: m.from_id === me.id ? "linear-gradient(135deg,var(--accent),var(--accent-2))" : "var(--panel-2)", color: m.from_id === me.id ? "#fff" : "var(--text)", padding: "9px 13px", borderRadius: 12, borderBottomRightRadius: m.from_id === me.id ? 3 : 12, borderBottomLeftRadius: m.from_id === me.id ? 12 : 3, fontSize: 13.5, wordBreak: "break-word" }}>{m.text}<div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>{fmt(m.ts)}</div></div>))}
             </>) : <EmptyState text="Choisis une conversation." />}
           </div>
           <div style={{ display: "flex", gap: 10, padding: 14, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
             {isChannel
               ? <MentionInput value={draft} onChange={setDraft} onSubmit={send} disabled={!canSend} people={contacts} placeholder={canSend ? "Écrire dans le salon… (@ pour mentionner)" : "Ton rôle ne permet pas d'envoyer de messages"} style={{ ...inputStyle, background: "var(--bg)", opacity: canSend ? 1 : 0.5 }} />
               : <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") send(); }} disabled={!canSend || !activeUser} placeholder={canSend ? "Écrire un message…" : "Ton rôle ne permet pas d'envoyer de messages"} style={{ ...inputStyle, flex: 1, background: "var(--bg)", opacity: canSend ? 1 : 0.5 }} />}
+            {canSend && (isChannel || activeUser) && <button type="button" onClick={() => setShowPoll(true)} title="Créer un sondage" aria-label="Créer un sondage" style={{ ...iconBtn, padding: "0 12px" }}><I.Poll size={16} /></button>}
             <button type="button" onClick={send} disabled={!canSend} style={{ background: "linear-gradient(135deg,var(--accent),var(--accent-2))", border: "none", color: "#fff", borderRadius: 9, padding: "0 16px", cursor: canSend ? "pointer" : "not-allowed", opacity: canSend ? 1 : 0.5, display: "grid", placeItems: "center" }}><I.Send size={16} /></button>
           </div>
         </div>
@@ -1994,19 +2183,19 @@ const ACTIVITY_TEXT = {
   "member.join": "a rejoint le serveur", "member.request": "a demandé à rejoindre le serveur", "member.approve": "a approuvé", "member.reject": "a refusé la demande de",
   "member.remove": "a retiré du serveur", "member.role": "a changé le rôle :", "server.rename": "a renommé le serveur en", "server.code": "a renouvelé le code d'invitation",
 };
-function ActivityLog({ accounts }) {
+function ActivityLog({ accounts, bare }) {
   const [rows, setRows] = useState(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(bare));
   const load = () => supabase.from('activity').select('*').order('created_at', { ascending: false }).limit(100).then(({ data }) => setRows(data || []));
   useEffect(() => { if (open) load(); }, [open]);
   const standalone = (a) => a === "member.join" || a === "member.request";
   return (
-    <div style={{ marginTop: 24 }}>
-      <button type="button" onClick={() => setOpen(o => !o)} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{ marginTop: bare ? 0 : 24 }}>
+      {!bare && <button type="button" onClick={() => setOpen(o => !o)} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
         <I.Chevron size={14} style={{ transform: open ? "none" : "rotate(-90deg)" }} /> Journal d'activité
-      </button>
+      </button>}
       {open && (
-        <div style={{ marginTop: 12, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "6px 14px" }}>
+        <div style={{ marginTop: bare ? 0 : 12, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "6px 14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
             <span style={{ fontSize: 12, color: "var(--text-dimmer)" }}>100 dernières actions · conservées 90 jours</span>
             <button type="button" onClick={load} style={{ ...secondaryBtn, width: "auto", padding: "4px 10px", fontSize: 12 }}>Actualiser</button>
@@ -2031,18 +2220,112 @@ function ActivityLog({ accounts }) {
   );
 }
 
-function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
+const ago = (iso) => {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.round(m / 60);
+  return h < 48 ? `il y a ${h} h` : `il y a ${Math.round(h / 24)} j`;
+};
+const adminBox = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 };
+function AdminHeading({ children, right }) {
+  return (<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{children}</div>{right}</div>);
+}
+
+/* ---------------- Aperçu : chiffres clés, activité, points à surveiller ---------------- */
+function AdminOverview({ approved, pending, tasks, mailStatus, go }) {
+  const now = Date.now(), weekAgo = now - 7 * 86400000, monthAgo = now - 30 * 86400000;
+  const open = tasks.filter(t => !t.done);
+  const late = open.filter(t => t.due && dueInfo(t).late);
+  const noOwner = open.filter(t => assigneeIds(t).length === 0);
+  const doneWeek = tasks.filter(t => t.done && t.done_at && new Date(t.done_at).getTime() >= weekAgo);
+  const createdWeek = tasks.filter(t => t.created_at && new Date(t.created_at).getTime() >= weekAgo);
+  const days = Array.from({ length: 14 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (13 - i)); return isoLocal(d); });
+  const doneByDay = days.map(day => tasks.filter(t => t.done && t.done_at && isoLocal(new Date(t.done_at)) === day).length);
+  const createdByDay = days.map(day => tasks.filter(t => t.created_at && isoLocal(new Date(t.created_at)) === day).length);
+  const maxBar = Math.max(1, ...doneByDay, ...createdByDay);
+  const load = approved.map(a => {
+    const mine = open.filter(t => assigneeIds(t).includes(a.id));
+    return { a, open: mine.length, late: mine.filter(t => t.due && dueInfo(t).late).length, done30: tasks.filter(t => t.done && t.done_at && new Date(t.done_at).getTime() >= monthAgo && assigneeIds(t).includes(a.id)).length };
+  }).sort((x, y) => y.open - x.open);
+  const maxLoad = Math.max(1, ...load.map(l => l.open));
+
+  const alerts = [];
+  if (pending.length) alerts.push({ key: "p", text: `${pending.length} demande${pending.length > 1 ? "s" : ""} d'accès en attente`, action: "Examiner", to: "members", color: "#FFC97A" });
+  if (late.length) alerts.push({ key: "l", text: `${late.length} tâche${late.length > 1 ? "s" : ""} en retard`, color: "#FF9A8F" });
+  if (noOwner.length) alerts.push({ key: "n", text: `${noOwner.length} tâche${noOwner.length > 1 ? "s" : ""} sans responsable`, color: "#FFC97A" });
+  if (mailStatus && !mailStatus.error) {
+    if (!mailStatus.mailConfigured) alerts.push({ key: "m", text: "L'envoi d'emails n'est pas configuré", action: "Régler", to: "settings", color: "#FF9A8F" });
+    else if (!mailStatus.lastRun || Date.now() - new Date(mailStatus.lastRun.ran_at).getTime() > 30 * 60000) alerts.push({ key: "c", text: "Les rappels automatiques ne tournent pas régulièrement", action: "Voir", to: "settings", color: "#FFC97A" });
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+        <StatCard value={approved.length} label="Membres" hex="#9B7EF5" onClick={() => go("members")} />
+        <StatCard value={open.length} label="Tâches en cours" hex="#5B9EF5" />
+        <StatCard value={late.length} label="En retard" hex="#FF6B5E" />
+        <StatCard value={doneWeek.length} label="Terminées (7 jours)" hex="#5FBF8B" />
+        <StatCard value={createdWeek.length} label="Créées (7 jours)" hex="#FFB648" />
+      </div>
+
+      <div style={adminBox}>
+        <AdminHeading>À surveiller</AdminHeading>
+        {alerts.length === 0 ? <div style={{ fontSize: 13.5, color: "#5FBF8B" }}>✓ Tout est en ordre.</div> : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {alerts.map(al => (
+              <div key={al.key} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5 }}>
+                <I.Alert size={15} style={{ color: al.color, flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>{al.text}</span>
+                {al.action && <button type="button" onClick={() => go(al.to)} style={{ ...secondaryBtn, width: "auto", padding: "5px 12px", fontSize: 12.5 }}>{al.action}</button>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={adminBox}>
+        <AdminHeading right={<span style={{ fontSize: 11.5, color: "var(--text-dimmer)", display: "flex", gap: 12 }}><span><span style={{ display: "inline-block", width: 9, height: 9, background: "#5FBF8B", borderRadius: 2, marginRight: 4 }} />terminées</span><span><span style={{ display: "inline-block", width: 9, height: 9, background: "#5B6EF5", borderRadius: 2, marginRight: 4 }} />créées</span></span>}>Activité des 14 derniers jours</AdminHeading>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 96 }} role="img" aria-label="Tâches créées et terminées par jour sur 14 jours">
+          {days.map((day, i) => (
+            <div key={day} title={`${new Date(day + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} : ${doneByDay[i]} terminée(s), ${createdByDay[i]} créée(s)`} style={{ flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 2, height: "100%" }}>
+              <div style={{ width: "42%", maxWidth: 12, height: Math.max(doneByDay[i] ? 4 : 1, (doneByDay[i] / maxBar) * 100) + "%", background: "#5FBF8B", borderRadius: "3px 3px 0 0", opacity: doneByDay[i] ? 1 : 0.25 }} />
+              <div style={{ width: "42%", maxWidth: 12, height: Math.max(createdByDay[i] ? 4 : 1, (createdByDay[i] / maxBar) * 100) + "%", background: "#5B6EF5", borderRadius: "3px 3px 0 0", opacity: createdByDay[i] ? 1 : 0.25 }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-dimmer)", marginTop: 6 }}><span>{new Date(days[0] + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span><span>Aujourd'hui</span></div>
+      </div>
+
+      <div style={adminBox}>
+        <AdminHeading>Charge par membre</AdminHeading>
+        {load.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucun membre.</div>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+          {load.map(({ a, open: o, late: l, done30 }) => (
+            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, width: 150, minWidth: 130 }}><Avatar user={a} size={24} /><span style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.display_name}</span></div>
+              <div style={{ flex: 1, minWidth: 140, height: 10, background: "var(--bg-2)", borderRadius: 6, overflow: "hidden", display: "flex" }} role="img" aria-label={`${o} en cours dont ${l} en retard`}>
+                <div style={{ width: ((o - l) / maxLoad) * 100 + "%", background: "#5B9EF5" }} />
+                <div style={{ width: (l / maxLoad) * 100 + "%", background: "#FF6B5E" }} />
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--text-dim)", minWidth: 190 }}>{o} en cours{l > 0 && <span style={{ color: "#FF9A8F" }}> ({l} en retard)</span>} · {done30} terminée(s) en 30 j</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Membres : demandes, invitations, comptes ---------------- */
+function AdminMembers({ me, session, approved, pending, tasks, notify }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [server, setServer] = useState(null);
   const [invites, setInvites] = useState([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [inviting, setInviting] = useState(false);
-
-  useEffect(() => {
-    supabase.from('servers').select('*').eq('id', me.server_id).single().then(({ data }) => setServer(data));
-  }, [me.server_id]);
+  const [q, setQ] = useState("");
 
   const loadInvites = async () => {
     const { data } = await supabase.from('invites').select('*').is('used_at', null).order('created_at', { ascending: false });
@@ -2081,10 +2364,6 @@ function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
     notify("Invitation annulée.");
     loadInvites();
   };
-
-  const pending = accounts.filter(a => a.status === "pending");
-  const approved = accounts.filter(a => a.status !== "pending");
-
   const approve = async (a) => {
     const defaults = ROLE_DEFAULT_PERMS.member;
     const { error } = await supabase.from('profiles').update({ status: "approved", role: "member", permissions: defaults }).eq('id', a.id);
@@ -2096,7 +2375,6 @@ function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
     if (error) { notify(error.message, "err"); return; }
     notify("Demande refusée.");
   };
-
   const createOrUpdate = async (draft) => {
     try {
       if (draft.id) {
@@ -2114,23 +2392,31 @@ function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
     try { await callApi('/api/manage-account', { action: 'delete', id: a.id }, session); notify(`Compte « ${a.display_name} » supprimé.`); }
     catch (e) { notify(e.message, "err"); }
   };
+  const shown = approved.filter(a => !q.trim() || [a.display_name, a.username, a.email].join(" ").toLowerCase().includes(q.trim().toLowerCase()));
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 12 }}>
-        <div><h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 10 }}><I.Shield size={24} color="var(--admin)" /> Administration</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>{approved.length} compte(s) · {tasks.length} tâche(s)</p></div>
-        <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(135deg,var(--admin),#B08CFA)", border: "none", color: "#fff", fontWeight: 600, fontSize: 13.5, padding: "10px 16px", borderRadius: 9, cursor: "pointer", boxShadow: "0 8px 20px rgba(155,126,245,.3)" }}><I.UserPlus size={16} /> Créer un compte</button>
-      </div>
+      {pending.length > 0 && (
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}><I.Alert size={14} color="#FFC97A" /> {pending.length} demande(s) en attente</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pending.map(a => (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "#2A2410", border: "1px solid #4A3F1A", borderRadius: 12, padding: "12px 16px", flexWrap: "wrap" }}>
+                <Avatar user={a} size={32} />
+                <div style={{ flex: 1, minWidth: 140 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</div><div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username} · {a.email}</div></div>
+                <button onClick={() => approve(a)} style={{ ...primaryBtn, width: "auto", padding: "7px 14px", fontSize: 13 }}>Approuver</button>
+                <button onClick={() => reject(a)} style={{ ...secondaryBtn, width: "auto", padding: "7px 14px", fontSize: 13, color: "#FF9A8F" }}>Refuser</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-      {server && <ServerSettings server={server} setServer={setServer} me={me} session={session} approved={approved} notify={notify} onChanged={onChanged} />}
-
-      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Inviter par email</div>
+      <div style={adminBox}>
+        <AdminHeading>Inviter par email</AdminHeading>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input type="email" placeholder="adresse@exemple.com" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} onKeyDown={e => { if (e.key === "Enter") sendInvite(); }} style={{ ...inputStyle, flex: 1, minWidth: 180, width: "auto" }} />
-          <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-            {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-          </select>
+          <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...inputStyle, width: "auto" }}>{ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select>
           <button type="button" onClick={sendInvite} disabled={inviting} style={{ ...primaryBtn, width: "auto", padding: "10px 18px", opacity: inviting ? 0.6 : 1 }}>{inviting ? "Envoi…" : "Envoyer"}</button>
         </div>
         {invites.length > 0 && (
@@ -2150,46 +2436,180 @@ function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
         )}
       </div>
 
-      {pending.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
-            <I.Alert size={14} color="#FFC97A" /> {pending.length} demande(s) en attente
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pending.map(a => (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "#2A2410", border: "1px solid #4A3F1A", borderRadius: 12, padding: "12px 16px", flexWrap: "wrap" }}>
-                <Avatar user={a} size={32} />
-                <div style={{ flex: 1, minWidth: 140 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username} · {a.email}</div>
-                </div>
-                <button onClick={() => approve(a)} style={{ ...primaryBtn, width: "auto", padding: "7px 14px", fontSize: 13 }}>Approuver</button>
-                <button onClick={() => reject(a)} style={{ ...secondaryBtn, width: "auto", padding: "7px 14px", fontSize: 13, color: "#FF9A8F" }}>Refuser</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: "1 1 200px" }}><I.Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)" }} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher un membre…" style={{ ...inputStyle, paddingLeft: 32, background: "var(--bg-2)" }} /></div>
+        <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(135deg,var(--admin),#B08CFA)", border: "none", color: "#fff", fontWeight: 600, fontSize: 13.5, padding: "10px 16px", borderRadius: 9, cursor: "pointer", boxShadow: "0 8px 20px rgba(155,126,245,.3)" }}><I.UserPlus size={16} /> Créer un compte</button>
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {approved.map(a => (
-          <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", flexWrap: "wrap" }}>
-            <Avatar user={a} size={34} />
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</span>
-                {a.role === "admin" ? <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--admin)", background: "#9B7EF51A", padding: "2px 7px", borderRadius: 6 }}>ADMIN</span> : <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent-2)", background: "#5B6EF51A", padding: "2px 7px", borderRadius: 6 }}>{(ROLES.find(r => r.id === a.role) || ROLES[1]).label.toUpperCase()}</span>}
+        {shown.length === 0 && <EmptyState text="Aucun membre ne correspond." />}
+        {shown.map(a => {
+          const mine = tasks.filter(t => assigneeIds(t).includes(a.id) && !t.done);
+          const lateN = mine.filter(t => t.due && dueInfo(t).late).length;
+          return (
+            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", flexWrap: "wrap" }}>
+              <Avatar user={a} size={34} />
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</span>
+                  {a.role === "admin" ? <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--admin)", background: "#9B7EF51A", padding: "2px 7px", borderRadius: 6 }}>ADMIN</span> : <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent-2)", background: "#5B6EF51A", padding: "2px 7px", borderRadius: 6 }}>{(ROLES.find(r => r.id === a.role) || ROLES[1]).label.toUpperCase()}</span>}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username} · {a.email}</div>
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username}</div>
+              <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{mine.length} tâche(s) en cours{lateN > 0 && <span style={{ color: "#FF9A8F" }}> · {lateN} en retard</span>}</div>
+              <button onClick={() => { setEditing(a); setShowForm(true); }} style={iconBtn} title="Modifier" aria-label="Modifier"><I.Settings size={14} /></button>
+              {a.role !== "admin" && <button onClick={() => removeUser(a)} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer" aria-label="Supprimer"><I.Trash size={15} /></button>}
             </div>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{tasks.filter(t => assigneeIds(t).includes(a.id) && !t.done).length} tâche(s) en cours</div>
-            <button onClick={() => { setEditing(a); setShowForm(true); }} style={iconBtn} title="Modifier"><I.Settings size={14} /></button>
-            {a.role !== "admin" && <button onClick={() => removeUser(a)} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer"><I.Trash size={15} /></button>}
-          </div>
+          );
+        })}
+      </div>
+      {showForm && <UserForm initial={editing} onCancel={() => { setShowForm(false); setEditing(null); }} onSave={createOrUpdate} />}
+    </div>
+  );
+}
+
+/* ---------------- Réglages : serveur + état des emails ---------------- */
+function EmailsCard({ status, reload, session, notify }) {
+  const [busy, setBusy] = useState(false);
+  const test = async () => {
+    setBusy(true);
+    try { const r = await callApi('/api/admin-tools', { action: 'test-mail' }, session); notify("Email de test envoyé à " + r.to + "."); }
+    catch (e) { notify(e.message, "err"); }
+    setBusy(false);
+  };
+  const Line = ({ ok, children, hint }) => (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", fontSize: 13.5 }}>
+      <span style={{ width: 16, flexShrink: 0, fontWeight: 700, color: ok === true ? "#5FBF8B" : ok === false ? "#FF9A8F" : "var(--text-dimmer)" }}>{ok === true ? "✓" : ok === false ? "✗" : "•"}</span>
+      <div><div>{children}</div>{hint && <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2, lineHeight: 1.5 }}>{hint}</div>}</div>
+    </div>
+  );
+  const fresh = status && status.lastRun && (Date.now() - new Date(status.lastRun.ran_at).getTime() <= 30 * 60000);
+  return (
+    <div style={adminBox}>
+      <AdminHeading right={<button type="button" onClick={reload} style={{ ...secondaryBtn, width: "auto", padding: "4px 10px", fontSize: 12 }}>Actualiser</button>}><span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><I.Mail size={15} /> Emails et rappels</span></AdminHeading>
+      {!status && <div style={{ padding: 10, display: "grid", placeItems: "center" }}><Spinner /></div>}
+      {status && status.error && <Line ok={false} hint="La fonction « admin-tools » n'est probablement pas encore déployée : ajoute le dossier api/ à jour sur GitHub.">Impossible de lire l'état : {status.error}</Line>}
+      {status && !status.error && (<>
+        <Line ok={status.mailConfigured} hint={status.mailConfigured ? null : "Ajoute GMAIL_USER et GMAIL_APP_PASSWORD dans Vercel → Settings → Environment Variables, puis redéploie."}>{status.mailConfigured ? <>Envoi d'emails configuré{status.sender ? <> (expéditeur : {status.sender})</> : null}</> : "Envoi d'emails non configuré"}</Line>
+        <Line ok={status.cronSecretSet} hint={status.cronSecretSet ? null : "Ajoute CRON_SECRET dans Vercel (une longue phrase secrète) et redéploie : sans elle, aucun rappel ne part."}>{status.cronSecretSet ? "Clé des rappels (CRON_SECRET) présente" : "Clé des rappels (CRON_SECRET) absente"}</Line>
+        <Line ok={Boolean(fresh)} hint={fresh ? `${status.runs24h} passage(s) sur les dernières 24 h (environ 144 attendus avec un passage toutes les 10 min).` : "Les rappels « il reste peu de temps » demandent un passage toutes les 10 minutes. Lance planifier-rappels.sql dans Supabase (SQL Editor) pour l'activer."}>{status.lastRun ? <>Dernier passage du planificateur : {ago(status.lastRun.ran_at)}</> : "Le planificateur n'a encore jamais tourné"}</Line>
+        <Line ok={null}>{status.mails7d} rappel(s) envoyé(s) sur ce serveur ces 7 derniers jours</Line>
+        <div style={{ marginTop: 10 }}><button type="button" onClick={test} disabled={busy || !status.mailConfigured} style={{ ...secondaryBtn, width: "auto", padding: "8px 14px", fontSize: 13, opacity: busy || !status.mailConfigured ? 0.5 : 1 }}>{busy ? "Envoi…" : "M'envoyer un email de test"}</button></div>
+      </>)}
+    </div>
+  );
+}
+
+/* ---------------- Site : annonces (réservé à l'administrateur du site) ---------------- */
+function AdminSite({ notify }) {
+  const [rows, setRows] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [when, setWhen] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = () => supabase.from('system_alerts').select('id,message,display_at,is_maintenance').order('display_at', { ascending: false }).limit(30)
+    .then(({ data, error }) => { if (error) notify(error.message, "err"); setRows(data || []); });
+  useEffect(() => { load(); }, []);
+  const publish = async () => {
+    const text = msg.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    const at = when ? new Date(when).toISOString() : new Date().toISOString();
+    const { error } = await supabase.from('system_alerts').insert({ message: text.slice(0, 300), display_at: at, is_maintenance: false });
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    setMsg(""); setWhen("");
+    notify(when ? "Annonce programmée." : "Annonce publiée.");
+    load();
+  };
+  const remove = async (id) => {
+    const { error } = await supabase.from('system_alerts').delete().eq('id', id);
+    if (error) { notify(error.message, "err"); return; }
+    notify("Annonce supprimée.");
+    load();
+  };
+  const ann = (rows || []).filter(r => !r.is_maintenance && r.message && r.message.trim());
+  const live = ann.find(r => new Date(r.display_at) <= new Date());
+  const status = (r) => new Date(r.display_at) > new Date() ? ["Programmée", "#5B9EF5"] : (live && r.id === live.id) ? ["Affichée", "#5FBF8B"] : ["Remplacée", "var(--text-dimmer)"];
+  const fmtDate = (iso) => new Date(iso).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
+  return (
+    <div>
+      <div style={adminBox}>
+        <AdminHeading>Nouvelle annonce</AdminHeading>
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 10px", lineHeight: 1.5 }}>Un bandeau visible par tous les visiteurs, sur l'accueil et dans l'application. Il apparaît à l'heure choisie ; la plus récente remplace la précédente.</p>
+        <Field label="Message (300 caractères maximum)"><textarea value={msg} maxLength={300} onChange={e => setMsg(e.target.value)} rows={2} placeholder="Maintenance ce soir de 22 h à 23 h" style={{ ...inputStyle, resize: "vertical" }} /></Field>
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 220px" }}><Field label="Afficher à partir de (heure de ton appareil)"><input type="datetime-local" value={when} onChange={e => setWhen(e.target.value)} style={inputStyle} /></Field></div>
+          <button type="button" onClick={publish} disabled={!msg.trim() || busy} style={{ ...primaryBtn, width: "auto", padding: "10px 20px", marginBottom: 14, opacity: msg.trim() && !busy ? 1 : 0.5 }}>{busy ? "…" : when ? "Programmer" : "Publier maintenant"}</button>
+        </div>
+      </div>
+      <div style={adminBox}>
+        <AdminHeading>Annonces</AdminHeading>
+        {rows === null && <div style={{ padding: 10, display: "grid", placeItems: "center" }}><Spinner /></div>}
+        {rows && ann.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucune annonce.</div>}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {ann.map(r => { const [lab, col] = status(r); return (
+            <div key={r.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 0", borderTop: "1px solid var(--border)" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, wordBreak: "break-word" }}>{r.message}</div>
+                <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 3 }}>{fmtDate(r.display_at)} (heure de Paris)</div>
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: col, border: `1px solid ${col}`, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap" }}>{lab}</span>
+              <button type="button" onClick={() => remove(r.id)} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer" aria-label="Supprimer l'annonce"><I.Trash size={14} /></button>
+            </div>
+          ); })}
+        </div>
+      </div>
+      <div style={{ ...adminBox, fontSize: 12.5, color: "var(--text-dim)", lineHeight: 1.6 }}>
+        <strong style={{ color: "var(--text)" }}>Maintenance.</strong> Elle se commande dans Supabase (table <code>system_alerts</code>, colonne <code>is_maintenance</code> à <code>true</code>). Tu serais toi aussi redirigé vers la page de maintenance, c'est pourquoi ce bouton n'est volontairement pas ici.
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Administration : onglets ---------------- */
+function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
+  const [sub, setSub] = useState(() => { try { return localStorage.getItem("carnet-admin-tab") || "overview"; } catch (_) { return "overview"; } });
+  const [server, setServer] = useState(null);
+  const [siteAdmin, setSiteAdmin] = useState(false);
+  const [mailStatus, setMailStatus] = useState(null);
+  const pending = accounts.filter(a => a.status === "pending");
+  const approved = accounts.filter(a => a.status !== "pending");
+  const go = (t) => { setSub(t); try { localStorage.setItem("carnet-admin-tab", t); } catch (_) {} };
+  const loadMail = async () => {
+    try { setMailStatus(await callApi('/api/admin-tools', { action: 'status' }, session)); }
+    catch (e) { setMailStatus({ error: e.message }); }
+  };
+  useEffect(() => { supabase.from('servers').select('*').eq('id', me.server_id).single().then(({ data }) => setServer(data)); }, [me.server_id]);
+  useEffect(() => { supabase.rpc('is_platform_admin').then(({ data, error }) => setSiteAdmin(!error && data === true)); loadMail(); }, []);
+  const cur = sub === "site" && !siteAdmin ? "overview" : sub;
+  const tabs = [
+    { id: "overview", label: "Aperçu" },
+    { id: "members", label: "Membres", badge: pending.length },
+    { id: "settings", label: "Réglages" },
+    { id: "activity", label: "Activité" },
+    ...(siteAdmin ? [{ id: "site", label: "Site" }] : []),
+  ];
+
+  return (
+    <div>
+      <div style={{ marginBottom: 18 }}>
+        <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 10 }}><I.Shield size={24} color="var(--admin)" /> Administration</h1>
+        <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>{server ? server.name + " · " : ""}{approved.length} compte(s) · {tasks.length} tâche(s)</p>
+      </div>
+      <div role="tablist" style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--border)", marginBottom: 20, overflowX: "auto" }}>
+        {tabs.map(t => (
+          <button key={t.id} role="tab" aria-selected={cur === t.id} type="button" onClick={() => go(t.id)} style={{ background: "none", border: "none", borderBottom: `2px solid ${cur === t.id ? "var(--admin)" : "transparent"}`, color: cur === t.id ? "var(--text)" : "var(--text-dim)", fontWeight: cur === t.id ? 600 : 500, fontSize: 14, padding: "9px 14px", cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 7, marginBottom: -1 }}>
+            {t.label}{t.badge > 0 && <span style={{ background: "#FFB648", color: "#1a1405", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px" }}>{t.badge}</span>}
+          </button>
         ))}
       </div>
-      <ActivityLog accounts={accounts} />
-      {showForm && <UserForm initial={editing} onCancel={() => { setShowForm(false); setEditing(null); }} onSave={createOrUpdate} />}
+      {cur === "overview" && <AdminOverview approved={approved} pending={pending} tasks={tasks} mailStatus={mailStatus} go={go} />}
+      {cur === "members" && <AdminMembers me={me} session={session} approved={approved} pending={pending} tasks={tasks} notify={notify} />}
+      {cur === "settings" && (<>
+        {server && <ServerSettings server={server} setServer={setServer} me={me} session={session} approved={approved} notify={notify} onChanged={onChanged} />}
+        <EmailsCard status={mailStatus} reload={loadMail} session={session} notify={notify} />
+      </>)}
+      {cur === "activity" && <ActivityLog accounts={accounts} bare />}
+      {cur === "site" && <AdminSite notify={notify} />}
     </div>
   );
 }
