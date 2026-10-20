@@ -2181,7 +2181,7 @@ const ACTIVITY_TEXT = {
   "task.create": "a créé la tâche", "task.update": "a modifié la tâche", "task.done": "a terminé la tâche", "task.reopen": "a rouvert la tâche",
   "task.trash": "a mis à la corbeille", "task.restore": "a restauré", "task.delete": "a supprimé définitivement",
   "member.join": "a rejoint le serveur", "member.request": "a demandé à rejoindre le serveur", "member.approve": "a approuvé", "member.reject": "a refusé la demande de",
-  "member.remove": "a retiré du serveur", "member.role": "a changé le rôle :", "server.rename": "a renommé le serveur en", "server.code": "a renouvelé le code d'invitation",
+  "member.remove": "a retiré du serveur", "member.role": "a changé le rôle :", "mail.sent": "a envoyé un email", "server.rename": "a renommé le serveur en", "server.code": "a renouvelé le code d'invitation",
 };
 function ActivityLog({ accounts, bare }) {
   const [rows, setRows] = useState(null);
@@ -2499,6 +2499,66 @@ function EmailsCard({ status, reload, session, notify }) {
   );
 }
 
+/* ---------------- Écrire aux membres (administrateur du serveur) ---------------- */
+function AdminMail({ me, session, approved, status, notify }) {
+  const [mode, setMode] = useState("all");            // "all" | "pick"
+  const [picked, setPicked] = useState([]);
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [copy, setCopy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const others = approved.filter(a => a.id !== me.id && a.email);
+  const recipients = mode === "all" ? others : others.filter(a => picked.includes(a.id));
+  const count = recipients.length + (copy ? 1 : 0);
+  const configured = !status || status.error ? true : status.mailConfigured;
+  const valid = subject.trim().length > 0 && message.trim().length > 0 && count > 0;
+  const toggle = (id) => { setConfirm(false); setPicked(l => l.includes(id) ? l.filter(x => x !== id) : [...l, id]); };
+  const send = async () => {
+    if (!valid || busy) return;
+    if (!confirm) { setConfirm(true); return; }
+    setBusy(true);
+    try {
+      const r = await callApi('/api/admin-tools', { action: 'send-mail', subject: subject.trim(), message: message.trim(), all: mode === "all", userIds: mode === "all" ? [] : picked, copyToMe: copy }, session);
+      notify(r.failed ? `${r.sent} email(s) envoyé(s), ${r.failed} échec(s).` : `Email envoyé à ${r.sent} personne${r.sent > 1 ? "s" : ""}.`);
+      setSubject(""); setMessage(""); setConfirm(false);
+    } catch (e) { notify(e.message, "err"); setConfirm(false); }
+    setBusy(false);
+  };
+  const chip = (on) => ({ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 11px", borderRadius: 18, cursor: "pointer", fontSize: 13, background: on ? "var(--accent)" : "var(--panel-2)", color: on ? "#fff" : "var(--text)", border: `1.5px solid ${on ? "var(--accent)" : "var(--border)"}` });
+  return (
+    <div style={adminBox}>
+      <AdminHeading><span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><I.Mail size={15} /> Écrire aux membres</span></AdminHeading>
+      <p style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 16px", lineHeight: 1.5 }}>Le message part par email depuis l'adresse du site. Les membres peuvent te répondre directement : leur réponse arrive dans ta boîte mail ({me.email}). Seuls les membres de ce serveur peuvent être destinataires.</p>
+      {!configured && <div style={{ background: "#FF9A8F22", border: "1px solid #FF9A8F66", borderRadius: 8, padding: "9px 12px", fontSize: 13, marginBottom: 14 }}>Les emails ne sont pas configurés sur Vercel (GMAIL_USER et GMAIL_APP_PASSWORD). Voir Réglages.</div>}
+      <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 6, fontWeight: 500 }}>Destinataires</div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        {[["all", `Tous les membres (${others.length})`], ["pick", "Choisir"]].map(([v, lab]) => (
+          <button key={v} type="button" aria-pressed={mode === v} onClick={() => { setMode(v); setConfirm(false); }} style={chip(mode === v)}>{lab}</button>
+        ))}
+      </div>
+      {mode === "pick" && (
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 12 }}>
+          {others.length === 0 && <span style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucun autre membre pour l'instant.</span>}
+          {others.map(a => { const on = picked.includes(a.id); return (
+            <button key={a.id} type="button" aria-pressed={on} onClick={() => toggle(a.id)} style={chip(on)}><Avatar user={a} size={18} />{a.display_name}</button>
+          ); })}
+        </div>
+      )}
+      <Field label="Objet"><input value={subject} maxLength={120} onChange={e => { setSubject(e.target.value); setConfirm(false); }} placeholder="Réunion de famille dimanche" style={inputStyle} /></Field>
+      <Field label={`Message (${message.length} / 5000)`}><textarea value={message} maxLength={5000} rows={7} onChange={e => { setMessage(e.target.value); setConfirm(false); }} placeholder="Bonjour à tous, …" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} /></Field>
+      <label style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, cursor: "pointer", marginBottom: 16 }}><input type="checkbox" checked={copy} onChange={e => { setCopy(e.target.checked); setConfirm(false); }} style={{ width: 15, height: 15 }} /> M'envoyer aussi une copie</label>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <button type="button" onClick={send} disabled={!valid || busy || !configured} style={{ ...primaryBtn, width: "auto", padding: "10px 20px", opacity: valid && !busy && configured ? 1 : 0.5, ...(confirm ? { background: "#E2574C", boxShadow: "none" } : {}) }}>
+          {busy ? "Envoi…" : confirm ? `Confirmer l'envoi à ${count} personne${count > 1 ? "s" : ""}` : "Envoyer"}
+        </button>
+        {confirm && !busy && <button type="button" onClick={() => setConfirm(false)} style={{ ...secondaryBtn, width: "auto", padding: "9px 14px" }}>Annuler</button>}
+        {!valid && count === 0 && mode === "pick" && <span style={{ fontSize: 12.5, color: "var(--text-dimmer)" }}>Choisis au moins un destinataire.</span>}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Site : annonces (réservé à l'administrateur du site) ---------------- */
 function AdminSite({ notify }) {
   const [rows, setRows] = useState(null);
@@ -2584,6 +2644,7 @@ function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
   const tabs = [
     { id: "overview", label: "Aperçu" },
     { id: "members", label: "Membres", badge: pending.length },
+    { id: "mail", label: "Écrire" },
     { id: "settings", label: "Réglages" },
     { id: "activity", label: "Activité" },
     ...(siteAdmin ? [{ id: "site", label: "Site" }] : []),
@@ -2604,6 +2665,7 @@ function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
       </div>
       {cur === "overview" && <AdminOverview approved={approved} pending={pending} tasks={tasks} mailStatus={mailStatus} go={go} />}
       {cur === "members" && <AdminMembers me={me} session={session} approved={approved} pending={pending} tasks={tasks} notify={notify} />}
+      {cur === "mail" && <AdminMail me={me} session={session} approved={approved} status={mailStatus} notify={notify} />}
       {cur === "settings" && (<>
         {server && <ServerSettings server={server} setServer={setServer} me={me} session={session} approved={approved} notify={notify} onChanged={onChanged} />}
         <EmailsCard status={mailStatus} reload={loadMail} session={session} notify={notify} />
