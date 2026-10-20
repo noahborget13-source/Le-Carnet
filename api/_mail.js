@@ -38,3 +38,16 @@ export async function sendMail({ to, subject, text, html }) {
   if (!mailConfigured()) throw new Error("L'envoi d'emails n'est pas configuré (GMAIL_USER / GMAIL_APP_PASSWORD manquants).");
   await getTransporter().sendMail({ from: `"Le Carnet" <${process.env.GMAIL_USER}>`, to, subject, text, html });
 }
+
+// Extrait les @identifiants d'un texte (sans le @, en minuscules, sans doublon).
+export function extractMentions(text) {
+  const out = new Set();
+  for (const m of String(text || '').matchAll(/(^|[^A-Za-z0-9._-])@([A-Za-z0-9._-]{3,30})/g)) {
+    const name = m[2].replace(/[._-]+$/, '').toLowerCase();
+    if (name.length >= 3) out.add(name);
+  }
+  return [...out];
+}
+
+// Dates / heures (Paris) : voir _time.js
+export * from './_time.js';
