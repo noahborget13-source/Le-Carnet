@@ -34,9 +34,9 @@ export function button(link, label) {
   return `<p style="margin:22px 0"><a href="${esc(link)}" style="background:#5B9EF5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block">${esc(label)}</a></p>`;
 }
 
-export async function sendMail({ to, subject, text, html }) {
+export async function sendMail({ to, subject, text, html, replyTo }) {
   if (!mailConfigured()) throw new Error("L'envoi d'emails n'est pas configuré (GMAIL_USER / GMAIL_APP_PASSWORD manquants).");
-  await getTransporter().sendMail({ from: `"Le Carnet" <${process.env.GMAIL_USER}>`, to, subject, text, html });
+  await getTransporter().sendMail({ from: `"Le Carnet" <${process.env.GMAIL_USER}>`, to, subject, text, html, ...(replyTo ? { replyTo } : {}) });
 }
 
 // Extrait les @identifiants d'un texte (sans le @, en minuscules, sans doublon).
