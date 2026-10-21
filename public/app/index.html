@@ -19,6 +19,21 @@
       .catch(reveal);
   })();
 </script>
+<link rel="manifest" href="/app/manifest.webmanifest" />
+<meta name="theme-color" content="#14171C" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Le Carnet" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<script>
+  // Garde la proposition d'installation du navigateur pour le bouton « Installer » du Profil.
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__installPrompt = e; window.dispatchEvent(new Event('carnet-install-ready')); });
+  window.addEventListener('appinstalled', function () { window.__installPrompt = null; window.dispatchEvent(new Event('carnet-install-ready')); });
+  if ('serviceWorker' in navigator) window.addEventListener('load', function () { navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch(function () {}); });
+</script>
 <title>Le Carnet — Application</title>
 <meta name="robots" content="noindex" />
 <meta name="description" content="Le Carnet — organisez vos tâches en équipe : priorités, échéances, couleurs et messagerie." />
@@ -1181,6 +1196,8 @@ function ProfileView({ me, session, isAdmin, myPerms, tasks, notify, onChanged, 
 
       <NotificationPrefs me={me} session={session} notify={notify} onChanged={onChanged} card={card} />
 
+      <InstallCard card={card} />
+
       <div style={card}>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Changer de mot de passe</div>
         <Field label="Nouveau mot de passe (8 caractères minimum)"><input type="password" value={pw} onChange={e => setPw(e.target.value)} style={inputStyle} /></Field>
@@ -1198,6 +1215,39 @@ function ProfileView({ me, session, isAdmin, myPerms, tasks, notify, onChanged, 
           <button type="button" onClick={deleteAccount} disabled={delBusy || confirmText.trim().toUpperCase() !== "SUPPRIMER"} style={{ ...secondaryBtn, padding: "10px 22px", color: "#FF9A8F", borderColor: "#6A3532", opacity: confirmText.trim().toUpperCase() === "SUPPRIMER" ? 1 : 0.5 }}>{delBusy ? "Suppression…" : "Supprimer définitivement mon compte"}</button>
         </>)}
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Installer l'application (écran d'accueil du téléphone / de l'ordinateur) ---------------- */
+function InstallCard({ card }) {
+  const [, force] = useState(0);
+  useEffect(() => { const f = () => force(n => n + 1); window.addEventListener('carnet-install-ready', f); return () => window.removeEventListener('carnet-install-ready', f); }, []);
+  const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  const ua = navigator.userAgent || "";
+  const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const prompt = window.__installPrompt;
+  const install = async () => {
+    if (!prompt) return;
+    prompt.prompt();
+    try { await prompt.userChoice; } catch (_) {}
+    window.__installPrompt = null; force(n => n + 1);
+  };
+  return (
+    <div style={card}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><I.Check size={16} /> Application</div>
+      {standalone ? (
+        <div style={{ fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55 }}>Le Carnet est installé sur cet appareil.</div>
+      ) : prompt ? (
+        <>
+          <div style={{ fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55, marginBottom: 12 }}>Installe Le Carnet comme une vraie application : icône sur l'écran d'accueil, plein écran, sans barre d'adresse.</div>
+          <button type="button" onClick={install} style={{ ...primaryBtn, padding: "10px 22px" }}>Installer l'application</button>
+        </>
+      ) : ios ? (
+        <div style={{ fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.6 }}>Sur iPhone et iPad : ouvre cette page dans <strong>Safari</strong>, appuie sur le bouton <strong>Partager</strong> (le carré avec une flèche), puis sur <strong>Sur l'écran d'accueil</strong>.</div>
+      ) : (
+        <div style={{ fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.6 }}>Pour l'installer : dans le menu de ton navigateur (⋮ ou ⋯), choisis <strong>Installer l'application</strong> ou <strong>Ajouter à l'écran d'accueil</strong>. Si l'option n'apparaît pas, ouvre le site dans Chrome, Edge ou Safari.</div>
+      )}
     </div>
   );
 }
