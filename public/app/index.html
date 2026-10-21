@@ -12,9 +12,14 @@
     root.style.visibility = 'hidden';                       // évite de voir l'appli clignoter avant la redirection
     function reveal() { if (!done) { done = true; root.style.visibility = ''; } }
     setTimeout(reveal, 2500);                               // jamais bloqué plus de 2,5 s
-    fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id&is_maintenance=eq.true&limit=1', {
+    var BASE = 'https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/';
+    var OPTS = {
       headers: { apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4', Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4' }, cache: 'no-store'
-    }).then(function (r) { return r.ok ? r.json() : []; })
+    };
+    // « Y a-t-il une maintenance en cours maintenant ? » (vue maintenance_active, calculée avec l'heure de Supabase).
+    // Si la vue n'existe pas encore (migration 07 non lancée), on retombe sur l'ancienne règle : is_maintenance = true.
+    fetch(BASE + 'maintenance_active?select=id&limit=1', OPTS)
+      .then(function (r) { return r.ok ? r.json() : fetch(BASE + 'system_alerts?select=id&is_maintenance=eq.true&limit=1', OPTS).then(function (r2) { return r2.ok ? r2.json() : []; }); })
       .then(function (rows) { if (rows && rows.length) { done = true; location.replace('/maintenance.html'); } else reveal(); })
       .catch(reveal);
   })();
@@ -377,10 +382,13 @@ function AlertBanner({ inline }) {
     let alive = true;
     const load = async () => {
       try {
-        const { data, error } = await supabase.from('system_alerts').select('id,message,display_at,is_maintenance')
-          .lte('display_at', new Date().toISOString()).order('display_at', { ascending: false }).limit(5);
+        const q = (cols) => supabase.from('system_alerts').select(cols).lte('display_at', new Date().toISOString()).order('display_at', { ascending: false }).limit(5);
+        let { data, error } = await q('id,message,display_at,is_maintenance,maint_end');
+        if (error) ({ data, error } = await q('id,message,display_at,is_maintenance'));   // migration 07 pas encore lancée
         if (error || !alive) return;
-        const a = (data || []).find(r => !r.is_maintenance && r.message && r.message.trim());
+        const now = new Date();
+        // Une annonce de maintenance disparaît toute seule une fois la maintenance terminée.
+        const a = (data || []).find(r => r.message && r.message.trim() && (!r.is_maintenance || (r.maint_end && new Date(r.maint_end) > now)));
         if (!a) { setAlert(null); return; }
         let dismissed = null;
         try { dismissed = localStorage.getItem("carnet-alert-dismissed"); } catch (_) {}
@@ -422,6 +430,22 @@ function App() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => { if (event === "PASSWORD_RECOVERY") setRecovery(true); setSession(s); });
     return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Maintenance programmée : si elle démarre pendant qu'on utilise l'appli, on est envoyé sur la page de maintenance
+  // (vérification chaque minute et au retour sur l'onglet). Une erreur réseau ne bloque jamais l'appli.
+  useEffect(() => {
+    let stop = false;
+    const check = async () => {
+      try {
+        const { data, error } = await supabase.from('maintenance_active').select('id').limit(1);
+        if (!stop && !error && data && data.length) location.replace('/maintenance.html');
+      } catch (_) {}
+    };
+    const id = setInterval(check, 60000);
+    const onVis = () => { if (!document.hidden) check(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { stop = true; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   const [profileChecked, setProfileChecked] = useState(false);
@@ -2615,9 +2639,24 @@ function AdminSite({ notify }) {
   const [msg, setMsg] = useState("");
   const [when, setWhen] = useState("");
   const [busy, setBusy] = useState(false);
-  const load = () => supabase.from('system_alerts').select('id,message,display_at,is_maintenance').order('display_at', { ascending: false }).limit(30)
-    .then(({ data, error }) => { if (error) notify(error.message, "err"); setRows(data || []); });
+  // Maintenance programmée
+  const [mStart, setMStart] = useState("");
+  const [mEnd, setMEnd] = useState("");
+  const [mMsg, setMMsg] = useState("");
+  const [mMsgEdited, setMMsgEdited] = useState(false);
+  const [mConfirm, setMConfirm] = useState(false);
+  const [mBusy, setMBusy] = useState(false);
+  const load = async () => {
+    const q = (cols) => supabase.from('system_alerts').select(cols).order('display_at', { ascending: false }).limit(40);
+    let { data, error } = await q('id,message,display_at,is_maintenance,maint_start,maint_end');
+    if (error) ({ data, error } = await q('id,message,display_at,is_maintenance'));      // migration 07 pas encore lancée
+    if (error) notify(error.message, "err");
+    setRows(data || []);
+  };
   useEffect(() => { load(); }, []);
+  const fmtDate = (iso) => new Date(iso).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
+  const fmtHour = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
+  const sameDay = (a, b) => new Date(a).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) === new Date(b).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" });
   const publish = async () => {
     const text = msg.trim();
     if (!text || busy) return;
@@ -2630,22 +2669,87 @@ function AdminSite({ notify }) {
     notify(when ? "Annonce programmée." : "Annonce publiée.");
     load();
   };
-  const remove = async (id) => {
+  const remove = async (id, label) => {
     const { error } = await supabase.from('system_alerts').delete().eq('id', id);
     if (error) { notify(error.message, "err"); return; }
-    notify("Annonce supprimée.");
+    notify(label || "Annonce supprimée.");
     load();
   };
+
+  // ---- maintenance : validation + message proposé
+  const startD = mStart ? new Date(mStart) : null, endD = mEnd ? new Date(mEnd) : null;
+  const mError = !startD || !endD ? null
+    : startD.getTime() < Date.now() + 60000 ? "Le début doit être dans le futur (au moins une minute)."
+    : endD <= startD ? "La fin doit être après le début."
+    : endD.getTime() - startD.getTime() > 48 * 3600000 ? "Une maintenance programmée dure 48 h au maximum."
+    : null;
+  const mValid = Boolean(startD && endD && !mError);
+  const suggested = mValid ? `Maintenance prévue ${sameDay(startD, endD) ? `le ${startD.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Paris" })} de ${fmtHour(startD)} à ${fmtHour(endD)}` : `du ${fmtDate(startD)} au ${fmtDate(endD)}`}. Le site sera indisponible pendant ce temps.` : "";
+  const shownMsg = mMsgEdited ? mMsg : suggested;
+  const scheduleMaintenance = async () => {
+    if (!mValid || mBusy) return;
+    if (!mConfirm) { setMConfirm(true); return; }
+    setMBusy(true);
+    const text = shownMsg.trim().slice(0, 300);
+    const { error } = await supabase.from('system_alerts').insert({
+      is_maintenance: true, maint_start: startD.toISOString(), maint_end: endD.toISOString(),
+      message: text || null, display_at: new Date().toISOString(),
+    });
+    setMBusy(false); setMConfirm(false);
+    if (error) { notify(/maint_start|maint_end/.test(error.message) ? "Lance d'abord migration-07-maintenance-programmee.sql dans Supabase." : error.message, "err"); return; }
+    setMStart(""); setMEnd(""); setMMsg(""); setMMsgEdited(false);
+    notify("Maintenance programmée.");
+    load();
+  };
+
   const ann = (rows || []).filter(r => !r.is_maintenance && r.message && r.message.trim());
+  const maint = (rows || []).filter(r => r.is_maintenance).sort((a, b) => new Date(b.maint_start || b.display_at) - new Date(a.maint_start || a.display_at));
   const live = ann.find(r => new Date(r.display_at) <= new Date());
   const status = (r) => new Date(r.display_at) > new Date() ? ["Programmée", "#5B9EF5"] : (live && r.id === live.id) ? ["Affichée", "#5FBF8B"] : ["Remplacée", "var(--text-dimmer)"];
-  const fmtDate = (iso) => new Date(iso).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
+  const mStatus = (r) => {
+    const now = Date.now(), s = r.maint_start ? new Date(r.maint_start).getTime() : null, e = r.maint_end ? new Date(r.maint_end).getTime() : null;
+    if (s && s > now) return ["Programmée", "#5B9EF5"];
+    if (e && e <= now) return ["Terminée", "var(--text-dimmer)"];
+    return [s || e ? "En cours" : "En cours (manuelle)", "#FFB648"];
+  };
+  const dtInput = (v, set, label) => <div style={{ flex: "1 1 200px" }}><Field label={label}><input type="datetime-local" value={v} onChange={e => { set(e.target.value); setMConfirm(false); }} style={inputStyle} /></Field></div>;
   return (
     <div>
       <div style={adminBox}>
+        <AdminHeading>Programmer une maintenance</AdminHeading>
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 10px", lineHeight: 1.5 }}>À l'heure de début, tous les visiteurs (toi compris) sont envoyés sur la page « Maintenance en cours ». À l'heure de fin, le site revient tout seul, sans rien à faire. Un bandeau peut prévenir à l'avance.</p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {dtInput(mStart, setMStart, "Début (heure de ton appareil)")}
+          {dtInput(mEnd, setMEnd, "Fin (obligatoire)")}
+        </div>
+        <Field label="Bandeau d'avertissement (300 caractères maximum, laisse vide pour ne rien afficher)"><textarea value={shownMsg} maxLength={300} rows={2} onChange={e => { setMMsg(e.target.value); setMMsgEdited(true); setMConfirm(false); }} placeholder="Choisis un début et une fin : le message est proposé automatiquement" style={{ ...inputStyle, resize: "vertical" }} /></Field>
+        {mError && <div style={{ fontSize: 12.5, color: "#FF9A8F", marginBottom: 10 }}>{mError}</div>}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <button type="button" onClick={scheduleMaintenance} disabled={!mValid || mBusy} style={{ ...primaryBtn, width: "auto", padding: "10px 20px", opacity: mValid && !mBusy ? 1 : 0.5, ...(mConfirm ? { background: "#E2574C", boxShadow: "none" } : {}) }}>
+            {mBusy ? "…" : mConfirm ? "Confirmer la programmation" : "Programmer la maintenance"}
+          </button>
+          {mConfirm && !mBusy && <button type="button" onClick={() => setMConfirm(false)} style={{ ...secondaryBtn, width: "auto", padding: "9px 14px" }}>Annuler</button>}
+        </div>
+        {maint.length > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", fontWeight: 600, marginBottom: 4 }}>Maintenances</div>
+            {maint.slice(0, 8).map(r => { const [lab, col] = mStatus(r); return (
+              <div key={r.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 0", borderTop: "1px solid var(--border)" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5 }}>{r.maint_start ? <>{fmtDate(r.maint_start)} → {r.maint_end ? fmtDate(r.maint_end) : "sans fin"}</> : "Maintenance manuelle (is_maintenance dans Supabase)"}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 3 }}>heure de Paris{r.message ? " · " + r.message : ""}</div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: col, border: `1px solid ${col}`, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap" }}>{lab}</span>
+                <button type="button" onClick={() => remove(r.id, lab === "Programmée" ? "Maintenance annulée." : "Maintenance supprimée.")} style={{ ...iconBtn, color: "#FF9A8F" }} title={lab === "Programmée" ? "Annuler la maintenance" : "Supprimer"} aria-label={lab === "Programmée" ? "Annuler la maintenance" : "Supprimer la maintenance"}><I.Trash size={14} /></button>
+              </div>
+            ); })}
+          </div>
+        )}
+      </div>
+      <div style={adminBox}>
         <AdminHeading>Nouvelle annonce</AdminHeading>
         <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 10px", lineHeight: 1.5 }}>Un bandeau visible par tous les visiteurs, sur l'accueil et dans l'application. Il apparaît à l'heure choisie ; la plus récente remplace la précédente.</p>
-        <Field label="Message (300 caractères maximum)"><textarea value={msg} maxLength={300} onChange={e => setMsg(e.target.value)} rows={2} placeholder="Maintenance ce soir de 22 h à 23 h" style={{ ...inputStyle, resize: "vertical" }} /></Field>
+        <Field label="Message (300 caractères maximum)"><textarea value={msg} maxLength={300} onChange={e => setMsg(e.target.value)} rows={2} placeholder="Nouvelle fonction : les sondages dans la messagerie" style={{ ...inputStyle, resize: "vertical" }} /></Field>
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 220px" }}><Field label="Afficher à partir de (heure de ton appareil)"><input type="datetime-local" value={when} onChange={e => setWhen(e.target.value)} style={inputStyle} /></Field></div>
           <button type="button" onClick={publish} disabled={!msg.trim() || busy} style={{ ...primaryBtn, width: "auto", padding: "10px 20px", marginBottom: 14, opacity: msg.trim() && !busy ? 1 : 0.5 }}>{busy ? "…" : when ? "Programmer" : "Publier maintenant"}</button>
@@ -2667,9 +2771,6 @@ function AdminSite({ notify }) {
             </div>
           ); })}
         </div>
-      </div>
-      <div style={{ ...adminBox, fontSize: 12.5, color: "var(--text-dim)", lineHeight: 1.6 }}>
-        <strong style={{ color: "var(--text)" }}>Maintenance.</strong> Elle se commande dans Supabase (table <code>system_alerts</code>, colonne <code>is_maintenance</code> à <code>true</code>). Tu serais toi aussi redirigé vers la page de maintenance, c'est pourquoi ce bouton n'est volontairement pas ici.
       </div>
     </div>
   );
