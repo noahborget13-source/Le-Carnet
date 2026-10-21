@@ -12,9 +12,14 @@
     root.style.visibility = 'hidden';                       // évite de voir l'appli clignoter avant la redirection
     function reveal() { if (!done) { done = true; root.style.visibility = ''; } }
     setTimeout(reveal, 2500);                               // jamais bloqué plus de 2,5 s
-    fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id&is_maintenance=eq.true&limit=1', {
+    var BASE = 'https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/';
+    var OPTS = {
       headers: { apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4', Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4' }, cache: 'no-store'
-    }).then(function (r) { return r.ok ? r.json() : []; })
+    };
+    // « Y a-t-il une maintenance en cours maintenant ? » (vue maintenance_active, calculée avec l'heure de Supabase).
+    // Si la vue n'existe pas encore (migration 07 non lancée), on retombe sur l'ancienne règle : is_maintenance = true.
+    fetch(BASE + 'maintenance_active?select=id&limit=1', OPTS)
+      .then(function (r) { return r.ok ? r.json() : fetch(BASE + 'system_alerts?select=id&is_maintenance=eq.true&limit=1', OPTS).then(function (r2) { return r2.ok ? r2.json() : []; }); })
       .then(function (rows) { if (rows && rows.length) { done = true; location.replace('/maintenance.html'); } else reveal(); })
       .catch(reveal);
   })();
@@ -25,6 +30,9 @@
   // Retour d'une connexion Google arrivé par erreur sur l'accueil : on l'envoie vers l'application.
   else if (/access_token=|[?&]code=/.test(location.hash + location.search)) location.replace('/app/' + location.search + location.hash);
 </script>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <title>Le Carnet — Gestion de tâches en équipe : priorités, échéances, calendrier</title>
 <meta name="description" content="Le Carnet : organisez vos tâches à plusieurs avec priorités, échéances, rappels par email, calendrier, sous-tâches, commentaires et messagerie. Chaque équipe a son propre espace." />
 <meta name="google-site-verification" content="q18Oiddw4g9GMthm8BH5JxncvVpMNxQU7R0Sk9p9tYw" />
@@ -271,11 +279,17 @@
   (function () {
     var KEYNAME = 'carnet-alert-dismissed';
     function run() {
-      fetch('https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id,message,display_at,is_maintenance&display_at=lte.' + encodeURIComponent(new Date().toISOString()) + '&order=display_at.desc&limit=5', {
+      var base = 'https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=';
+      var tail = '&display_at=lte.' + encodeURIComponent(new Date().toISOString()) + '&order=display_at.desc&limit=5';
+      var opts = {
         headers: { apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4', Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4' }, cache: 'no-store'
-      }).then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
-        var a = null;
-        for (var i = 0; i < rows.length; i++) { if (!rows[i].is_maintenance && rows[i].message && rows[i].message.trim()) { a = rows[i]; break; } }
+      };
+      // maint_end permet de masquer l'annonce d'une maintenance une fois terminée ; sans la colonne (migration 07 non lancée), on retombe sur l'ancienne requête.
+      fetch(base + 'id,message,display_at,is_maintenance,maint_end' + tail, opts)
+        .then(function (r) { return r.ok ? r.json() : fetch(base + 'id,message,display_at,is_maintenance' + tail, opts).then(function (r2) { return r2.ok ? r2.json() : []; }); })
+        .then(function (rows) {
+        var a = null, now = new Date();
+        for (var i = 0; i < rows.length; i++) { var r = rows[i], ok = r.message && r.message.trim() && (!r.is_maintenance || (r.maint_end && new Date(r.maint_end) > now)); if (ok) { a = r; break; } }
         if (!a) return;
         var key = a.id + '|' + a.display_at + '|' + a.message, done = null;
         try { done = localStorage.getItem(KEYNAME); } catch (e) {}
