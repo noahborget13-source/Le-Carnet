@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <title>Maintenance en cours — Le Carnet</title>
 <style>
   body { font-family: sans-serif; text-align: center; padding: 150px 20px; background: #f4f4f4; color: #333; margin: 0; }
@@ -15,23 +18,41 @@
 </style>
 </head>
 <body>
-  <h1> Le Carnet est en cours de maintenance, nous revenons très vite !</h1>
+  <h1>Nous revenons très vite !</h1>
   <p>Le site est actuellement en cours de mise à jour. Merci de votre patience.</p>
-  <small id="status">Cette page se rafraîchit toute seule : vous serez redirigé dès que ce sera terminé.</small>
+  <p id="back" style="font-size:17px;margin-top:14px;color:#555"></p>
+  <small id="status">Cette page se rafraîchit toute seule : tu seras redirigé dès que c'est terminé.</small>
   <button id="retry" type="button">Vérifier maintenant</button>
 <script>
-  var BASE = 'https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/system_alerts?select=id&is_maintenance=eq.true&limit=1';
+  var API = 'https://ovkjhtqzbgdlylxhhkjc.supabase.co/rest/v1/';
   var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4';
-  var statusEl = document.getElementById('status'), busy = false;
+  var OPTS = { headers: { apikey: KEY, Authorization: 'Bearer ' + KEY }, cache: 'no-store' };
+  var statusEl = document.getElementById('status'), backEl = document.getElementById('back'), busy = false;
   function hhmmss() { return new Date().toLocaleTimeString('fr-FR'); }
+  // Maintenance en cours ? Vue maintenance_active (heure de Supabase) ; à défaut, ancienne règle is_maintenance = true.
+  function fetchActive() {
+    return fetch(API + 'maintenance_active?select=id,maint_end&limit=1', OPTS).then(function (r) {
+      if (r.ok) return r.json();
+      return fetch(API + 'system_alerts?select=id&is_maintenance=eq.true&limit=1', OPTS).then(function (r2) {
+        if (!r2.ok) throw new Error('erreur ' + r2.status);
+        return r2.json();
+      });
+    });
+  }
+  // Affiche l'heure de retour prévue, si elle est connue.
+  function showBack(rows) {
+    var end = rows[0] && rows[0].maint_end ? new Date(rows[0].maint_end) : null;
+    if (!end || isNaN(end)) { backEl.textContent = ''; return; }
+    var sameDay = end.toDateString() === new Date().toDateString();
+    backEl.textContent = 'Retour prévu ' + (sameDay ? 'vers ' : 'le ') + end.toLocaleString('fr-FR', sameDay ? { hour: '2-digit', minute: '2-digit' } : { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  }
   // Regarde si la maintenance est terminée ; si oui, on ramène le visiteur sur le site.
   function check() {
     if (busy) return; busy = true;
-    fetch(BASE, { headers: { apikey: KEY, Authorization: 'Bearer ' + KEY }, cache: 'no-store' })
-      .then(function (r) { if (!r.ok) throw new Error('erreur ' + r.status); return r.json(); })
+    fetchActive()
       .then(function (rows) {
         if (rows.length === 0) { statusEl.textContent = 'Maintenance terminée, redirection…'; location.replace('/'); }
-        else statusEl.textContent = 'Toujours en maintenance · dernière vérification à ' + hhmmss();
+        else { showBack(rows); statusEl.textContent = 'Toujours en maintenance · dernière vérification à ' + hhmmss(); }
       })
       .catch(function (e) { statusEl.textContent = 'Vérification impossible (' + e.message + ') · nouvel essai automatique'; })
       .then(function () { busy = false; });
