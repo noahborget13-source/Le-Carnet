@@ -287,6 +287,7 @@ const I = {
   Clock: p => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />,
   Poll: p => <Icon {...p} path={<><line x1="6" y1="20" x2="6" y2="11"/><line x1="12" y1="20" x2="12" y2="5"/><line x1="18" y1="20" x2="18" y2="14"/></>} />,
   Mail: p => <Icon {...p} path={<><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/></>} />,
+  Video: p => <Icon {...p} path={<><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></>} />,
   Copy: p => <Icon {...p} path={<><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>} />,
 };
 function NotebookMark({ size = 22 }) {
@@ -316,6 +317,8 @@ function Avatar({ user, size = 28 }) {
   return (<div style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: (user && user.color) || "#5B6EF5", display: "grid", placeItems: "center", fontSize: size * 0.38, fontWeight: 700, color: "#14171C" }}>{initials}</div>);
 }
 function RichText({ text, accounts }) {
+  const segs = String(text).split(/(https:\/\/meet\.jit\.si\/LeCarnet-[A-Za-z0-9-]+)/);
+  if (segs.length > 1) return <>{segs.map((sg, i) => i % 2 ? <a key={i} href={sg} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", background: "linear-gradient(135deg,var(--accent),var(--accent-2))", color: "#fff", fontWeight: 600, borderRadius: 8, padding: "5px 12px", textDecoration: "none", margin: "2px 0" }}>📹 Rejoindre l'appel</a> : <RichText key={i} text={sg} accounts={accounts} />)}</>;
   const parts = [];
   const re = /(^|[^A-Za-z0-9._-])@([A-Za-z0-9._-]{3,30})/g;
   let last = 0, m;
@@ -999,6 +1002,9 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [attachments, setAttachments] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [pollVotes, setPollVotes] = useState([]);
+  const [leaves, setLeaves] = useState([]);
+  const [meetings, setMeetings] = useState([]);
+  const [attendees, setAttendees] = useState([]);
   const [, setClock] = useState(0);
   const [openId, setOpenId] = useState(null);
   const myPerms = useMemo(() => effectivePerms(me), [me]);
@@ -1012,6 +1018,9 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const reloadAttachments = useLiveTable('task_attachments', setAttachments);
   useLiveTable('task_templates', setTemplates);
   const reloadVotes = useLiveTable('poll_votes', setPollVotes);
+  useLiveTable('leave_requests', setLeaves);
+  useLiveTable('meetings', setMeetings);
+  useLiveTable('meeting_attendees', setAttendees);
   useEffect(() => { const id = setInterval(() => setClock(c => c + 1), 60000); return () => clearInterval(id); }, []);
 
   useEffect(() => { if (tab === "admin" && !isAdmin) setTab("home"); }, [tab, isAdmin]);
@@ -1024,6 +1033,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
     { id: "home", label: "Accueil", icon: I.Home },
     { id: "tasks", label: "Tâches", icon: I.Check },
     { id: "calendar", label: "Calendrier", icon: I.Calendar },
+    { id: "meetings", label: "Réunions", icon: I.Video },
     { id: "messages", label: "Messages", icon: I.Message },
     { id: "profile", label: "Profil", icon: I.User },
     ...(isAdmin ? [{ id: "admin", label: "Admin", icon: I.Shield }] : []),
@@ -1055,17 +1065,604 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       </aside>
       <main className="app-main" style={{ flex: 1, minWidth: 0, padding: "26px 34px", overflowY: "auto" }}>
         <AlertBanner inline />
-        {tab === "home" && <HomeView me={me} accounts={people} tasks={tasks} comments={comments} onOpen={openFromAnywhere} goTo={setTab} />}
+        {tab === "home" && <HomeView me={me} accounts={people} tasks={tasks} comments={comments} leaves={leaves} meetings={meetings} attendees={attendees} onOpen={openFromAnywhere} goTo={setTab} />}
         {tab === "tasks" && <TasksView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
-        {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} onOpen={openFromAnywhere} />}
+        {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} me={me} onOpen={openFromAnywhere} />}
+        {tab === "meetings" && <MeetingsView me={me} session={session} isAdmin={isAdmin} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} tasks={tasks} notify={notify} />}
         {tab === "messages" && <MessagesView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} messages={messages} channelMsgs={channelMsgs} pollVotes={pollVotes} reloadVotes={reloadVotes} notify={notify} />}
-        {tab === "profile" && <ProfileView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} tasks={tasks} notify={notify} onChanged={onProfileChanged} onLogout={onLogout} />}
-        {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} notify={notify} onChanged={onProfileChanged} />}
+        {tab === "profile" && <ProfileView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} tasks={tasks} leaves={leaves} notify={notify} onChanged={onProfileChanged} onLogout={onLogout} />}
+        {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} leaves={leaves} notify={notify} onChanged={onProfileChanged} />}
         <SiteFooter />
       </main>
       {openTask && <TaskDetail task={openTask} accounts={people} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openTask.id)} attachments={attachments.filter(a => a.task_id === openTask.id)} onAttachmentsChanged={reloadAttachments} notify={notify} onClose={() => setOpenId(null)} />}
     </div>
   );
+}
+
+/* ============================================================
+   Agenda : heure de Paris, congés, horaires, conflits, appels vidéo
+   ============================================================ */
+const TZ = "Europe/Paris";
+const _dtf = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+function parisParts(ms) { const o = {}; for (const p of _dtf.formatToParts(new Date(ms))) o[p.type] = p.value; return o; }
+const parisDay = (ms = Date.now()) => { const p = parisParts(ms); return `${p.year}-${p.month}-${p.day}`; };
+const parisHM = (ms) => { const p = parisParts(ms); return `${p.hour}:${p.minute}`; };
+function parisInstant(day, hm = "00:00") {
+  const [y, m, d] = day.split("-").map(Number); const [h, mi] = hm.slice(0, 5).split(":").map(Number);
+  const guess = Date.UTC(y, m - 1, d, h, mi);
+  const off = (ms) => { const p = parisParts(ms); return Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute), Number(p.second)) - ms; };
+  const t = guess - off(guess);
+  return guess - off(t);
+}
+const shiftDay = (day, n) => { const d = new Date(day + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const isoWd = (day) => { const w = new Date(day + "T12:00:00Z").getUTCDay(); return w === 0 ? 7 : w; };
+const fmtDay = (day, opts) => new Date(day + "T12:00:00Z").toLocaleDateString("fr-FR", { timeZone: "UTC", ...(opts || { weekday: "long", day: "numeric", month: "long" }) });
+const fmtHM = (ms) => parisHM(ms).replace(":", "h");
+const fmtWhen = (m) => {
+  const s = Date.parse(m.starts_at), e = Date.parse(m.ends_at);
+  const ds = parisDay(s), de = parisDay(e);
+  return ds === de ? `${fmtDay(ds)}, ${fmtHM(s)} – ${fmtHM(e)}` : `${fmtDay(ds)} ${fmtHM(s)} → ${fmtDay(de)} ${fmtHM(e)}`;
+};
+const fmtLeave = (l) => (l.start_date === l.end_date ? fmtDay(l.start_date) : `du ${fmtDay(l.start_date, { day: "numeric", month: "long" })} au ${fmtDay(l.end_date, { day: "numeric", month: "long", year: "numeric" })}`);
+const JITSI = "https://meet.jit.si/LeCarnet-";
+const callLink = (room) => JITSI + room;
+const joinLink = (room, name) => JITSI + room + (name ? "#userInfo.displayName=" + encodeURIComponent('"' + name + '"') : "");
+const copyText = async (text) => { try { await navigator.clipboard.writeText(text); return true; } catch (_) { return false; } };
+
+function outsideHoursC(wh, s, e) {
+  if (!wh) return false;
+  const point = e <= s; let cur = s;
+  for (let g = 0; g < 14 && (cur < e || (point && g === 0)); g++) {
+    const day = parisDay(cur); const next = parisInstant(shiftDay(day, 1));
+    const segEnd = point ? cur : Math.min(e, next);
+    const ranges = wh[String(isoWd(day))] || [];
+    if (!ranges.some(([a, b]) => parisInstant(day, a) <= cur && segEnd <= parisInstant(day, b))) return true;
+    cur = next;
+  }
+  return false;
+}
+/** Raisons pour lesquelles `user` n'est pas disponible. busy : lignes de busy_for pour cette personne. */
+function conflictsC({ s, e, user, busy = [], tasks = [], allDay = false, ignoreTaskId = null }) {
+  const out = []; const point = e <= s;
+  const ov = (b) => (point ? Date.parse(b.starts_at) <= s && s < Date.parse(b.ends_at) : s < Date.parse(b.ends_at) && e > Date.parse(b.starts_at));
+  if (allDay) {
+    const day = parisDay(s); const d0 = parisInstant(day), d1 = parisInstant(shiftDay(day, 1));
+    if (busy.some(b => b.kind === "leave" && d0 < Date.parse(b.ends_at) && d1 > Date.parse(b.starts_at))) out.push({ kind: "leave" });
+    return out;
+  }
+  if (busy.some(b => b.kind === "leave" && ov(b))) out.push({ kind: "leave" });
+  else if (outsideHoursC(user && user.work_hours, s, e)) out.push({ kind: "hours" });
+  if (busy.some(b => b.kind === "meeting" && ov(b))) out.push({ kind: "meeting" });
+  if (busy.some(b => b.kind === "google" && ov(b))) out.push({ kind: "google" });
+  if (point) {
+    const same = tasks.find(t => t.id !== ignoreTaskId && !t.done && t.due && t.due_time && assigneeIds(t).includes(user.id) && Math.abs(parisInstant(t.due, t.due_time) - s) < 60000);
+    if (same) out.push({ kind: "task", label: same.title });
+  }
+  return out;
+}
+const reasonLine = (r, name, you) => {
+  const who = you ? "Tu" : name;
+  switch (r.kind) {
+    case "leave": return you ? "Tu es en congé à cette date" : `${name} est en congé à cette date`;
+    case "hours": return you ? "C'est en dehors de tes horaires de disponibilité" : `C'est en dehors des horaires de ${name}`;
+    case "meeting": return `${who} ${you ? "as" : "a"} déjà une réunion à ce moment-là`;
+    case "google": return you ? "Ton agenda externe est occupé à ce moment-là" : `L'agenda externe de ${name} est occupé à ce moment-là`;
+    case "task": return `${who} ${you ? "as" : "a"} déjà une tâche à la même heure (« ${r.label} »)`;
+    default: return "";
+  }
+};
+/** Créneaux occupés (rpc busy_for) d'un groupe de personnes sur une période. */
+function useBusy(userIds, fromMs, toMs, ignoreMeetingId) {
+  const [rows, setRows] = useState([]);
+  const key = JSON.stringify([[...userIds].sort(), fromMs, toMs, ignoreMeetingId || null]);
+  useEffect(() => {
+    if (!userIds.length || !fromMs || !toMs) { setRows([]); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      supabase.rpc("busy_for", { p_users: userIds, p_from: new Date(fromMs).toISOString(), p_to: new Date(toMs).toISOString(), p_ignore_meeting: ignoreMeetingId || null })
+        .then(({ data, error }) => { if (alive) setRows(error ? [] : (data || [])); });
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [key]);
+  return rows;
+}
+function ConflictBox({ lines }) {
+  if (!lines.length) return null;
+  return (
+    <div role="alert" data-testid="conflict-box" style={{ border: "1px solid #6A4A1C", borderLeft: "4px solid #FFB648", background: "#2A2111", borderRadius: 10, padding: "10px 12px", margin: "0 0 14px", fontSize: 13 }}>
+      <div style={{ fontWeight: 700, color: "#FFC97A", marginBottom: 4 }}>⚠️ Conflit d'horaire</div>
+      <ul style={{ margin: 0, paddingLeft: 18, color: "var(--text)" }}>{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+      <div style={{ fontSize: 11.5, color: "var(--text-dimmer)", marginTop: 6 }}>Tu peux enregistrer quand même : les personnes concernées seront prévenues par email.</div>
+    </div>
+  );
+}
+const statusBadge = (s) => ({ pending: ["En attente", "#FFB648"], approved: ["Accepté", "#5FBF8B"], refused: ["Refusé", "#FF6B5E"] }[s] || [s, "#9098A8"]);
+function Badge({ s }) { const [l, c] = statusBadge(s); return <span style={{ fontSize: 11.5, fontWeight: 700, color: c, background: c + "22", borderRadius: 10, padding: "2px 9px", whiteSpace: "nowrap" }}>{l}</span>; }
+const dateInputs = (a, setA, b, setB, min) => (
+  <div style={{ display: "flex", gap: 12 }}>
+    <div style={{ flex: 1 }}><Field label="Du"><input type="date" value={a} min={min} onChange={e => { setA(e.target.value); if (!b || b < e.target.value) setB(e.target.value); }} style={inputStyle} aria-label="Premier jour" /></Field></div>
+    <div style={{ flex: 1 }}><Field label="Au (inclus)"><input type="date" value={b} min={a || min} onChange={e => setB(e.target.value)} style={inputStyle} aria-label="Dernier jour" /></Field></div>
+  </div>
+);
+
+/* ---------------- Profil : mes congés ---------------- */
+function LeaveCard({ me, session, isAdmin, leaves, notify, card }) {
+  const today = parisDay();
+  const [start, setStart] = useState(""); const [end, setEnd] = useState(""); const [reason, setReason] = useState(""); const [busy, setBusy] = useState(false);
+  const mine = leaves.filter(l => l.user_id === me.id && (l.end_date >= today || l.status === "pending")).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const submit = async () => {
+    if (busy) return;
+    if (!start) { notify("Choisis le premier jour.", "err"); return; }
+    const last = end || start;
+    if (last < start) { notify("La date de fin est avant le début.", "err"); return; }
+    setBusy(true);
+    const { data, error } = await supabase.from("leave_requests").insert({ server_id: me.server_id, user_id: me.id, start_date: start, end_date: last, reason: reason.trim().slice(0, 300), status: "pending" }).select().single();
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    if (data) callApi("/api/notify-leave", { action: "request", id: data.id }, session).catch(() => {});
+    setStart(""); setEnd(""); setReason("");
+    notify("Demande envoyée à l'administrateur.");
+  };
+  const cancel = async (l) => { const { error } = await supabase.from("leave_requests").delete().eq("id", l.id); notify(error ? error.message : "Demande retirée.", error ? "err" : "ok"); };
+  return (
+    <div style={card}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>🌴 Mes congés</div>
+      {isAdmin ? (
+        <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55, margin: 0 }}>Tu es l'administrateur : pose les congés (les tiens et ceux des autres) dans <strong>Admin → Congés</strong>. Ils sont acceptés tout de suite.</p>
+      ) : (<>
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 12px", lineHeight: 1.5 }}>Demande des jours de congé à l'administrateur. Une fois acceptés, on ne te prévient plus par email pour tes tâches, et les autres voient que tu es absent(e).</p>
+        {dateInputs(start, setStart, end, setEnd, today)}
+        <Field label="Motif (optionnel)"><input value={reason} onChange={e => setReason(e.target.value)} maxLength={300} placeholder="Vacances, rendez-vous médical…" style={inputStyle} /></Field>
+        <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, padding: "10px 22px", opacity: busy ? 0.6 : 1 }}>{busy ? "Envoi…" : "Envoyer la demande"}</button>
+      </>)}
+      {mine.length > 0 && (
+        <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+          {mine.map(l => (
+            <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "var(--bg)", borderRadius: 10, padding: "9px 12px", fontSize: 13.5 }}>
+              <div style={{ flex: 1, minWidth: 160 }}><div style={{ fontWeight: 600 }}>{fmtLeave(l)}</div>{(l.reason || l.admin_note) && <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>{l.reason}{l.admin_note ? ` · Réponse : ${l.admin_note}` : ""}</div>}</div>
+              <Badge s={l.status} />
+              {l.status === "pending" && !isAdmin && <button type="button" onClick={() => cancel(l)} style={{ ...secondaryBtn, width: "auto", padding: "4px 10px", fontSize: 12 }}>Retirer</button>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Profil : horaires de disponibilité ---------------- */
+const WEEKDAYS = [[1, "Lundi"], [2, "Mardi"], [3, "Mercredi"], [4, "Jeudi"], [5, "Vendredi"], [6, "Samedi"], [7, "Dimanche"]];
+function HoursCard({ me, session, notify, onChanged, card }) {
+  const [wh, setWh] = useState(me.work_hours || null);
+  const [busy, setBusy] = useState(false);
+  const saved = JSON.stringify(me.work_hours || null);
+  const dirty = JSON.stringify(wh) !== saved;
+  const setDay = (k, ranges) => setWh(w => { const n = { ...(w || {}) }; if (ranges) n[k] = ranges; else delete n[k]; return n; });
+  const toMin = (s) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
+  const problem = () => {
+    for (const [k, ranges] of Object.entries(wh || {})) {
+      let prev = -1;
+      for (const [a, b] of ranges) { if (!a || !b || toMin(b) <= toMin(a)) return "L'heure de fin doit être après l'heure de début."; if (toMin(a) < prev) return "Les deux plages d'une même journée ne doivent pas se chevaucher."; prev = toMin(b); }
+    }
+    return null;
+  };
+  const save = async () => {
+    const p = problem(); if (p) { notify(p, "err"); return; }
+    setBusy(true);
+    try { await callApi("/api/manage-account", { action: "update-self", patch: { work_hours: wh && Object.keys(wh).length ? wh : null } }, session); notify("Horaires enregistrés."); onChanged(); }
+    catch (e) { notify(e.message, "err"); }
+    setBusy(false);
+  };
+  const enable = () => setWh({ 1: [["09:00", "18:00"]], 2: [["09:00", "18:00"]], 3: [["09:00", "18:00"]], 4: [["09:00", "18:00"]], 5: [["09:00", "18:00"]] });
+  const timeIn = (v, on, label) => <input type="time" value={v} onChange={e => on(e.target.value)} aria-label={label} style={{ ...inputStyle, width: 112, padding: "7px 8px" }} />;
+  return (
+    <div style={card}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><I.Clock size={16} /> Mes horaires de disponibilité</div>
+      <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 12px", lineHeight: 1.5 }}>Hors de ces horaires, on te prévient par email si une tâche à heure précise ou une réunion tombe à ce moment-là. Rien n'est bloqué : c'est un avertissement.</p>
+      <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, cursor: "pointer", marginBottom: 10 }}>
+        <input type="checkbox" checked={!!wh} onChange={e => (e.target.checked ? enable() : setWh(null))} style={{ width: 16, height: 16, accentColor: "var(--accent)" }} aria-label="Définir mes horaires" />
+        <span>Définir mes horaires de travail {!wh && <span style={{ color: "var(--text-dimmer)" }}>(sinon : toujours disponible)</span>}</span>
+      </label>
+      {wh && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {WEEKDAYS.map(([k, name]) => {
+            const ranges = wh[k]; const on = !!ranges;
+            return (
+              <div key={k} data-day={k} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, width: 112, fontSize: 13.5, cursor: "pointer" }}>
+                  <input type="checkbox" checked={on} onChange={e => setDay(k, e.target.checked ? [["09:00", "18:00"]] : null)} style={{ width: 15, height: 15, accentColor: "var(--accent)" }} aria-label={"Je travaille le " + name.toLowerCase()} /> {name}
+                </label>
+                {!on && <span style={{ fontSize: 12.5, color: "var(--text-dimmer)" }}>Repos</span>}
+                {on && ranges.map((r, i) => (
+                  <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {timeIn(r[0], v => setDay(k, ranges.map((x, j) => j === i ? [v, x[1]] : x)), `${name} début ${i + 1}`)}–{timeIn(r[1], v => setDay(k, ranges.map((x, j) => j === i ? [x[0], v] : x)), `${name} fin ${i + 1}`)}
+                  </span>
+                ))}
+                {on && ranges.length === 1 && <button type="button" onClick={() => setDay(k, [[ranges[0][0], "12:00"], ["14:00", ranges[0][1] > "14:00" ? ranges[0][1] : "18:00"]])} style={{ ...chipBtn, fontSize: 12 }}>+ pause</button>}
+                {on && ranges.length === 2 && <button type="button" onClick={() => setDay(k, [[ranges[0][0], ranges[1][1]]])} style={{ ...chipBtn, fontSize: 12 }}>Retirer la pause</button>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <button type="button" onClick={save} disabled={busy || !dirty} style={{ ...primaryBtn, padding: "10px 22px", marginTop: 14, opacity: busy || !dirty ? 0.5 : 1 }}>{busy ? "Enregistrement…" : "Enregistrer mes horaires"}</button>
+    </div>
+  );
+}
+
+/* ---------------- Profil : agenda Google (lien secret iCal) ---------------- */
+function CalendarFeedCard({ session, notify, card }) {
+  const [st, setSt] = useState(undefined);      // undefined : chargement · false : indisponible · null : non connecté
+  const [url, setUrl] = useState(""); const [busy, setBusy] = useState(false);
+  const load = () => supabase.rpc("my_calendar_status").then(({ data, error }) => setSt(error ? false : ((data && data[0]) || null)));
+  useEffect(() => { load(); }, []);
+  const run = async (body, okMsg) => {
+    setBusy(true);
+    try { const r = await callApi("/api/calendar-feed", body, session); notify(okMsg(r)); setUrl(""); await load(); }
+    catch (e) { notify(e.message, "err"); await load(); }
+    setBusy(false);
+  };
+  const ago = (iso) => { if (!iso) return "jamais"; const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)); return m < 2 ? "à l'instant" : m < 90 ? `il y a ${m} min` : m < 2880 ? `il y a ${Math.round(m / 60)} h` : `il y a ${Math.round(m / 1440)} j`; };
+  if (st === false) return null;
+  return (
+    <div style={card}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><I.Calendar size={16} /> Agenda Google (ou Outlook, Apple)</div>
+      <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 12px", lineHeight: 1.5 }}>Relie ton agenda pour que Le Carnet sache quand tu es occupé(e). Si une tâche ou une réunion tombe pendant un de tes rendez-vous, tu reçois un email « deux événements se chevauchent ». Lecture seule : rien n'est écrit dans ton agenda, et les autres voient seulement « occupé », jamais le titre.</p>
+      {st ? (<>
+        <div style={{ background: "var(--bg)", borderRadius: 10, padding: "10px 12px", fontSize: 13.5, marginBottom: 12 }}>
+          <div style={{ fontWeight: 600, color: "#5FBF8B" }}>✓ Agenda connecté</div>
+          <div style={{ color: "var(--text-dim)", fontSize: 12.5, marginTop: 2 }}>{st.slots} créneau(x) occupé(s) dans les 45 prochains jours · mis à jour {ago(st.last_sync)}</div>
+          {st.last_error && <div style={{ color: "#FF9A8F", fontSize: 12.5, marginTop: 4 }}>⚠️ {st.last_error}</div>}
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" disabled={busy} onClick={() => run({ action: "sync" }, r => `Agenda relu : ${r.slots} créneau(x).`)} style={{ ...secondaryBtn, width: "auto", padding: "8px 16px" }}>{busy ? "…" : "Synchroniser maintenant"}</button>
+          <button type="button" disabled={busy} onClick={() => run({ action: "disconnect" }, () => "Agenda déconnecté.")} style={{ ...secondaryBtn, width: "auto", padding: "8px 16px", color: "#FF9A8F", borderColor: "#6A3532" }}>Déconnecter</button>
+        </div>
+      </>) : (<>
+        <Field label="Adresse secrète au format iCal"><input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://calendar.google.com/calendar/ical/…/private-…/basic.ics" style={inputStyle} aria-label="Adresse iCal" /></Field>
+        <button type="button" disabled={busy || !url.trim()} onClick={() => run({ action: "connect", url: url.trim() }, r => `Agenda connecté : ${r.slots} créneau(x) occupé(s).`)} style={{ ...primaryBtn, padding: "10px 22px", opacity: busy || !url.trim() ? 0.5 : 1 }}>{busy ? "Connexion…" : "Connecter mon agenda"}</button>
+        <details style={{ marginTop: 14, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6 }}>
+          <summary style={{ cursor: "pointer", color: "var(--accent-2)", fontWeight: 600 }}>Où trouver ce lien dans Google Agenda ?</summary>
+          <ol style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+            <li>Ouvre <strong>Google Agenda sur ordinateur</strong> (calendar.google.com). L'application mobile ne montre pas ce lien.</li>
+            <li>Clique sur la roue ⚙ → <strong>Paramètres</strong>.</li>
+            <li>À gauche, sous « Paramètres de mes agendas », clique sur ton agenda.</li>
+            <li>Descends jusqu'à <strong>Intégrer l'agenda</strong> et copie <strong>Adresse secrète au format iCal</strong>.</li>
+            <li>Colle-la ici. Ne la partage avec personne : quiconque l'a peut lire ton agenda. Tu peux la réinitialiser dans Google à tout moment.</li>
+          </ol>
+        </details>
+      </>)}
+    </div>
+  );
+}
+
+/* ---------------- Réunions ---------------- */
+const RESP = { accepted: ["✓", "#5FBF8B", "a accepté"], declined: ["✗", "#FF6B5E", "a refusé"], invited: ["?", "#9098A8", "n'a pas répondu"] };
+function MeetingForm({ initial, me, accounts, attendees, leaves, tasks, onCancel, onSaved, session, notify }) {
+  const startInit = initial ? Date.parse(initial.starts_at) : null;
+  const [title, setTitle] = useState(initial?.title || "");
+  const [notes, setNotes] = useState(initial?.notes || "");
+  const [day, setDay] = useState(initial ? parisDay(startInit) : shiftDay(parisDay(), 1));
+  const [from, setFrom] = useState(initial ? parisHM(startInit) : "10:00");
+  const [to, setTo] = useState(initial ? parisHM(Date.parse(initial.ends_at)) : "11:00");
+  const [people, setPeople] = useState(() => initial ? attendees.filter(a => a.meeting_id === initial.id && a.user_id !== me.id).map(a => a.user_id) : []);
+  const [busy, setBusy] = useState(false);
+  const others = accounts.filter(a => a.id !== me.id);
+  const s = day && from ? parisInstant(day, from) : 0, e = day && to ? parisInstant(day, to) : 0;
+  const valid = s && e > s && e - s <= 12 * 3600e3;
+  const ids = [me.id, ...people];
+  const busyRows = useBusy(valid ? ids : [], s, e, initial && initial.id);
+  const lines = useMemo(() => {
+    if (!valid) return [];
+    const out = [];
+    for (const id of ids) {
+      const u = accounts.find(a => a.id === id); if (!u) continue;
+      const reasons = conflictsC({ s, e, user: u, busy: busyRows.filter(b => b.user_id === id) });
+      for (const r of reasons) out.push(reasonLine(r, u.display_name, id === me.id));
+    }
+    return out;
+  }, [valid, s, e, busyRows, JSON.stringify(ids)]);
+  const toggle = (id) => setPeople(l => l.includes(id) ? l.filter(x => x !== id) : [...l, id]);
+  const changeFrom = (v) => { // garde la même durée
+    if (from && to && v) { const dur = Math.max(15, (Number(to.slice(0, 2)) * 60 + Number(to.slice(3))) - (Number(from.slice(0, 2)) * 60 + Number(from.slice(3)))); const m = Math.min(23 * 60 + 59, Number(v.slice(0, 2)) * 60 + Number(v.slice(3)) + dur); setTo(String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0")); }
+    setFrom(v);
+  };
+  const save = async () => {
+    if (busy) return;
+    if (!title.trim()) { notify("Donne un titre à la réunion.", "err"); return; }
+    if (!valid) { notify(e <= s ? "L'heure de fin doit être après le début." : "Une réunion dure 12 heures au maximum.", "err"); return; }
+    setBusy(true);
+    try {
+      const row = { title: title.trim().slice(0, 120), notes: notes.trim().slice(0, 1000), starts_at: new Date(s).toISOString(), ends_at: new Date(e).toISOString() };
+      let id;
+      if (initial) {
+        id = initial.id;
+        const { error } = await supabase.from("meetings").update(row).eq("id", id);
+        if (error) throw new Error(error.message);
+        const old = attendees.filter(a => a.meeting_id === id && a.user_id !== me.id).map(a => a.user_id);
+        const moved = initial.starts_at !== row.starts_at || initial.ends_at !== row.ends_at;
+        const removed = moved ? old : old.filter(x => !people.includes(x));
+        const added = moved ? people : people.filter(x => !old.includes(x));
+        for (const uid_ of removed) await supabase.from("meeting_attendees").delete().eq("meeting_id", id).eq("user_id", uid_);
+        if (added.length) { const { error: e2 } = await supabase.from("meeting_attendees").insert(added.map(u => ({ meeting_id: id, user_id: u }))); if (e2) throw new Error(e2.message); }
+      } else {
+        const { data, error } = await supabase.from("meetings").insert({ ...row, server_id: me.server_id, created_by: me.id }).select().single();
+        if (error) throw new Error(error.message);
+        id = data.id;
+        const { error: e2 } = await supabase.from("meeting_attendees").insert([{ meeting_id: id, user_id: me.id, response: "accepted" }, ...people.map(u => ({ meeting_id: id, user_id: u }))]);
+        if (e2) throw new Error(e2.message);
+      }
+      let sent = 0, conflicts = 0;
+      if (people.length || initial) { try { const r = await callApi("/api/notify-meeting", { action: initial ? "update" : "invite", meetingId: id }, session); sent = r.sent || 0; conflicts = r.conflicts || 0; } catch (_) {} }
+      notify((initial ? "Réunion mise à jour" : "Réunion créée") + (sent ? ` · ${sent} email(s) envoyé(s)` : "") + (conflicts ? ` · ${conflicts} conflit(s) signalé(s)` : "") + ".");
+      onSaved();
+    } catch (err) { notify(err.message, "err"); }
+    setBusy(false);
+  };
+  return (
+    <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onCancel(); }}>
+      <div className="modal-card" style={{ ...modalStyle, width: 500, maxHeight: "92vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>{initial ? "Modifier la réunion" : "Nouvelle réunion"}</h2><button type="button" onClick={onCancel} style={{ ...iconBtn, border: "none" }} aria-label="Fermer"><I.X size={18} /></button></div>
+        <Field label="Titre"><input autoFocus value={title} onChange={ev => setTitle(ev.target.value)} maxLength={120} style={inputStyle} aria-label="Titre de la réunion" /></Field>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ flex: "2 1 150px" }}><Field label="Jour"><input type="date" value={day} onChange={ev => setDay(ev.target.value)} style={inputStyle} aria-label="Jour de la réunion" /></Field></div>
+          <div style={{ flex: "1 1 100px" }}><Field label="Début"><input type="time" value={from} onChange={ev => changeFrom(ev.target.value)} style={inputStyle} aria-label="Heure de début" /></Field></div>
+          <div style={{ flex: "1 1 100px" }}><Field label="Fin"><input type="time" value={to} onChange={ev => setTo(ev.target.value)} style={inputStyle} aria-label="Heure de fin" /></Field></div>
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--text-dimmer)", margin: "-8px 0 14px" }}>Heure de Paris.</div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Participants {people.length ? `(${people.length})` : ""}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {others.length === 0 && <span style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Personne d'autre sur le serveur pour l'instant.</span>}
+            {others.map(a => { const on = people.includes(a.id); return (
+              <button key={a.id} type="button" aria-pressed={on} onClick={() => toggle(a.id)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 11px 5px 6px", borderRadius: 20, cursor: "pointer", fontSize: 13, border: `1.5px solid ${on ? a.color : "var(--border-soft)"}`, background: on ? `${a.color}22` : "transparent", color: on ? "var(--text)" : "var(--text-dim)" }}><Avatar user={a} size={20} /> {a.display_name}</button>
+            ); })}
+          </div>
+        </div>
+        <Field label="Notes (optionnel)"><textarea value={notes} onChange={ev => setNotes(ev.target.value)} rows={2} maxLength={1000} style={{ ...inputStyle, resize: "vertical" }} placeholder="Ordre du jour, documents à lire…" /></Field>
+        <ConflictBox lines={lines} />
+        <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginBottom: 16, lineHeight: 1.5 }}>📹 Un lien d'appel vidéo est créé automatiquement. Les invités reçoivent un email avec un fichier à ajouter à leur agenda.</div>
+        <div style={{ display: "flex", gap: 10 }}><button type="button" onClick={onCancel} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" onClick={save} disabled={busy} style={{ ...primaryBtn, flex: 1, opacity: busy ? 0.6 : 1 }}>{busy ? "Enregistrement…" : initial ? "Enregistrer" : people.length ? "Créer et inviter" : "Créer la réunion"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function MeetingCard({ m, me, isAdmin, accounts, attendees, onEdit, onCancel, notify }) {
+  const list = attendees.filter(a => a.meeting_id === m.id);
+  const mine = list.find(a => a.user_id === me.id);
+  const org = accounts.find(a => a.id === m.created_by);
+  const s = Date.parse(m.starts_at), e = Date.parse(m.ends_at), now = Date.now();
+  const live = now >= s - 10 * 60000 && now < e, past = now >= e;
+  const canManage = m.created_by === me.id || isAdmin;
+  const respond = async (response) => { const { error } = await supabase.from("meeting_attendees").update({ response }).eq("meeting_id", m.id).eq("user_id", me.id); if (error) notify(error.message, "err"); };
+  const copy = async () => notify((await copyText(callLink(m.room))) ? "Lien d'appel copié." : callLink(m.room));
+  return (
+    <div data-meeting={m.id} style={{ background: "var(--panel)", border: `1px solid ${live ? "#2F5FA8" : "var(--border)"}`, borderLeft: `5px solid ${past ? "#4A4F5A" : "#5B9EF5"}`, borderRadius: 12, padding: "14px 16px", opacity: past ? 0.7 : 1 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{m.title}{live && <span style={{ fontSize: 11, fontWeight: 700, color: "#7DB4FF", background: "#5B9EF522", borderRadius: 10, padding: "2px 8px" }}>EN COURS</span>}</div>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 3, textTransform: "capitalize" }}>{fmtWhen(m)}</div>
+          <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 2 }}>Organisée par {org ? org.display_name : "un ancien membre"}</div>
+        </div>
+        {!past && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <a href={joinLink(m.room, me.display_name)} target="_blank" rel="noopener noreferrer" style={{ ...primaryBtn, padding: "9px 16px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13.5 }}>📹 Rejoindre l'appel</a>
+            <button type="button" onClick={copy} style={{ ...iconBtn, padding: "0 11px" }} title="Copier le lien d'appel" aria-label="Copier le lien d'appel"><I.Copy size={14} /></button>
+          </div>
+        )}
+      </div>
+      {m.notes && <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8, whiteSpace: "pre-wrap" }}>{m.notes}</div>}
+      {list.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          {list.map(a => { const u = accounts.find(x => x.id === a.user_id); if (!u) return null; const [sym, col, txt] = RESP[a.response] || RESP.invited; return (
+            <span key={a.user_id} title={`${u.display_name} ${txt}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, background: "var(--bg)", borderRadius: 16, padding: "3px 10px 3px 4px" }}><Avatar user={u} size={20} /> {u.display_name} <strong style={{ color: col }}>{sym}</strong></span>
+          ); })}
+        </div>
+      )}
+      {!past && (mine || canManage) && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, alignItems: "center" }}>
+          {mine && m.created_by !== me.id && (<>
+            <button type="button" onClick={() => respond("accepted")} aria-pressed={mine.response === "accepted"} style={{ ...chipBtn, color: mine.response === "accepted" ? "#5FBF8B" : undefined, borderColor: mine.response === "accepted" ? "#5FBF8B" : undefined }}>✓ J'y serai</button>
+            <button type="button" onClick={() => respond("declined")} aria-pressed={mine.response === "declined"} style={{ ...chipBtn, color: mine.response === "declined" ? "#FF6B5E" : undefined, borderColor: mine.response === "declined" ? "#FF6B5E" : undefined }}>✗ Je ne peux pas</button>
+          </>)}
+          {canManage && <button type="button" onClick={() => onEdit(m)} style={{ ...chipBtn, marginLeft: "auto" }}>Modifier</button>}
+          {canManage && <button type="button" onClick={() => onCancel(m)} style={{ ...chipBtn, color: "#FF9A8F" }}>Annuler la réunion</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MeetingsView({ me, session, isAdmin, accounts, meetings, attendees, leaves, tasks, notify }) {
+  const [form, setForm] = useState(null);       // null | "new" | meeting
+  const [showPast, setShowPast] = useState(false);
+  const [, tick] = useState(0);
+  useEffect(() => { const id = setInterval(() => tick(n => n + 1), 30000); return () => clearInterval(id); }, []);
+  const now = Date.now();
+  const upcoming = meetings.filter(m => Date.parse(m.ends_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const past = meetings.filter(m => Date.parse(m.ends_at) <= now).sort((a, b) => b.starts_at.localeCompare(a.starts_at)).slice(0, 15);
+  const cancel = async (m) => {
+    if (!window.confirm(`Annuler la réunion « ${m.title} » ? Les invités seront prévenus par email.`)) return;
+    try { const r = await callApi("/api/notify-meeting", { action: "cancel", meetingId: m.id }, session); notify("Réunion annulée" + (r.sent ? ` · ${r.sent} email(s) envoyé(s).` : ".")); }
+    catch (e) { notify(e.message, "err"); }
+  };
+  const instant = async () => {
+    const room = "inst" + uid() + uid();
+    const ok = await copyText(callLink(room));
+    window.open(joinLink(room, me.display_name), "_blank", "noopener,noreferrer");
+    notify(ok ? "Appel lancé · lien copié : envoie-le à qui tu veux." : "Appel lancé.");
+  };
+  const canCreate = me.role !== "guest";
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div><h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Réunions</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>Planifie une réunion, invite l'équipe, rejoins l'appel vidéo en un clic.</p></div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" onClick={instant} style={{ ...secondaryBtn, width: "auto", padding: "10px 16px" }}>📞 Appel immédiat</button>
+          {canCreate && <button type="button" onClick={() => setForm("new")} style={{ ...primaryBtn, padding: "10px 18px", display: "flex", alignItems: "center", gap: 7 }}><I.Plus size={15} /> Nouvelle réunion</button>}
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {upcoming.length === 0 && <EmptyState text="Aucune réunion à venir. Crée-en une avec « Nouvelle réunion »." />}
+        {upcoming.map(m => <MeetingCard key={m.id} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={cancel} notify={notify} />)}
+      </div>
+      {past.length > 0 && (<>
+        <button type="button" onClick={() => setShowPast(v => !v)} style={{ ...chipBtn, marginTop: 20 }}>{showPast ? "Masquer" : "Voir"} les réunions passées ({past.length})</button>
+        {showPast && <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>{past.map(m => <MeetingCard key={m.id} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={cancel} notify={notify} />)}</div>}
+      </>)}
+      {form && <MeetingForm initial={form === "new" ? null : form} me={me} accounts={accounts} attendees={attendees} leaves={leaves} tasks={tasks} session={session} notify={notify} onCancel={() => setForm(null)} onSaved={() => setForm(null)} />}
+    </div>
+  );
+}
+
+/* ---------------- Admin : congés ---------------- */
+function AdminLeaves({ me, session, accounts, leaves, notify }) {
+  const today = parisDay();
+  const [notes, setNotes] = useState({});
+  const [who, setWho] = useState(""); const [start, setStart] = useState(""); const [end, setEnd] = useState(""); const [reason, setReason] = useState(""); const [busy, setBusy] = useState(false);
+  const name = (id) => (accounts.find(a => a.id === id) || {}).display_name || "Ancien membre";
+  const pending = leaves.filter(l => l.status === "pending").sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const coming = leaves.filter(l => l.status === "approved" && l.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const decide = async (l, status) => {
+    const { error } = await supabase.rpc("decide_leave", { p_id: l.id, p_status: status, p_note: (notes[l.id] || "").trim() });
+    if (error) { notify(error.message, "err"); return; }
+    callApi("/api/notify-leave", { action: "decision", id: l.id }, session).catch(() => {});
+    notify(status === "approved" ? "Congé accepté · la personne est prévenue." : "Demande refusée · la personne est prévenue.");
+  };
+  const add = async () => {
+    if (busy) return;
+    if (!who || !start) { notify("Choisis la personne et le premier jour.", "err"); return; }
+    const last = end || start; if (last < start) { notify("La date de fin est avant le début.", "err"); return; }
+    setBusy(true);
+    const { data, error } = await supabase.from("leave_requests").insert({ server_id: me.server_id, user_id: who, start_date: start, end_date: last, reason: reason.trim().slice(0, 300), status: "approved" }).select().single();
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    if (data && who !== me.id) callApi("/api/notify-leave", { action: "decision", id: data.id }, session).catch(() => {});
+    setWho(""); setStart(""); setEnd(""); setReason("");
+    notify("Congé posé.");
+  };
+  const remove = async (l) => { if (!window.confirm(`Supprimer ce congé de ${name(l.user_id)} ?`)) return; const { error } = await supabase.from("leave_requests").delete().eq("id", l.id); notify(error ? error.message : "Congé supprimé.", error ? "err" : "ok"); };
+  const card = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "18px 20px", marginBottom: 18 };
+  return (
+    <div style={{ maxWidth: 680 }}>
+      <div style={card}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Demandes à traiter {pending.length > 0 && <span style={{ background: "#FFB648", color: "#1a1405", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px", marginLeft: 6 }}>{pending.length}</span>}</div>
+        {pending.length === 0 && <div style={{ fontSize: 13.5, color: "var(--text-dimmer)" }}>Aucune demande en attente.</div>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {pending.map(l => (
+            <div key={l.id} data-leave={l.id} style={{ background: "var(--bg)", borderRadius: 10, padding: "12px 14px" }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{name(l.user_id)} <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>· {fmtLeave(l)}</span></div>
+              {l.reason && <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2 }}>« {l.reason} »</div>}
+              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                <input value={notes[l.id] || ""} onChange={e => setNotes(n => ({ ...n, [l.id]: e.target.value }))} placeholder="Message (optionnel)" maxLength={300} aria-label="Message pour la personne" style={{ ...inputStyle, flex: "1 1 160px", padding: "8px 10px" }} />
+                <button type="button" onClick={() => decide(l, "approved")} style={{ ...primaryBtn, padding: "8px 16px", background: "#2F9E6B", boxShadow: "none" }}>Accepter</button>
+                <button type="button" onClick={() => decide(l, "refused")} style={{ ...secondaryBtn, width: "auto", padding: "8px 16px", color: "#FF9A8F", borderColor: "#6A3532" }}>Refuser</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={card}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Poser un congé</div>
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 12px" }}>Accepté tout de suite. La personne est prévenue par email (sauf si c'est toi).</p>
+        <Field label="Pour"><select value={who} onChange={e => setWho(e.target.value)} style={inputStyle} aria-label="Personne"><option value="">Choisir…</option>{accounts.filter(a => a.status === "approved").map(a => <option key={a.id} value={a.id} style={{ background: "var(--bg-2)" }}>{a.display_name}{a.id === me.id ? " (moi)" : ""}</option>)}</select></Field>
+        {dateInputs(start, setStart, end, setEnd, undefined)}
+        <Field label="Motif (optionnel)"><input value={reason} onChange={e => setReason(e.target.value)} maxLength={300} style={inputStyle} /></Field>
+        <button type="button" onClick={add} disabled={busy} style={{ ...primaryBtn, padding: "10px 22px", opacity: busy ? 0.6 : 1 }}>{busy ? "…" : "Poser le congé"}</button>
+      </div>
+      <div style={card}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Congés à venir</div>
+        {coming.length === 0 && <div style={{ fontSize: 13.5, color: "var(--text-dimmer)" }}>Aucun congé prévu.</div>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {coming.map(l => (
+            <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "var(--bg)", borderRadius: 10, padding: "9px 12px", fontSize: 13.5 }}>
+              <div style={{ flex: 1, minWidth: 160 }}><strong>{name(l.user_id)}</strong> · {fmtLeave(l)}{l.start_date <= today && <span style={{ marginLeft: 8, fontSize: 11, color: "#7DB4FF", fontWeight: 700 }}>EN COURS</span>}</div>
+              <button type="button" onClick={() => remove(l)} aria-label={"Supprimer le congé de " + name(l.user_id)} style={{ ...iconBtn, border: "none", color: "var(--text-dimmer)" }}><I.Trash size={14} /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Accueil : ma journée ---------------- */
+function MyDay({ me, accounts, tasks, meetings, attendees, leaves, onOpen, goTo }) {
+  const now = Date.now(), today = parisDay(now);
+  const myMeetings = meetings.filter(m => parisDay(Date.parse(m.starts_at)) === today && (m.created_by === me.id || attendees.some(a => a.meeting_id === m.id && a.user_id === me.id && a.response !== "declined")));
+  const mine = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id));
+  const timed = mine.filter(t => t.due === today && t.due_time);
+  const allDay = mine.filter(t => t.due === today && !t.due_time);
+  const late = mine.filter(t => t.due && t.due < today);
+  const items = [
+    ...myMeetings.map(m => ({ k: "m-" + m.id, at: Date.parse(m.starts_at), end: Date.parse(m.ends_at), kind: "meeting", m })),
+    ...timed.map(t => ({ k: "t-" + t.id, at: parisInstant(today, t.due_time), end: parisInstant(today, t.due_time), kind: "task", t })),
+  ].sort((a, b) => a.at - b.at);
+  const myLeave = leaves.find(l => l.user_id === me.id && l.status === "approved" && l.start_date <= today && l.end_date >= today);
+  const away = leaves.filter(l => l.user_id !== me.id && l.status === "approved" && l.start_date <= today && l.end_date >= today).map(l => ({ l, u: accounts.find(a => a.id === l.user_id) })).filter(x => x.u);
+  const next = items.find(i => i.end >= now);
+  const minsTo = next ? Math.round((next.at - now) / 60000) : 0;
+  const empty = !items.length && !allDay.length && !late.length;
+  const sec = { fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6, color: "var(--text-dimmer)", textTransform: "uppercase", margin: "12px 0 6px" };
+  return (
+    <section aria-label="Ma journée" data-testid="my-day" style={{ background: "var(--panel)", border: "1px solid var(--border)", borderLeft: "4px solid var(--accent)", borderRadius: 14, padding: "16px 18px", marginBottom: 26 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>Ma journée</h2>
+        {next && <span style={{ fontSize: 12.5, color: "var(--accent-2)", fontWeight: 600 }}>{minsTo > 0 ? `Prochain : ${next.kind === "meeting" ? next.m.title : next.t.title} · dans ${minsTo >= 60 ? `${Math.floor(minsTo / 60)} h ${String(minsTo % 60).padStart(2, "0")}` : `${minsTo} min`}` : `En cours : ${next.kind === "meeting" ? next.m.title : next.t.title}`}</span>}
+        <button type="button" onClick={() => goTo("meetings")} style={{ ...chipBtn, marginLeft: "auto" }}>Réunions</button>
+      </div>
+      {myLeave && <div role="status" style={{ marginTop: 12, background: "#16281F", border: "1px solid #234B36", color: "#8FD6AE", borderRadius: 10, padding: "9px 12px", fontSize: 13.5 }}>🌴 Tu es en congé aujourd'hui ({fmtLeave(myLeave)}). Pas de rappels par email.</div>}
+      {empty && !myLeave && <div style={{ marginTop: 10, fontSize: 13.5, color: "var(--text-dim)" }}>Rien de prévu aujourd'hui. Profites-en ✨</div>}
+      {items.length > 0 && (<>
+        <div style={sec}>Planning</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {items.map(i => i.kind === "meeting" ? (
+            <div key={i.k} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--bg)", borderRadius: 10, padding: "9px 12px", opacity: i.end < now ? 0.5 : 1 }}>
+              <span style={{ minWidth: 92, fontSize: 12.5, fontWeight: 700, color: "#7DB4FF" }}>{fmtHM(i.at)} – {fmtHM(i.end)}</span>
+              <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>📹 {i.m.title}</span>
+              {i.end >= now && <a href={joinLink(i.m.room, me.display_name)} target="_blank" rel="noopener noreferrer" style={{ ...chipBtn, textDecoration: "none", color: "var(--accent-2)" }}>Rejoindre</a>}
+            </div>
+          ) : (
+            <button key={i.k} type="button" onClick={() => onOpen(i.t.id)} style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left", background: "var(--bg)", border: "none", borderRadius: 10, padding: "9px 12px", cursor: "pointer", color: "var(--text)", opacity: i.at < now ? 0.75 : 1 }}>
+              <span style={{ minWidth: 92, fontSize: 12.5, fontWeight: 700, color: "#FFC97A" }}>{fmtHM(i.at)}</span>
+              <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>✅ {i.t.title}</span>
+              {i.at < now && <span style={{ fontSize: 11.5, color: "#FF9A8F" }}>dépassée</span>}
+            </button>
+          ))}
+        </div>
+      </>)}
+      {allDay.length > 0 && (<>
+        <div style={sec}>À finir aujourd'hui</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{allDay.map(t => <button key={t.id} type="button" onClick={() => onOpen(t.id)} style={{ textAlign: "left", background: "var(--bg)", border: "none", borderRadius: 10, padding: "9px 12px", cursor: "pointer", color: "var(--text)", fontSize: 14, fontWeight: 600 }}>{t.title}</button>)}</div>
+      </>)}
+      {late.length > 0 && <button type="button" onClick={() => goTo("tasks")} style={{ ...chipBtn, marginTop: 12, color: "#FF9A8F" }}>⚠️ {late.length} tâche(s) en retard</button>}
+      {away.length > 0 && (
+        <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--text-dim)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span>🌴 Absent(s) aujourd'hui :</span>
+          {away.map(({ u, l }) => <span key={u.id} title={fmtLeave(l)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "var(--bg)", borderRadius: 14, padding: "2px 9px 2px 3px" }}><Avatar user={u} size={18} /> {u.display_name}</span>)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ---------------- Photos : réduction avant envoi (limite de 5 Mo) ---------------- */
+async function shrinkImage(file, maxSide = 1600) {
+  if (!file || !(file.type || "").startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
+  try {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    URL.revokeObjectURL(url);
+    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+    if (scale === 1 && file.size <= 1.5 * 1024 * 1024) return file;
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise(res => c.toBlob(res, "image/jpeg", 0.82));
+    if (!blob || blob.size >= file.size) return file;
+    const base = (file.name || "photo").replace(/\.[^.]+$/, "");
+    return new File([blob], base + ".jpg", { type: "image/jpeg", lastModified: Date.now() });
+  } catch (_) { return file; }
 }
 
 /* ============================================================
@@ -1079,7 +1676,7 @@ function StatCard({ value, label, hex, onClick }) {
     </button>
   );
 }
-function HomeView({ me, accounts, tasks, comments, onOpen, goTo }) {
+function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], attendees = [], onOpen, goTo }) {
   const mine = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id));
   const late = mine.filter(t => t.due && dueInfo(t).late);
   const today = mine.filter(t => t.due && !dueInfo(t).late && daysUntil(t.due) === 0);
@@ -1113,6 +1710,7 @@ function HomeView({ me, accounts, tasks, comments, onOpen, goTo }) {
         <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Bonjour {first} 👋</h1>
         <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", textTransform: "capitalize" }}>{dateLabel}</p>
       </div>
+      <MyDay me={me} accounts={accounts} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} onOpen={onOpen} goTo={goTo} />
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 26 }}>
         <StatCard value={mine.length} label="À faire pour moi" hex="#5B9EF5" onClick={() => goTo("tasks")} />
         <StatCard value={late.length} label="En retard" hex="#FF6B5E" onClick={() => goTo("tasks")} />
@@ -1149,7 +1747,7 @@ function HomeView({ me, accounts, tasks, comments, onOpen, goTo }) {
 /* ============================================================
    Mon profil : nom, couleur, mot de passe, suppression du compte
    ============================================================ */
-function ProfileView({ me, session, isAdmin, myPerms, tasks, notify, onChanged, onLogout }) {
+function ProfileView({ me, session, isAdmin, myPerms, tasks, leaves = [], notify, onChanged, onLogout }) {
   const [displayName, setDisplayName] = useState(me.display_name || "");
   const [username, setUsername] = useState(me.username || "");
   const [color, setColor] = useState(me.color || LABELS[3].hex);
@@ -1220,6 +1818,12 @@ function ProfileView({ me, session, isAdmin, myPerms, tasks, notify, onChanged, 
 
       <NotificationPrefs me={me} session={session} notify={notify} onChanged={onChanged} card={card} />
 
+      <LeaveCard me={me} session={session} isAdmin={isAdmin} leaves={leaves} notify={notify} card={card} />
+
+      <HoursCard me={me} session={session} notify={notify} onChanged={onChanged} card={card} />
+
+      <CalendarFeedCard session={session} notify={notify} card={card} />
+
       <InstallCard card={card} />
 
       <div style={card}>
@@ -1282,10 +1886,12 @@ const NOTIF_OPTIONS = [
   { key: "notify_soon", label: "Quand il me reste peu de temps avant l'heure limite d'une tâche" },
   { key: "notify_overdue", label: "Quand une de mes tâches est en retard" },
   { key: "notify_digest", label: "Chaque matin : récapitulatif d'aujourd'hui et de demain" },
+  { key: "notify_meetings", label: "Invitations et rappels de réunion" },
+  { key: "notify_conflicts", label: "Avertissements quand deux tâches ou réunions se chevauchent (ou tombent pendant un congé)" },
 ];
 const LEAD_OPTIONS = [{ v: 15, l: "15 minutes" }, { v: 30, l: "30 minutes" }, { v: 60, l: "1 heure" }, { v: 120, l: "2 heures" }, { v: 240, l: "4 heures" }, { v: 720, l: "12 heures" }, { v: 1440, l: "1 jour" }];
 function NotificationPrefs({ me, session, notify, onChanged, card }) {
-  const read = () => ({ notify_assigned: me.notify_assigned !== false, notify_soon: me.notify_soon !== false, notify_overdue: me.notify_overdue !== false, notify_digest: me.notify_digest !== false, remind_lead_minutes: me.remind_lead_minutes || 120 });
+  const read = () => ({ notify_assigned: me.notify_assigned !== false, notify_soon: me.notify_soon !== false, notify_overdue: me.notify_overdue !== false, notify_digest: me.notify_digest !== false, notify_meetings: me.notify_meetings !== false, notify_conflicts: me.notify_conflicts !== false, remind_lead_minutes: me.remind_lead_minutes || 120 });
   const [prefs, setPrefs] = useState(read);
   const [busy, setBusy] = useState(false);
   const save = async (patch) => {
@@ -1477,7 +2083,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
         <KanbanBoard tasks={visible} accounts={accounts} canEditTask={canEditTask} onOpen={onOpen} onMove={setStatus} />
       )}
 
-      {showForm && <TaskForm initial={editing} meId={me.id} accounts={accounts} templates={templates} onDeleteTemplate={deleteTemplate} onCancel={() => { setShowForm(false); setEditing(null); }} onSave={saveTask} />}
+      {showForm && <TaskForm initial={editing} meId={me.id} accounts={accounts} templates={templates} tasks={tasks} onDeleteTemplate={deleteTemplate} onCancel={() => { setShowForm(false); setEditing(null); }} onSave={saveTask} />}
       {showTrash && <TrashModal trashed={trashed} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} onRestore={restoreTask} onPurge={purgeTask} onClose={() => setShowTrash(false)} />}
     </div>
   );
@@ -1623,7 +2229,7 @@ function TaskCard({ task, accounts, me, isAdmin, myPerms, commentCount, attachCo
     </div>
   );
 }
-function TaskForm({ initial, meId, accounts, templates, onDeleteTemplate, onCancel, onSave }) {
+function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], onDeleteTemplate, onCancel, onSave }) {
   const [title, setTitle] = useState(initial?.title || "");
   const [notes, setNotes] = useState(initial?.notes || "");
   const [label, setLabel] = useState(initial?.label || LABELS[0].id);
@@ -1661,6 +2267,19 @@ function TaskForm({ initial, meId, accounts, templates, onDeleteTemplate, onCanc
     });
   };
   const selectedTpl = (templates || []).find(x => x.id === tplId);
+  const allDayDue = !(timed && dueTime);
+  const dueS = due ? (allDayDue ? parisInstant(due) : parisInstant(due, dueTime)) : 0;
+  const dueE = due ? (allDayDue ? parisInstant(shiftDay(due, 1)) : dueS) : 0;
+  const busyRows = useBusy(due && assignees.length ? assignees : [], dueS, allDayDue ? dueE : dueS + 60000, null);
+  const dueLines = useMemo(() => {
+    if (!due || !assignees.length) return [];
+    const out = [];
+    for (const id of assignees) {
+      const u = accounts.find(a => a.id === id); if (!u) continue;
+      for (const r of conflictsC({ s: dueS, e: dueE, user: u, busy: busyRows.filter(b => b.user_id === id), tasks: allTasks, allDay: allDayDue, ignoreTaskId: initial && initial.id })) out.push(reasonLine(r, u.display_name, id === meId));
+    }
+    return out;
+  }, [due, dueS, dueE, allDayDue, busyRows, JSON.stringify(assignees), allTasks]);
   return (
     <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
       <div className="modal-card" style={{ ...modalStyle, maxHeight: "92vh", overflowY: "auto" }}>
@@ -1699,6 +2318,7 @@ function TaskForm({ initial, meId, accounts, templates, onDeleteTemplate, onCanc
             ); })}
           </div>
         </div>
+        <ConflictBox lines={dueLines} />
         <Field label="Étiquettes (séparées par des virgules)"><input value={tagsText} onChange={e => setTagsText(e.target.value)} placeholder="maison, courses" style={inputStyle} /></Field>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Sous-tâches</div>
@@ -1766,6 +2386,7 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
+  const camRef = useRef(null);
   const label = LABELS.find(l => l.id === task.label) || LABELS[0];
   const prio = PRIORITIES.find(p => p.id === task.priority) || PRIORITIES[1];
   const people = assigneeIds(task).map(id => accounts.find(a => a.id === id)).filter(Boolean);
@@ -1797,7 +2418,8 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
     if (!files.length || uploading) return;
     setUploading(true);
     let count = attachments.length;
-    for (const f of files) {
+    for (const f0 of files) {
+      const f = await shrinkImage(f0);
       if (count >= MAX_FILES_PER_TASK) { notify(`Maximum ${MAX_FILES_PER_TASK} fichiers par tâche.`, "err"); break; }
       if (f.size > MAX_FILE_BYTES) { notify(`« ${f.name} » dépasse 5 Mo.`, "err"); continue; }
       const safe = f.name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80) || "fichier";
@@ -1810,6 +2432,7 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
     }
     setUploading(false);
     if (fileRef.current) fileRef.current.value = "";
+    if (camRef.current) camRef.current.value = "";
     onAttachmentsChanged();
   };
   const removeAttachment = async (att) => {
@@ -1858,7 +2481,11 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
             <div style={{ fontSize: 12.5, color: "var(--text-dim)", fontWeight: 600 }}>Pièces jointes · {attachments.length}</div>
             {canEdit && (<>
               <input ref={fileRef} type="file" multiple onChange={e => upload(e.target.files)} style={{ display: "none" }} />
+              <input ref={camRef} type="file" accept="image/*" capture="environment" aria-label="Prendre une photo" onChange={e => upload(e.target.files)} style={{ display: "none" }} />
+              <span style={{ display: "inline-flex", gap: 6 }}>
+              <button type="button" onClick={() => camRef.current && camRef.current.click()} disabled={uploading} style={{ ...secondaryBtn, width: "auto", padding: "5px 11px", fontSize: 12, opacity: uploading ? 0.6 : 1 }}>📷 Photo</button>
               <button type="button" onClick={() => fileRef.current && fileRef.current.click()} disabled={uploading} style={{ ...secondaryBtn, width: "auto", padding: "5px 11px", fontSize: 12, display: "flex", alignItems: "center", gap: 6, opacity: uploading ? 0.6 : 1 }}><I.Paperclip size={12} /> {uploading ? "Envoi…" : "Ajouter"}</button>
+              </span>
             </>)}
           </div>
           {attachments.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>{canEdit ? "Aucun fichier. Photos, PDF, documents… (5 Mo max chacun)" : "Aucun fichier."}</div>}
@@ -1898,7 +2525,7 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
 /* ============================================================
    Calendrier des échéances
    ============================================================ */
-function CalendarView({ tasks, accounts, onOpen }) {
+function CalendarView({ tasks, accounts, meetings = [], attendees = [], leaves = [], me, onOpen }) {
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [selected, setSelected] = useState(todayISO());
   const today = todayISO();
@@ -1911,6 +2538,12 @@ function CalendarView({ tasks, accounts, onOpen }) {
   const byDay = {};
   for (const t of tasks) if (t.due) (byDay[t.due] = byDay[t.due] || []).push(t);
   const noDue = tasks.filter(t => !t.due && !t.done).length;
+  const myMeetings = meetings.filter(m => me && (m.created_by === me.id || attendees.some(a => a.meeting_id === m.id && a.user_id === me.id && a.response !== "declined")));
+  const meetByDay = {};
+  for (const m of myMeetings) (meetByDay[parisDay(Date.parse(m.starts_at))] = meetByDay[parisDay(Date.parse(m.starts_at))] || []).push(m);
+  const leaveOn = (iso) => leaves.filter(l => l.status === "approved" && l.start_date <= iso && l.end_date >= iso);
+  const dayMeetings = (meetByDay[selected] || []).slice().sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const dayLeaves = leaveOn(selected);
   const dayTasks = (byDay[selected] || []).slice().sort((a, b) => dueKey(a).localeCompare(dueKey(b)) || b.priority - a.priority);
   const title = first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
   const go = (n) => setMonth(m => new Date(m.getFullYear(), m.getMonth() + n, 1));
@@ -1939,6 +2572,8 @@ function CalendarView({ tasks, accounts, onOpen }) {
             <button key={iso} type="button" onClick={() => setSelected(iso)} style={{ minHeight: 62, padding: "6px 4px", borderRadius: 9, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, background: isSel ? "var(--panel-2)" : "var(--panel)", border: `1px solid ${isSel ? "var(--accent)" : iso === today ? "var(--accent-2)" : "var(--border)"}`, color: "var(--text)" }}>
               <span style={{ fontSize: 13, fontWeight: iso === today ? 700 : 500, color: iso === today ? "var(--accent-2)" : "var(--text)" }}>{Number(iso.slice(8))}</span>
               <span style={{ display: "flex", flexWrap: "wrap", gap: 3, justifyContent: "center" }}>
+                {(meetByDay[iso] || []).slice(0, 2).map(m => <span key={m.id} title={m.title} style={{ width: 7, height: 7, borderRadius: 2, background: "#5B9EF5" }} />)}
+                {leaveOn(iso).length > 0 && <span title="Congé" style={{ fontSize: 9, lineHeight: "7px" }}>🌴</span>}
                 {list.slice(0, 4).map(t => <span key={t.id} style={{ width: 7, height: 7, borderRadius: "50%", background: (LABELS.find(l => l.id === t.label) || LABELS[0]).hex, opacity: t.done ? 0.35 : 1 }} />)}
               </span>
               {list.length > 4 && <span style={{ fontSize: 10, color: "var(--text-dimmer)" }}>+{list.length - 4}</span>}
@@ -1949,7 +2584,9 @@ function CalendarView({ tasks, accounts, onOpen }) {
       </div>
       <div style={{ marginTop: 22 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10, textTransform: "capitalize" }}>{new Date(selected + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</div>
-        {dayTasks.length === 0 && <EmptyState text="Rien de prévu ce jour-là." />}
+        {dayLeaves.length > 0 && <div style={{ marginBottom: 10, fontSize: 13, color: "#8FD6AE", background: "#16281F", border: "1px solid #234B36", borderRadius: 10, padding: "8px 12px" }}>🌴 En congé : {dayLeaves.map(l => (accounts.find(a => a.id === l.user_id) || {}).display_name || "?").join(", ")}</div>}
+        {dayMeetings.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>{dayMeetings.map(m => <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--panel)", border: "1px solid var(--border)", borderLeft: "5px solid #5B9EF5", borderRadius: 10, padding: "10px 14px" }}><span style={{ minWidth: 48, fontSize: 12, fontWeight: 600, color: "#7DB4FF" }}>{fmtHM(Date.parse(m.starts_at))}</span><span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>📹 {m.title}</span><a href={joinLink(m.room, me && me.display_name)} target="_blank" rel="noopener noreferrer" style={{ ...chipBtn, textDecoration: "none" }}>Rejoindre</a></div>)}</div>}
+        {dayTasks.length === 0 && dayMeetings.length === 0 && dayLeaves.length === 0 && <EmptyState text="Rien de prévu ce jour-là." />}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {dayTasks.map(t => {
             const label = LABELS.find(l => l.id === t.label) || LABELS[0];
@@ -2091,6 +2728,16 @@ function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, chann
       if (error) { notify(error.message, "err"); setDraft(text); }
     }
   };
+  const startCall = async () => {
+    if (!canSend || (!isChannel && !activeUser)) return;
+    const url = callLink("msg" + uid() + uid() + uid());
+    const text = `📞 ${me.display_name} lance un appel vidéo : ${url}`;
+    const { error } = isChannel
+      ? await supabase.from('channel_messages').insert({ server_id: me.server_id, from_id: me.id, text })
+      : await supabase.from('messages').insert({ from_id: me.id, to_id: activeId, text, server_id: me.server_id });
+    if (error) { notify(error.message, "err"); return; }
+    window.open(joinLink(url.slice(JITSI.length), me.display_name), "_blank", "noopener,noreferrer");
+  };
   const sendPoll = async ({ question, options, multiple }) => {
     const text = ("📊 " + question).slice(0, 2000);
     const poll = { question, options, multiple, closed: false };
@@ -2151,13 +2798,14 @@ function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, chann
               })}
             </>) : activeUser ? (<>
               {thread.length === 0 && <EmptyState text="Aucun message. Dites bonjour !" />}
-              {thread.map(m => m.poll ? (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", width: "min(400px, 94%)" }}><div style={{ fontSize: 10.5, color: "var(--text-dimmer)", margin: "0 0 3px 4px", textAlign: m.from_id === me.id ? "right" : "left" }}>{fmt(m.ts)}</div><PollCard kind="dm" msg={m} me={me} isAdmin={isAdmin} accounts={accounts} votes={votesFor("dm", m.id)} onChanged={reloadVotes} notify={notify} /></div>) : (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", maxWidth: "70%", background: m.from_id === me.id ? "linear-gradient(135deg,var(--accent),var(--accent-2))" : "var(--panel-2)", color: m.from_id === me.id ? "#fff" : "var(--text)", padding: "9px 13px", borderRadius: 12, borderBottomRightRadius: m.from_id === me.id ? 3 : 12, borderBottomLeftRadius: m.from_id === me.id ? 12 : 3, fontSize: 13.5, wordBreak: "break-word" }}>{m.text}<div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>{fmt(m.ts)}</div></div>))}
+              {thread.map(m => m.poll ? (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", width: "min(400px, 94%)" }}><div style={{ fontSize: 10.5, color: "var(--text-dimmer)", margin: "0 0 3px 4px", textAlign: m.from_id === me.id ? "right" : "left" }}>{fmt(m.ts)}</div><PollCard kind="dm" msg={m} me={me} isAdmin={isAdmin} accounts={accounts} votes={votesFor("dm", m.id)} onChanged={reloadVotes} notify={notify} /></div>) : (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", maxWidth: "70%", background: m.from_id === me.id ? "linear-gradient(135deg,var(--accent),var(--accent-2))" : "var(--panel-2)", color: m.from_id === me.id ? "#fff" : "var(--text)", padding: "9px 13px", borderRadius: 12, borderBottomRightRadius: m.from_id === me.id ? 3 : 12, borderBottomLeftRadius: m.from_id === me.id ? 12 : 3, fontSize: 13.5, wordBreak: "break-word" }}><RichText text={m.text} accounts={accounts} /><div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>{fmt(m.ts)}</div></div>))}
             </>) : <EmptyState text="Choisis une conversation." />}
           </div>
           <div style={{ display: "flex", gap: 10, padding: 14, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
             {isChannel
               ? <MentionInput value={draft} onChange={setDraft} onSubmit={send} disabled={!canSend} people={contacts} placeholder={canSend ? "Écrire dans le salon… (@ pour mentionner)" : "Ton rôle ne permet pas d'envoyer de messages"} style={{ ...inputStyle, background: "var(--bg)", opacity: canSend ? 1 : 0.5 }} />
               : <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") send(); }} disabled={!canSend || !activeUser} placeholder={canSend ? "Écrire un message…" : "Ton rôle ne permet pas d'envoyer de messages"} style={{ ...inputStyle, flex: 1, background: "var(--bg)", opacity: canSend ? 1 : 0.5 }} />}
+            {canSend && (isChannel || activeUser) && <button type="button" onClick={startCall} title="Lancer un appel vidéo" aria-label="Lancer un appel vidéo" style={{ ...iconBtn, padding: "0 12px" }}><I.Video size={16} /></button>}
             {canSend && (isChannel || activeUser) && <button type="button" onClick={() => setShowPoll(true)} title="Créer un sondage" aria-label="Créer un sondage" style={{ ...iconBtn, padding: "0 12px" }}><I.Poll size={16} /></button>}
             <button type="button" onClick={send} disabled={!canSend} style={{ background: "linear-gradient(135deg,var(--accent),var(--accent-2))", border: "none", color: "#fff", borderRadius: 9, padding: "0 16px", cursor: canSend ? "pointer" : "not-allowed", opacity: canSend ? 1 : 0.5, display: "grid", placeItems: "center" }}><I.Send size={16} /></button>
           </div>
@@ -2255,7 +2903,7 @@ const ACTIVITY_TEXT = {
   "task.create": "a créé la tâche", "task.update": "a modifié la tâche", "task.done": "a terminé la tâche", "task.reopen": "a rouvert la tâche",
   "task.trash": "a mis à la corbeille", "task.restore": "a restauré", "task.delete": "a supprimé définitivement",
   "member.join": "a rejoint le serveur", "member.request": "a demandé à rejoindre le serveur", "member.approve": "a approuvé", "member.reject": "a refusé la demande de",
-  "member.remove": "a retiré du serveur", "member.role": "a changé le rôle :", "mail.sent": "a envoyé un email", "server.rename": "a renommé le serveur en", "server.code": "a renouvelé le code d'invitation",
+  "member.remove": "a retiré du serveur", "member.role": "a changé le rôle :", "mail.sent": "a envoyé un email", "leave.request": "a demandé un congé", "leave.approve": "a accepté un congé :", "leave.refuse": "a refusé un congé :", "server.rename": "a renommé le serveur en", "server.code": "a renouvelé le code d'invitation",
 };
 function ActivityLog({ accounts, bare }) {
   const [rows, setRows] = useState(null);
@@ -2777,7 +3425,7 @@ function AdminSite({ notify }) {
 }
 
 /* ---------------- Administration : onglets ---------------- */
-function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
+function AdminView({ me, session, accounts, tasks, leaves = [], notify, onChanged }) {
   const [sub, setSub] = useState(() => { try { return localStorage.getItem("carnet-admin-tab") || "overview"; } catch (_) { return "overview"; } });
   const [server, setServer] = useState(null);
   const [siteAdmin, setSiteAdmin] = useState(false);
@@ -2795,6 +3443,7 @@ function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
   const tabs = [
     { id: "overview", label: "Aperçu" },
     { id: "members", label: "Membres", badge: pending.length },
+    { id: "leaves", label: "Congés", badge: leaves.filter(l => l.status === "pending").length },
     { id: "mail", label: "Écrire" },
     { id: "settings", label: "Réglages" },
     { id: "activity", label: "Activité" },
@@ -2816,6 +3465,7 @@ function AdminView({ me, session, accounts, tasks, notify, onChanged }) {
       </div>
       {cur === "overview" && <AdminOverview approved={approved} pending={pending} tasks={tasks} mailStatus={mailStatus} go={go} />}
       {cur === "members" && <AdminMembers me={me} session={session} approved={approved} pending={pending} tasks={tasks} notify={notify} />}
+      {cur === "leaves" && <AdminLeaves me={me} session={session} accounts={accounts} leaves={leaves} notify={notify} />}
       {cur === "mail" && <AdminMail me={me} session={session} approved={approved} status={mailStatus} notify={notify} />}
       {cur === "settings" && (<>
         {server && <ServerSettings server={server} setServer={setServer} me={me} session={session} approved={approved} notify={notify} onChanged={onChanged} />}
