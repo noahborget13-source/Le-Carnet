@@ -2542,6 +2542,17 @@ function CalendarView({ tasks, accounts, meetings = [], attendees = [], leaves =
   const meetByDay = {};
   for (const m of myMeetings) (meetByDay[parisDay(Date.parse(m.starts_at))] = meetByDay[parisDay(Date.parse(m.starts_at))] || []).push(m);
   const leaveOn = (iso) => leaves.filter(l => l.status === "approved" && l.start_date <= iso && l.end_date >= iso);
+  // Mes créneaux « occupé » venant de mon agenda externe (sans titre), visibles par moi seul
+  const rangeFrom = parisInstant(shiftDay(isoLocal(first), -1), "00:00"), rangeTo = parisInstant(shiftDay(isoLocal(new Date(first.getFullYear(), first.getMonth() + 1, 1)), 1), "00:00");
+  const busyRows = useBusy(me ? [me.id] : [], rangeFrom, rangeTo).filter(r => r.kind === "google");
+  const busyOn = (iso) => {
+    const d0 = parisInstant(iso, "00:00"), d1 = parisInstant(shiftDay(iso, 1), "00:00");
+    const sl = busyRows.map(r => [Math.max(Date.parse(r.starts_at), d0), Math.min(Date.parse(r.ends_at), d1)]).filter(x => x[0] < x[1]).sort((x, y) => x[0] - y[0]);
+    const out = [];
+    for (const x of sl) { const last = out[out.length - 1]; if (last && x[0] <= last[1]) last[1] = Math.max(last[1], x[1]); else out.push([x[0], x[1]]); }
+    return out.map(([f, t]) => ({ from: f, to: t, all: f <= d0 && t >= d1 }));
+  };
+  const dayBusy = busyOn(selected);
   const dayMeetings = (meetByDay[selected] || []).slice().sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const dayLeaves = leaveOn(selected);
   const dayTasks = (byDay[selected] || []).slice().sort((a, b) => dueKey(a).localeCompare(dueKey(b)) || b.priority - a.priority);
@@ -2573,6 +2584,7 @@ function CalendarView({ tasks, accounts, meetings = [], attendees = [], leaves =
               <span style={{ fontSize: 13, fontWeight: iso === today ? 700 : 500, color: iso === today ? "var(--accent-2)" : "var(--text)" }}>{Number(iso.slice(8))}</span>
               <span style={{ display: "flex", flexWrap: "wrap", gap: 3, justifyContent: "center" }}>
                 {(meetByDay[iso] || []).slice(0, 2).map(m => <span key={m.id} title={m.title} style={{ width: 7, height: 7, borderRadius: 2, background: "#5B9EF5" }} />)}
+                {busyOn(iso).length > 0 && <span title="Indisponible (agenda externe)" style={{ width: 7, height: 7, borderRadius: 2, background: "#6B7280" }} />}
                 {leaveOn(iso).length > 0 && <span title="Congé" style={{ fontSize: 9, lineHeight: "7px" }}>🌴</span>}
                 {list.slice(0, 4).map(t => <span key={t.id} style={{ width: 7, height: 7, borderRadius: "50%", background: (LABELS.find(l => l.id === t.label) || LABELS[0]).hex, opacity: t.done ? 0.35 : 1 }} />)}
               </span>
@@ -2584,9 +2596,10 @@ function CalendarView({ tasks, accounts, meetings = [], attendees = [], leaves =
       </div>
       <div style={{ marginTop: 22 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10, textTransform: "capitalize" }}>{new Date(selected + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</div>
+        {dayBusy.length > 0 && <div data-testid="day-busy" style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>{dayBusy.map((b, i) => <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--panel)", border: "1px dashed var(--border)", borderLeft: "5px solid #6B7280", borderRadius: 10, padding: "8px 14px", color: "var(--text-dim)" }}><span style={{ minWidth: 48, fontSize: 12, fontWeight: 600 }}>{b.all ? "Journée" : fmtHM(b.from)}</span><span style={{ flex: 1, fontSize: 13.5 }}>⛔ Indisponible{b.all ? "" : ` jusqu'à ${fmtHM(b.to)}`} <span style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>· agenda externe</span></span></div>)}</div>}
         {dayLeaves.length > 0 && <div style={{ marginBottom: 10, fontSize: 13, color: "#8FD6AE", background: "#16281F", border: "1px solid #234B36", borderRadius: 10, padding: "8px 12px" }}>🌴 En congé : {dayLeaves.map(l => (accounts.find(a => a.id === l.user_id) || {}).display_name || "?").join(", ")}</div>}
         {dayMeetings.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>{dayMeetings.map(m => <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--panel)", border: "1px solid var(--border)", borderLeft: "5px solid #5B9EF5", borderRadius: 10, padding: "10px 14px" }}><span style={{ minWidth: 48, fontSize: 12, fontWeight: 600, color: "#7DB4FF" }}>{fmtHM(Date.parse(m.starts_at))}</span><span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>📹 {m.title}</span><a href={joinLink(m.room, me && me.display_name)} target="_blank" rel="noopener noreferrer" style={{ ...chipBtn, textDecoration: "none" }}>Rejoindre</a></div>)}</div>}
-        {dayTasks.length === 0 && dayMeetings.length === 0 && dayLeaves.length === 0 && <EmptyState text="Rien de prévu ce jour-là." />}
+        {dayTasks.length === 0 && dayMeetings.length === 0 && dayLeaves.length === 0 && dayBusy.length === 0 && <EmptyState text="Rien de prévu ce jour-là." />}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {dayTasks.map(t => {
             const label = LABELS.find(l => l.id === t.label) || LABELS[0];
