@@ -2483,6 +2483,76 @@ function MyStats({ me, tasks, projects }) {
   );
 }
 
+/* ---------------- Patch notes : une entrée par jour (la plus récente en premier) ----------------
+   `items` = ce que voient tous les membres (accueil) ; `tech` = détails réservés à l'administrateur du site. */
+const PATCH_NOTES = [
+  { date: "2026-10-26",
+    items: [
+      "Réunions : tu peux ajouter ton propre lien d'appel (Google Meet, Zoom, Teams…). Il est utilisé dans l'appli, les e-mails et les rappels.",
+      "Tâches : un bouton 🔗 copie le lien direct vers une tâche ; ouvrir ce lien affiche la tâche.",
+      "Profil : export de tes tâches en CSV (Excel) et de ton agenda en .ics (Google Agenda, Outlook, Apple).",
+      "Un même compte peut rejoindre plusieurs serveurs (menu « Mes serveurs »).",
+      "Nouveau : cette page de nouveautés."],
+    tech: [
+      "migration-13-lien-appel.sql : colonne meetings.call_url (https uniquement, 300 caractères max).",
+      "migration-12-comptes-multi-serveurs.sql : table account_links ; changement de serveur via lien magique + verifyOtp (à tester une fois sur le vrai Supabase).",
+      "api/_meeting.js : meetingLink() utilisé par notify-meeting et cron-reminders.",
+      "Toujours 12 fonctions serverless (limite Vercel Hobby) : ne pas ajouter de fichier dans api/ sans en fusionner un autre."] },
+  { date: "2026-10-25",
+    items: [
+      "Mobile : barre du bas fixe et plus compacte, menu « Plus », administration redessinée.",
+      "Projets avec accès privé, pièces jointes dans les réunions.",
+      "Statistiques personnelles dans le Profil."],
+    tech: [
+      "migration-11-projets-pj-reunions.sql : projects, project_members, meeting_attachments, fonctions can_see_project / can_manage_project, trigger tasks_project_guard.",
+      "Fusion de create-account dans manage-account (limite des 12 fonctions)."] },
+];
+const frDate = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+function PatchNotesCard({ me }) {
+  const [all, setAll] = useState(false);
+  const seenKey = "carnet-patch-seen-" + me.id;
+  const latest = PATCH_NOTES[0].date;
+  const [seen, setSeen] = useState(() => { try { return localStorage.getItem(seenKey) || ""; } catch (_) { return ""; } });
+  const isNew = seen < latest;
+  const mark = () => { try { localStorage.setItem(seenKey, latest); } catch (_) {} setSeen(latest); };
+  const list = all ? PATCH_NOTES : PATCH_NOTES.slice(0, 1);
+  return (
+    <div data-patch-card style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "14px 18px", marginBottom: 22 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span style={{ fontWeight: 600, fontSize: 14 }}>🆕 Nouveautés</span>
+        {isNew && <span data-patch-new style={{ background: "#5B9EF5", color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px" }}>Nouveau</span>}
+        <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          {isNew && <button type="button" data-patch-seen onClick={mark} style={{ ...chipBtn, padding: "4px 10px", fontSize: 12 }}>Marquer comme lu</button>}
+          {PATCH_NOTES.length > 1 && <button type="button" data-patch-toggle onClick={() => setAll(v => !v)} style={{ ...chipBtn, padding: "4px 10px", fontSize: 12 }}>{all ? "Réduire" : "Voir tout"}</button>}
+        </span>
+      </div>
+      {list.map(n => (
+        <div key={n.date} style={{ marginTop: 6 }}>
+          <div style={{ fontSize: 12, color: "var(--text-dimmer)", textTransform: "capitalize", marginBottom: 4 }}>{frDate(n.date)}</div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+/** Onglet réservé à l'administrateur du site : historique complet, avec les détails techniques. */
+function AdminPatchNotes() {
+  return (
+    <div data-admin-patchnotes>
+      <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "0 0 16px" }}>Historique complet, jour par jour. Les membres ne voient que les « Nouveautés » de l'accueil ; les détails techniques ci-dessous ne sont visibles que par toi.</p>
+      {PATCH_NOTES.map(n => (
+        <div key={n.date} style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 14 }}>
+          <div style={{ fontFamily: "Fraunces, serif", fontSize: 17, fontWeight: 600, textTransform: "capitalize", marginBottom: 8 }}>{frDate(n.date)}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dimmer)", marginBottom: 4 }}>Vu par les membres</div>
+          <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin)", marginBottom: 4 }}>Détails techniques (admin)</div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.tech.map((x, i) => <li key={i}>{x}</li>)}</ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], attendees = [], events = [], onOpen, goTo, projects = [] }) {
   const mine = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id));
   const late = mine.filter(t => t.due && dueInfo(t).late);
@@ -2518,6 +2588,7 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
         <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", textTransform: "capitalize" }}>{dateLabel}</p>
       </div>
       <MyDay me={me} accounts={accounts} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} events={events} onOpen={onOpen} goTo={goTo} />
+      <PatchNotesCard me={me} />
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 26 }}>
         <StatCard value={mine.length} label="À faire pour moi" hex="#5B9EF5" onClick={() => goTo("tasks")} />
         <StatCard value={late.length} label="En retard" hex="#FF6B5E" onClick={() => goTo("tasks")} />
@@ -4569,7 +4640,7 @@ function AdminView({ me, session, accounts, tasks, leaves = [], meetings = [], a
   };
   useEffect(() => { supabase.from('servers').select('*').eq('id', me.server_id).single().then(({ data }) => setServer(data)); }, [me.server_id]);
   useEffect(() => { supabase.rpc('is_platform_admin').then(({ data, error }) => setSiteAdmin(!error && data === true)); loadMail(); }, []);
-  const cur = sub === "site" && !siteAdmin ? "overview" : sub;
+  const cur = (sub === "site" || sub === "patch") && !siteAdmin ? "overview" : sub;
   const tabs = [
     { id: "overview", label: "Aperçu" },
     { id: "members", label: "Membres", badge: pending.length },
@@ -4579,7 +4650,7 @@ function AdminView({ me, session, accounts, tasks, leaves = [], meetings = [], a
     { id: "settings", label: "Réglages" },
     { id: "status", label: "Statut" },
     { id: "activity", label: "Activité" },
-    ...(siteAdmin ? [{ id: "site", label: "Site" }] : []),
+    ...(siteAdmin ? [{ id: "patch", label: "Patch notes" }, { id: "site", label: "Site" }] : []),
   ];
 
   return (
@@ -4606,6 +4677,7 @@ function AdminView({ me, session, accounts, tasks, leaves = [], meetings = [], a
       </>)}
       {cur === "status" && <AdminStatus session={session} notify={notify} go={go} />}
       {cur === "activity" && <ActivityLog accounts={accounts} bare />}
+      {cur === "patch" && <AdminPatchNotes />}
       {cur === "site" && <AdminSite notify={notify} />}
     </div>
   );
