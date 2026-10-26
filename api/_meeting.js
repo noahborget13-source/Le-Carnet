@@ -4,6 +4,8 @@ import { TZ } from './_time.js';
 
 export const CALL_BASE = 'https://meet.jit.si';
 export const callUrl = (room) => `${CALL_BASE}/LeCarnet-${room}`;
+/** Lien d'appel d'une réunion : le lien personnalisé (Meet, Zoom, Teams…) s'il existe, sinon l'appel Jitsi du Carnet. */
+export const meetingLink = (m) => (m && typeof m.call_url === 'string' && /^https:\/\/\S+$/.test(m.call_url) ? m.call_url : callUrl(m.room));
 
 const pad = (n) => String(n).padStart(2, '0');
 const icsDate = (ms) => { const d = new Date(ms); return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`; };

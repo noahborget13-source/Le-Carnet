@@ -1058,6 +1058,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [meetingFiles, setMeetingFiles] = useState([]);
   const [showHelp, setShowHelp] = useState(false);
   const [inviteFromUrl] = useState(() => { try { const t = new URLSearchParams(window.location.search).get("invite"); return t && t.length >= 20 ? t : ""; } catch (_) { return ""; } });
+  const [taskFromUrl] = useState(() => { try { return new URLSearchParams(window.location.search).get("task") || ""; } catch (_) { return ""; } });
+  const [tasksReady, setTasksReady] = useState(false);
   const [showServers, setShowServers] = useState(Boolean(inviteFromUrl));
   useEffect(() => { if (inviteFromUrl) { try { window.history.replaceState({}, "", window.location.pathname); } catch (_) {} } }, []);
   const [serverName, setServerName] = useState("");
@@ -1068,7 +1070,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const isAdmin = me.role === "admin";
 
   useLiveTable('profiles', setAccounts);
-  useLiveTable('tasks', setTasksAll);
+  useLiveTable('tasks', (rows) => { setTasksAll(rows); setTasksReady(true); });
   useLiveTable('task_comments', setComments);
   useLiveTable('messages', setMessages);
   useLiveTable('channel_messages', setChannelMsgs, q => q.order('ts', { ascending: false }).limit(300));
@@ -1090,6 +1092,13 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const trashed = useMemo(() => tasksAll.filter(t => t.deleted_at).sort((a, b) => b.deleted_at.localeCompare(a.deleted_at)), [tasksAll]);
   const people = useMemo(() => accounts.filter(a => a.status !== "pending"), [accounts]);
   const openTask = openId ? tasks.find(t => t.id === openId) : null;
+  // Lien direct vers une tâche (?task=…) : ouvre la tâche, ou explique pourquoi elle est introuvable
+  useEffect(() => {
+    if (!taskFromUrl || !tasksReady) return;
+    try { window.history.replaceState({}, "", window.location.pathname); } catch (_) {}
+    if (tasksAll.some(t => t.id === taskFromUrl && !t.deleted_at)) setOpenId(taskFromUrl);
+    else notify("Cette tâche est introuvable dans ce serveur. Elle est peut-être dans un autre de tes serveurs (« Mes serveurs »), ou elle a été supprimée.", "err");
+  }, [tasksReady]);
 
   const tabs = [
     { id: "home", label: "Accueil", icon: I.Home },
@@ -1168,7 +1177,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} events={teamEvents} isAdmin={isAdmin} notify={notify} me={me} onOpen={openFromAnywhere} />}
         {tab === "meetings" && <MeetingsView meetingFiles={meetingFiles} onFilesChanged={reloadMeetingFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} tasks={tasks} notify={notify} />}
         {tab === "messages" && <MessagesView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} reactions={reactions} accounts={people} messages={messages} channelMsgs={channelMsgs} pollVotes={pollVotes} reloadVotes={reloadVotes} notify={notify} />}
-        {tab === "profile" && <ProfileView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} tasks={tasks} leaves={leaves} notify={notify} onChanged={onProfileChanged} onLogout={onLogout} />}
+        {tab === "profile" && <ProfileView accounts={accounts} projects={projects} meetings={meetings} attendees={attendees} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} tasks={tasks} leaves={leaves} notify={notify} onChanged={onProfileChanged} onLogout={onLogout} />}
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} leaves={leaves} meetings={meetings} attendees={attendees} notify={notify} onChanged={onProfileChanged} />}
         <SiteFooter />
       </main>
@@ -1206,6 +1215,10 @@ const fmtWhen = (m) => {
 const fmtLeave = (l) => (l.start_date === l.end_date ? fmtDay(l.start_date) : `du ${fmtDay(l.start_date, { day: "numeric", month: "long" })} au ${fmtDay(l.end_date, { day: "numeric", month: "long", year: "numeric" })}`);
 const JITSI = "https://meet.jit.si/LeCarnet-";
 const callLink = (room) => JITSI + room;
+/** Lien d'appel d'une réunion : lien personnalisé (Meet, Zoom, Teams…) sinon appel Jitsi du Carnet. */
+const customCallUrl = (m) => (m && typeof m.call_url === "string" && /^https:\/\/\S+$/.test(m.call_url) ? m.call_url : "");
+const meetLink = (m) => customCallUrl(m) || callLink(m.room);
+const meetJoin = (m, name) => customCallUrl(m) || joinLink(m.room, name);
 const joinLink = (room, name) => JITSI + room + (name ? "#userInfo.displayName=" + encodeURIComponent('"' + name + '"') : "");
 const copyText = async (text) => { try { await navigator.clipboard.writeText(text); return true; } catch (_) { return false; } };
 
@@ -1447,6 +1460,8 @@ function MeetingForm({ initial, me, accounts, attendees, leaves, tasks, onCancel
   const [to, setTo] = useState(initial ? parisHM(Date.parse(initial.ends_at)) : "11:00");
   const [people, setPeople] = useState(() => initial ? attendees.filter(a => a.meeting_id === initial.id && a.user_id !== me.id).map(a => a.user_id) : []);
   const [busy, setBusy] = useState(false);
+  const [callUrlText, setCallUrlText] = useState(initial?.call_url || "");
+  const callUrlOk = !callUrlText.trim() || /^https:\/\/\S+$/.test(callUrlText.trim());
   const others = accounts.filter(a => a.id !== me.id);
   const s = day && from ? parisInstant(day, from) : 0, e = day && to ? parisInstant(day, to) : 0;
   const valid = s && e > s && e - s <= 12 * 3600e3;
@@ -1471,9 +1486,10 @@ function MeetingForm({ initial, me, accounts, attendees, leaves, tasks, onCancel
     if (busy) return;
     if (!title.trim()) { notify("Donne un titre à la réunion.", "err"); return; }
     if (!valid) { notify(e <= s ? "L'heure de fin doit être après le début." : "Une réunion dure 12 heures au maximum.", "err"); return; }
+    if (!callUrlOk || callUrlText.trim().length > 300) { notify("Le lien d'appel doit commencer par https:// (et faire 300 caractères au maximum).", "err"); return; }
     setBusy(true);
     try {
-      const row = { title: title.trim().slice(0, 120), notes: notes.trim().slice(0, 1000), starts_at: new Date(s).toISOString(), ends_at: new Date(e).toISOString() };
+      const row = { title: title.trim().slice(0, 120), notes: notes.trim().slice(0, 1000), call_url: callUrlText.trim() || null, starts_at: new Date(s).toISOString(), ends_at: new Date(e).toISOString() };
       let id;
       if (initial) {
         id = initial.id;
@@ -1519,6 +1535,7 @@ function MeetingForm({ initial, me, accounts, attendees, leaves, tasks, onCancel
             ); })}
           </div>
         </div>
+        <Field label="Lien d'appel (facultatif — Meet, Zoom, Teams…)"><input data-call-url type="url" value={callUrlText} onChange={ev => setCallUrlText(ev.target.value)} maxLength={300} style={{ ...inputStyle, ...(callUrlOk ? {} : { borderColor: "var(--danger, #c0392b)" }) }} placeholder="https://… (sinon : appel vidéo du Carnet)" /></Field>
         <Field label="Notes (optionnel)"><textarea value={notes} onChange={ev => setNotes(ev.target.value)} rows={2} maxLength={1000} style={{ ...inputStyle, resize: "vertical" }} placeholder="Ordre du jour, documents à lire…" /></Field>
         <SlotFinder ids={ids} accounts={accounts} tasks={tasks} durationMin={valid ? Math.round((e - s) / 60000) : 60} ignoreMeetingId={initial && initial.id} onPick={(x) => { setDay(x.day); setFrom(x.from); setTo(x.to); }} />
         <ConflictBox lines={lines} />
@@ -1539,7 +1556,7 @@ function MeetingCard({ m, me, isAdmin, accounts, attendees, onEdit, onCancel, no
   const live = now >= s - 10 * 60000 && now < e, past = now >= e;
   const canManage = m.created_by === me.id || isAdmin;
   const respond = async (response) => { const { error } = await supabase.from("meeting_attendees").update({ response }).eq("meeting_id", m.id).eq("user_id", me.id); if (error) notify(error.message, "err"); };
-  const copy = async () => notify((await copyText(callLink(m.room))) ? "Lien d'appel copié." : callLink(m.room));
+  const copy = async () => notify((await copyText(meetLink(m))) ? "Lien d'appel copié." : meetLink(m));
   return (
     <div data-meeting={m.id} style={{ background: "var(--panel)", border: `1px solid ${live ? "#2F5FA8" : "var(--border)"}`, borderLeft: `5px solid ${past ? "#4A4F5A" : "#5B9EF5"}`, borderRadius: 12, padding: "14px 16px", opacity: past ? 0.7 : 1 }}>
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
@@ -1550,7 +1567,7 @@ function MeetingCard({ m, me, isAdmin, accounts, attendees, onEdit, onCancel, no
         </div>
         {!past && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <a href={joinLink(m.room, me.display_name)} target="_blank" rel="noopener noreferrer" style={{ ...primaryBtn, padding: "9px 16px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13.5 }}>📹 Rejoindre l'appel</a>
+            <a href={meetJoin(m, me.display_name)} target="_blank" rel="noopener noreferrer" style={{ ...primaryBtn, padding: "9px 16px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13.5 }}>📹 Rejoindre l'appel</a>
             <button type="button" onClick={copy} style={{ ...iconBtn, padding: "0 11px" }} title="Copier le lien d'appel" aria-label="Copier le lien d'appel"><I.Copy size={14} /></button>
           </div>
         )}
@@ -2357,7 +2374,7 @@ function MyDay({ me, accounts, tasks, meetings, attendees, leaves, events = [], 
             <div key={i.k} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--bg)", borderRadius: 10, padding: "9px 12px", opacity: i.end < now ? 0.5 : 1 }}>
               <span style={{ minWidth: 92, fontSize: 12.5, fontWeight: 700, color: "#7DB4FF" }}>{fmtHM(i.at)} – {fmtHM(i.end)}</span>
               <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>📹 {i.m.title}</span>
-              {i.end >= now && <a href={joinLink(i.m.room, me.display_name)} target="_blank" rel="noopener noreferrer" style={{ ...chipBtn, textDecoration: "none", color: "var(--accent-2)" }}>Rejoindre</a>}
+              {i.end >= now && <a href={meetJoin(i.m, me.display_name)} target="_blank" rel="noopener noreferrer" style={{ ...chipBtn, textDecoration: "none", color: "var(--accent-2)" }}>Rejoindre</a>}
             </div>
           ) : (
             <button key={i.k} type="button" onClick={() => onOpen(i.t.id)} style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left", background: "var(--bg)", border: "none", borderRadius: 10, padding: "9px 12px", cursor: "pointer", color: "var(--text)", opacity: i.at < now ? 0.75 : 1 }}>
@@ -2539,7 +2556,7 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
 /* ============================================================
    Mon profil : nom, couleur, mot de passe, suppression du compte
    ============================================================ */
-function ProfileView({ me, session, isAdmin, myPerms, tasks, leaves = [], notify, onChanged, onLogout }) {
+function ProfileView({ me, session, isAdmin, myPerms, tasks, leaves = [], notify, onChanged, onLogout, accounts = [], projects = [], meetings = [], attendees = [] }) {
   const [displayName, setDisplayName] = useState(me.display_name || "");
   const [username, setUsername] = useState(me.username || "");
   const [color, setColor] = useState(me.color || LABELS[3].hex);
@@ -2623,6 +2640,8 @@ function ProfileView({ me, session, isAdmin, myPerms, tasks, leaves = [], notify
 
       <InstallCard card={card} />
 
+      <ExportCard me={me} tasks={tasks} accounts={accounts} projects={projects} meetings={meetings} attendees={attendees} notify={notify} card={card} />
+
       <div style={card}>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Changer de mot de passe</div>
         <Field label="Nouveau mot de passe (8 caractères minimum)"><input type="password" value={pw} onChange={e => setPw(e.target.value)} style={inputStyle} /></Field>
@@ -2645,6 +2664,69 @@ function ProfileView({ me, session, isAdmin, myPerms, tasks, leaves = [], notify
 }
 
 /* ---------------- Installer l'application (écran d'accueil du téléphone / de l'ordinateur) ---------------- */
+/* ---------------- Export : tâches en CSV, agenda en .ics ---------------- */
+const csvCell = (v) => { const t = String(v ?? ""); return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+function buildTasksCsv(tasks, accounts, projects) {
+  const head = ["Titre", "Statut", "Priorité", "Échéance", "Heure", "Assignés", "Projet", "Étiquettes", "Récurrence", "Notes", "Sous-tâches faites", "Créée le"];
+  const rows = tasks.map(t => {
+    const who = assigneeIds(t).map(id => (accounts.find(a => a.id === id) || {}).display_name).filter(Boolean).join(", ");
+    const proj = (projects.find(p => p.id === t.project_id) || {}).name || "";
+    const subs = t.subtasks || [];
+    return [t.title, t.done ? "Terminée" : t.doing ? "En cours" : "À faire", (PRIORITIES.find(p => p.id === t.priority) || {}).label || "", t.due || "", t.due_time ? hhmm(t.due_time) : "", who, proj, [t.label, ...(t.tags || [])].filter(Boolean).join(" "), t.recurrence ? ((RECURRENCES.find(r => r.value === t.recurrence) || {}).label || t.recurrence) : "", t.notes || "", subs.length ? `${subs.filter(x => x.done).length}/${subs.length}` : "", t.created_at ? parisDay(Date.parse(t.created_at)) : ""];
+  });
+  // Point-virgule + BOM : s'ouvre correctement dans Excel en français
+  return "\ufeff" + [head, ...rows].map(r => r.map(csvCell).join(";")).join("\r\n") + "\r\n";
+}
+const icsEsc = (v) => String(v || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+const icsFoldLine = (line) => { const out = []; let cur = line; while (cur.length > 73) { out.push(cur.slice(0, 73)); cur = " " + cur.slice(73); } out.push(cur); return out.join("\r\n"); };
+const icsUtc = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+function buildCalendarIcs({ me, tasks, meetings, attendees }) {
+  const stamp = icsUtc(Date.now());
+  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Le Carnet//FR", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Le Carnet"];
+  for (const m of meetings) {
+    if (m.created_by !== me.id && !attendees.some(a => a.meeting_id === m.id && a.user_id === me.id)) continue;
+    L.push("BEGIN:VEVENT", `UID:meeting-${m.id}@le-carnet`, `DTSTAMP:${stamp}`, `DTSTART:${icsUtc(Date.parse(m.starts_at))}`, `DTEND:${icsUtc(Date.parse(m.ends_at))}`, `SUMMARY:${icsEsc("📹 " + m.title)}`, `DESCRIPTION:${icsEsc((m.notes ? m.notes + "\n" : "") + "Appel : " + meetLink(m))}`, `URL:${meetLink(m)}`, "END:VEVENT");
+  }
+  for (const t of tasks) {
+    if (t.done || !t.due || !assigneeIds(t).includes(me.id)) continue;
+    L.push("BEGIN:VEVENT", `UID:task-${t.id}@le-carnet`, `DTSTAMP:${stamp}`);
+    if (t.due_time) { const a = parisInstant(t.due, hhmm(t.due_time)); L.push(`DTSTART:${icsUtc(a)}`, `DTEND:${icsUtc(a + 30 * 60000)}`); }
+    else L.push(`DTSTART;VALUE=DATE:${t.due.replace(/-/g, "")}`, `DTEND;VALUE=DATE:${shiftDay(t.due, 1).replace(/-/g, "")}`);
+    L.push(`SUMMARY:${icsEsc("☑ " + t.title)}`, ...(t.notes ? [`DESCRIPTION:${icsEsc(t.notes)}`] : []), "END:VEVENT");
+  }
+  L.push("END:VCALENDAR");
+  return L.map(icsFoldLine).join("\r\n") + "\r\n";
+}
+function downloadText(name, mime, content) {
+  const url = URL.createObjectURL(new Blob([content], { type: mime + ";charset=utf-8" }));
+  const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function ExportCard({ me, tasks, accounts, projects, meetings, attendees, notify, card }) {
+  const today = parisDay();
+  const exportCsv = (mineOnly) => {
+    const list = mineOnly ? tasks.filter(t => assigneeIds(t).includes(me.id)) : tasks;
+    downloadText(`le-carnet-taches-${today}.csv`, "text/csv", buildTasksCsv(list, accounts, projects));
+    notify(`${list.length} tâche(s) exportée(s).`);
+  };
+  const exportIcs = () => {
+    const ics = buildCalendarIcs({ me, tasks, meetings, attendees });
+    downloadText(`le-carnet-agenda-${today}.ics`, "text/calendar", ics);
+    notify("Agenda exporté : ouvre le fichier pour l'ajouter à Google Agenda, Outlook ou Apple Calendrier.");
+  };
+  return (
+    <div data-export-card style={card}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Exporter mes données</div>
+      <p style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 12px" }}>Garde une copie de tes tâches (tableur) ou ajoute tes échéances et réunions à un autre agenda. Seul ce serveur est concerné.</p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" data-export="csv-mine" onClick={() => exportCsv(true)} style={chipBtn}>⬇ Mes tâches (CSV)</button>
+        <button type="button" data-export="csv-all" onClick={() => exportCsv(false)} style={chipBtn}>⬇ Toutes les tâches visibles (CSV)</button>
+        <button type="button" data-export="ics" onClick={exportIcs} style={chipBtn}>📅 Mon agenda (.ics)</button>
+      </div>
+    </div>
+  );
+}
+
 function InstallCard({ card }) {
   const [, force] = useState(0);
   useEffect(() => { const f = () => force(n => n + 1); window.addEventListener('carnet-install-ready', f); return () => window.removeEventListener('carnet-install-ready', f); }, []);
@@ -3456,6 +3538,7 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
       <div className="modal-card" style={{ ...modalStyle, width: 520, maxHeight: "92vh", overflowY: "auto", borderTop: `4px solid ${label.hex}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
           <h2 style={{ fontFamily: "Fraunces, serif", fontSize: 20, fontWeight: 600, margin: 0, wordBreak: "break-word" }}>{task.title}</h2>
+          <button type="button" data-copy-task-link title="Copier le lien de cette tâche" aria-label="Copier le lien de cette tâche" onClick={async () => { const url = `${window.location.origin}/app/?task=${task.id}`; notify((await copyText(url)) ? "Lien de la tâche copié." : url); }} style={{ ...iconBtn, border: "none", marginLeft: "auto" }}>🔗</button>
           <button type="button" onClick={onClose} style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>
@@ -3629,7 +3712,7 @@ function CalendarView({ tasks, accounts, meetings = [], attendees = [], leaves =
         </div>}
         {dayBusy.length > 0 && <div data-testid="day-busy" style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>{dayBusy.map((b, i) => <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--panel)", border: "1px dashed var(--border)", borderLeft: "5px solid #6B7280", borderRadius: 10, padding: "8px 14px", color: "var(--text-dim)" }}><span style={{ minWidth: 48, fontSize: 12, fontWeight: 600 }}>{b.all ? "Journée" : fmtHM(b.from)}</span><span style={{ flex: 1, fontSize: 13.5 }}>⛔ Indisponible{b.all ? "" : ` jusqu'à ${fmtHM(b.to)}`} <span style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>· agenda externe</span></span></div>)}</div>}
         {dayLeaves.length > 0 && <div style={{ marginBottom: 10, fontSize: 13, color: "#8FD6AE", background: "#16281F", border: "1px solid #234B36", borderRadius: 10, padding: "8px 12px" }}>🌴 En congé : {dayLeaves.map(l => (accounts.find(a => a.id === l.user_id) || {}).display_name || "?").join(", ")}</div>}
-        {dayMeetings.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>{dayMeetings.map(m => <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--panel)", border: "1px solid var(--border)", borderLeft: "5px solid #5B9EF5", borderRadius: 10, padding: "10px 14px" }}><span style={{ minWidth: 48, fontSize: 12, fontWeight: 600, color: "#7DB4FF" }}>{fmtHM(Date.parse(m.starts_at))}</span><span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>📹 {m.title}</span><a href={joinLink(m.room, me && me.display_name)} target="_blank" rel="noopener noreferrer" style={{ ...chipBtn, textDecoration: "none" }}>Rejoindre</a></div>)}</div>}
+        {dayMeetings.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>{dayMeetings.map(m => <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--panel)", border: "1px solid var(--border)", borderLeft: "5px solid #5B9EF5", borderRadius: 10, padding: "10px 14px" }}><span style={{ minWidth: 48, fontSize: 12, fontWeight: 600, color: "#7DB4FF" }}>{fmtHM(Date.parse(m.starts_at))}</span><span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>📹 {m.title}</span><a href={meetJoin(m, me && me.display_name)} target="_blank" rel="noopener noreferrer" style={{ ...chipBtn, textDecoration: "none" }}>Rejoindre</a></div>)}</div>}
         {dayTasks.length === 0 && dayMeetings.length === 0 && dayLeaves.length === 0 && dayBusy.length === 0 && dayX.events.length === 0 && dayX.birthdays.length === 0 && <EmptyState text="Rien de prévu ce jour-là." />}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {dayTasks.map(t => {

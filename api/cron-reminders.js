@@ -8,7 +8,7 @@ import { esc, siteUrl, layout, button, sendMail, mailConfigured, dueText, hhmm, 
 import { parisHour } from './_time.js';
 import { fetchIcs, busyForStorage } from './_ics.js';
 import { loadBusy, loadTimedTasks, conflictReasons, reasonText, reasonsStamp, nameMap } from './_availability.js';
-import { callUrl, whenText, warnBox } from './_meeting.js';
+import { meetingLink, whenText, warnBox } from './_meeting.js';
 import { planReminders, minutesLabel, assigneesOf, DIGEST_FROM_HOUR, DIGEST_UNTIL_HOUR } from './_reminders.js';
 import { buildWeeklyMail, mondayOf, isoWeekday } from './_weekly.js';
 import { parisInstant as parisInstantSafe } from './_time.js';
@@ -165,8 +165,8 @@ async function meetingReminders(room, link) {
       try {
         await sendMail({
           to: p.email, subject: `⏰ Réunion dans ${min} min : ${m.title}`,
-          text: `« ${m.title} » commence dans ${min} minutes (${whenText(m)}).\nAppel vidéo : ${callUrl(m.room)}`,
-          html: layout(`<p>Bonjour ${esc(p.display_name)},</p><p>La réunion <strong>${esc(m.title)}</strong> commence dans <strong>${min} min</strong> (${esc(whenText(m))}).</p>${button(callUrl(m.room), "Rejoindre l'appel vidéo")}<p style="font-size:12px;color:#889">Tu choisis les emails que tu reçois dans Le Carnet → Profil → Notifications.</p>`),
+          text: `« ${m.title} » commence dans ${min} minutes (${whenText(m)}).\nAppel vidéo : ${meetingLink(m)}`,
+          html: layout(`<p>Bonjour ${esc(p.display_name)},</p><p>La réunion <strong>${esc(m.title)}</strong> commence dans <strong>${min} min</strong> (${esc(whenText(m))}).</p>${button(meetingLink(m), "Rejoindre l'appel vidéo")}<p style="font-size:12px;color:#889">Tu choisis les emails que tu reçois dans Le Carnet → Profil → Notifications.</p>`),
         });
         sent++; marks.push({ kind: 'meeting_remind', item_id: m.id, user_id: p.id, stamp: m.starts_at, sent_at: new Date().toISOString() });
       } catch (_) { /* on réessaiera au prochain passage */ }

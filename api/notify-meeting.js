@@ -5,7 +5,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { esc, siteUrl, layout, button, sendMail, mailConfigured, wants, via } from './_mail.js';
 import { loadBusy, conflictReasons, reasonText, reasonsStamp } from './_availability.js';
-import { callUrl, buildIcs, whenText, warnBox } from './_meeting.js';
+import { meetingLink, buildIcs, whenText, warnBox } from './_meeting.js';
 
 const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     const byId = new Map((people || []).map(p => [p.id, p]));
     const organizer = byId.get(meeting.created_by) || caller;
     const attendees = ids.map(id => byId.get(id)).filter(p => p && p.status === 'approved' && p.server_id === caller.server_id && p.email);
-    const link = callUrl(meeting.room);
+    const link = meetingLink(meeting);
     const site = siteUrl(req);
     const when = whenText(meeting);
     const sequence = Math.floor(Date.parse(meeting.created_at || meeting.starts_at) / 1000) % 1000000 + Math.floor((Date.now() - 1.7e12) / 60000);
