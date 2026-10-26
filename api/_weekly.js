@@ -19,7 +19,7 @@ export const mondayOf = (iso) => addDays(iso, -(isoWeekday(iso) - 1));
  * @param birthdays [{ name, day }]
  * @returns { subject, text, html } ou null s'il n'y a rien à dire
  */
-export function buildWeeklyMail({ person, monday, tasks = [], overdue = 0, meetings = [], away = [], myLeave = [], events = [], birthdays = [], link }) {
+export function buildWeeklyMail({ person, monday, tasks = [], overdue = 0, meetings = [], away = [], myLeave = [], events = [], birthdays = [], link, doneLastWeek = 0 }) {
   const sunday = addDays(monday, 6);
   if (!tasks.length && !overdue && !meetings.length && !away.length && !myLeave.length && !events.length && !birthdays.length) return null;
   const span = (a, b) => (a === b ? dayLabel(a, { weekday: 'long', day: 'numeric' }) : `${dayLabel(a < monday ? monday : a, { weekday: 'short', day: 'numeric' })} → ${dayLabel(b > sunday ? sunday : b, { weekday: 'short', day: 'numeric' })}`);
@@ -36,6 +36,7 @@ export function buildWeeklyMail({ person, monday, tasks = [], overdue = 0, meeti
   const hello = `<p>Bonjour ${esc(person.display_name)}, voici ta semaine du ${esc(dayLabel(monday, { day: 'numeric', month: 'long' }))} au ${esc(dayLabel(sunday, { day: 'numeric', month: 'long' }))}.</p>`;
   const box = (title, color, inner) => `<p style="margin:18px 0 6px;font-weight:bold;color:${color}">${title}</p>${inner}`;
   let html = hello, text = `Ta semaine du ${dayLabel(monday, { day: 'numeric', month: 'long' })} au ${dayLabel(sunday, { day: 'numeric', month: 'long' })}\n`;
+  if (doneLastWeek > 0) { html += `<p style="background:#e8f5ee;border-left:4px solid #2F9E6B;padding:8px 12px;border-radius:6px">✅ La semaine dernière, tu as terminé <strong>${doneLastWeek}</strong> tâche${doneLastWeek > 1 ? 's' : ''}. Bravo !</p>`; text += `\nLa semaine dernière : ${doneLastWeek} tâche${doneLastWeek > 1 ? 's' : ''} terminée${doneLastWeek > 1 ? 's' : ''}.\n`; }
   if (overdue) { html += `<p style="background:#fdecea;border-left:4px solid #D6453A;padding:8px 12px;border-radius:6px">⏰ Tu as <strong>${overdue}</strong> tâche${overdue > 1 ? 's' : ''} en retard.</p>`; text += `\n⏰ ${overdue} tâche(s) en retard\n`; }
   if (myLeave.length) { html += `<p style="background:#e8f5ee;border-left:4px solid #2F9E6B;padding:8px 12px;border-radius:6px">🌴 Tu es en congé : ${myLeave.map(l => esc(span(l.start_date, l.end_date))).join(' ; ')}.</p>`; text += `\n🌴 Tu es en congé : ${myLeave.map(l => span(l.start_date, l.end_date)).join(' ; ')}\n`; }
   if (perDay.length) {

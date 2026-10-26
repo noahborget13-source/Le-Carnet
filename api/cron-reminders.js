@@ -202,6 +202,8 @@ async function weeklySummary(room, link) {
   const weekStart = new Date(parisInstantSafe(monday, '00:00:00')).toISOString(), weekEnd = new Date(parisInstantSafe(addDays(sunday, 1), '00:00:00')).toISOString();
   const { data: meetings } = await supabaseAdmin.from('meetings').select('id, server_id, title, starts_at, ends_at').lt('starts_at', weekEnd).gt('ends_at', weekStart);
   const { data: atts } = meetings && meetings.length ? await supabaseAdmin.from('meeting_attendees').select('meeting_id, user_id, response').in('meeting_id', meetings.map(m => m.id)) : { data: [] };
+  const prevStart = new Date(parisInstantSafe(addDays(monday, -7), '00:00:00')).toISOString();
+  const { data: doneLast } = await supabaseAdmin.from('tasks').select('assignee, assignees').eq('done', true).is('deleted_at', null).gte('done_at', prevStart).lt('done_at', weekStart);
   const nameOf = new Map(members.map(p => [p.id, p.display_name]));
   const marks = []; let sent = 0;
   for (const p of todo) {
@@ -214,7 +216,7 @@ async function weeklySummary(room, link) {
     const myMeetingIds = new Set((atts || []).filter(a => a.user_id === p.id && a.response !== 'declined').map(a => a.meeting_id));
     const bdays = members.filter(m => m.server_id === p.server_id && m.birthday).map(m => { for (let i = 0; i < 7; i++) { const d = addDays(monday, i); if (d.slice(5) === m.birthday) return { name: m.id === p.id ? 'toi' : m.display_name, day: d }; } return null; }).filter(Boolean);
     const mail = buildWeeklyMail({
-      person: p, monday, link,
+      person: p, monday, link, doneLastWeek: (doneLast || []).filter(t => assigneesOf(t).includes(p.id)).length,
       tasks: mine.filter(t => t.due >= monday),
       overdue: mine.filter(t => t.due < monday).length,
       meetings: (meetings || []).filter(m => m.server_id === p.server_id && myMeetingIds.has(m.id)).sort((a, b) => a.starts_at.localeCompare(b.starts_at)),

@@ -3,7 +3,7 @@
 //                                                   Si un invité est indisponible : avertissement dans son email + résumé à l'organisateur.
 //   { action: 'cancel', meetingId }              → prévient les invités puis supprime la réunion.
 import { createClient } from '@supabase/supabase-js';
-import { esc, siteUrl, layout, button, sendMail, mailConfigured, wants } from './_mail.js';
+import { esc, siteUrl, layout, button, sendMail, mailConfigured, wants, via } from './_mail.js';
 import { loadBusy, conflictReasons, reasonText, reasonsStamp } from './_availability.js';
 import { callUrl, buildIcs, whenText, warnBox } from './_meeting.js';
 
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
           if (p.id === caller.id || !wants(p, 'notify_meetings')) continue;
           try {
             await sendMail({
-              to: p.email, replyTo: organizer.email, subject: `Réunion annulée : ${meeting.title}`,
+              to: p.email, replyTo: organizer.email, fromName: via(caller.display_name), subject: `Réunion annulée : ${meeting.title}`,
               text: `${caller.display_name} a annulé la réunion « ${meeting.title} » (${when}).`,
               html: layout(`<p><strong>${esc(caller.display_name)}</strong> a annulé la réunion :</p><div style="border-left:4px solid #D6453A;background:#fdf3f2;padding:12px 14px;border-radius:6px"><div style="font-size:16px;font-weight:bold;text-decoration:line-through">${esc(meeting.title)}</div><div style="font-size:13px;color:#556;margin-top:4px">${esc(when)}</div></div>`),
               icalEvent: { method: 'CANCEL', content: ics },
@@ -53,6 +53,11 @@ export default async function handler(req, res) {
           } catch (_) { /* on continue */ }
         }
       }
+      // Les fichiers joints sont effacés du stockage avec la réunion
+      try {
+        const { data: files } = await supabaseAdmin.from('meeting_attachments').select('path').eq('meeting_id', meeting.id);
+        if (files && files.length) await supabaseAdmin.storage.from('task-files').remove(files.map(f => f.path));
+      } catch (_) { /* sans gravité */ }
       await supabaseAdmin.from('meetings').delete().eq('id', meeting.id);
       return res.status(200).json({ ok: true, sent });
     }
@@ -79,7 +84,7 @@ export default async function handler(req, res) {
       const warn = mine && wants(p, 'notify_conflicts') ? warnBox(mine.map(r => reasonText(r, p.display_name, 'you').replace(/^./, c => c.toUpperCase()))) : '';
       try {
         await sendMail({
-          to: p.email, replyTo: organizer.email,
+          to: p.email, replyTo: organizer.email, fromName: via(caller.display_name),
           subject: `${updated ? 'Réunion modifiée' : 'Invitation'} : ${meeting.title}`,
           text: `${caller.display_name} ${updated ? 'a modifié' : "t'invite à"} la réunion « ${meeting.title} » : ${when}.\nAppel vidéo : ${link}\n${site}/app/`,
           html: layout(`<p><strong>${esc(caller.display_name)}</strong> ${updated ? 'a modifié la réunion' : "t'invite à une réunion"} :</p>
