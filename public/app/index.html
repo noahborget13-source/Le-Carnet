@@ -594,6 +594,14 @@ function InviteAccept({ token, notify }) {
         {info && (
           <div>
             <h1 style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 21, textAlign: "center", margin: "0 0 4px" }}>Rejoindre « {info.serverName} »</h1>
+            {info.existingAccount && (
+              <div data-existing-account style={{ textAlign: "center" }}>
+                <p style={{ color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6, margin: "10px 0 18px" }}>{info.email} a déjà un compte Le Carnet. Pas besoin d'en créer un autre : connecte-toi avec ton compte, puis ouvre <strong>« Mes serveurs » → « Rejoindre »</strong> (menu « Plus » sur téléphone) et colle ce lien d'invitation.</p>
+                <button type="button" data-copy-invite onClick={async () => { await copyText(window.location.href); notify("Lien d'invitation copié."); }} style={{ ...secondaryBtn, width: "100%", marginBottom: 10 }}>Copier le lien d'invitation</button>
+                <button type="button" onClick={goHome} style={{ ...primaryBtn, width: "100%" }}>Aller à la connexion</button>
+              </div>
+            )}
+            {!info.existingAccount && (<>
             <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13, margin: "0 0 20px" }}>Crée ton compte pour {info.email}</p>
             <Field label="Identifiant (pour te connecter)"><input autoFocus value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
             <Field label="Nom affiché"><input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
@@ -605,6 +613,7 @@ function InviteAccept({ token, notify }) {
             </Field>
             {err && <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#FF9A8F", fontSize: 13, margin: "4px 0 14px" }}><I.Alert size={14} /> {err}</div>}
             <button type="button" onClick={submit} disabled={busy} style={{ ...primaryBtn, width: "100%", opacity: busy ? 0.6 : 1 }}>{busy ? "Création…" : "Créer mon compte"}</button>
+            </>)}
           </div>
         )}
       </div>
@@ -893,8 +902,10 @@ function Signup({ notify }) {
   const [busy, setBusy] = useState(false);
 
   const doSignupCore = async () => {
+    const EXISTS = "Cette adresse a déjà un compte Le Carnet. Connecte-toi avec, puis ouvre « Mes serveurs » (menu Plus sur téléphone) pour créer un autre serveur ou en rejoindre un : tu gardes le même compte.";
     const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
-    if (error) throw error;
+    if (error) throw new Error(/already|registered|exists/i.test(error.message) ? EXISTS : error.message);
+    if (data && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) throw new Error(EXISTS);
     let session = data.session;
     if (!session) {
       // Confirmation email activée côté Supabase : on tente une connexion directe
@@ -1046,6 +1057,11 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [projectMembers, setProjectMembers] = useState([]);
   const [meetingFiles, setMeetingFiles] = useState([]);
   const [showHelp, setShowHelp] = useState(false);
+  const [inviteFromUrl] = useState(() => { try { const t = new URLSearchParams(window.location.search).get("invite"); return t && t.length >= 20 ? t : ""; } catch (_) { return ""; } });
+  const [showServers, setShowServers] = useState(Boolean(inviteFromUrl));
+  useEffect(() => { if (inviteFromUrl) { try { window.history.replaceState({}, "", window.location.pathname); } catch (_) {} } }, []);
+  const [serverName, setServerName] = useState("");
+  useEffect(() => { supabase.from('servers').select('name').eq('id', me.server_id).maybeSingle().then(({ data }) => setServerName((data && data.name) || "")); }, [me.server_id]);
   const [, setClock] = useState(0);
   const [openId, setOpenId] = useState(null);
   const myPerms = useMemo(() => effectivePerms(me), [me]);
@@ -1117,6 +1133,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
     <div className="app-shell" style={{ position: "relative", zIndex: 1, display: "flex", minHeight: "100vh" }}>
       <aside className="paper app-sidebar" style={{ width: 236, flexShrink: 0, borderRight: "1px solid var(--border)", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 18 }}>
         <div className="app-sidebar-brand" style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 8px" }}><NotebookMark size={24} /><span style={{ fontFamily: "Fraunces, serif", fontSize: 18 }}>Le Carnet</span></div>
+        <button type="button" className="app-sidebar-footer-label" data-servers-open onClick={() => setShowServers(true)} title="Changer de serveur, en créer ou en rejoindre un autre" style={{ display: "flex", alignItems: "center", gap: 8, margin: "-6px 0 0", padding: "8px 10px", background: "var(--bg-2)", border: "1px solid var(--border-soft)", borderRadius: 9, color: "var(--text)", fontSize: 13, cursor: "pointer", textAlign: "left" }}><span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>{serverName || "Mon serveur"}</span><span style={{ color: "var(--text-dimmer)" }}>⇄</span></button>
         <nav style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
           {tabs.map(t => (<button key={t.id} className={t.secondary ? "tab-secondary" : undefined} onClick={() => goTab(t.id)} aria-current={tab === t.id ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: tab === t.id ? 600 : 500, cursor: "pointer", textAlign: "left" }}><t.icon size={17} /> {t.label}</button>))}
         
@@ -1141,6 +1158,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       {moreOpen && <div className="more-backdrop" onClick={() => setMoreOpen(false)} />}
       {moreOpen && <div className="more-sheet" role="menu">
         {tabs.filter(t => t.secondary).map(t => (<button key={t.id} type="button" role="menuitem" aria-current={tab === t.id ? "true" : undefined} onClick={() => goTab(t.id)}><t.icon size={19} /> {t.label}</button>))}
+        <button type="button" role="menuitem" data-servers-open-mobile onClick={() => { setMoreOpen(false); setShowServers(true); }}><span style={{ width: 19, textAlign: "center" }}>⇄</span> Mes serveurs{serverName ? " · " + serverName : ""}</button>
         <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onLogout(); }} style={{ color: "var(--text-dim)" }}><I.LogOut size={19} /> Déconnexion · {me.display_name}</button>
       </div>}
       <main className="app-main" style={{ flex: 1, minWidth: 0, padding: "26px 34px", overflowY: "auto" }}>
@@ -1155,6 +1173,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         <SiteFooter />
       </main>
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} />}
+      {showServers && <ServersModal initialCode={inviteFromUrl} me={me} session={session} notify={notify} onClose={() => setShowServers(false)} />}
       {openTask && <TaskDetail reactions={reactions} task={openTask} accounts={people} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openTask.id)} attachments={attachments.filter(a => a.task_id === openTask.id)} onAttachmentsChanged={reloadAttachments} notify={notify} onClose={() => setOpenId(null)} />}
     </div>
   );
@@ -2551,7 +2570,8 @@ function ProfileView({ me, session, isAdmin, myPerms, tasks, leaves = [], notify
     if (pw.length < 8) { notify("Le mot de passe doit faire au moins 8 caractères.", "err"); return; }
     if (pw !== pw2) { notify("Les deux mots de passe sont différents.", "err"); return; }
     setPwBusy(true);
-    const { error } = await supabase.auth.updateUser({ password: pw });
+    let error = null;
+    try { await callApi('/api/manage-account', { action: 'set-password', password: pw }, session); } catch (e) { error = e; }
     setPwBusy(false);
     if (error) { notify(error.message, "err"); return; }
     setPw(""); setPw2("");
@@ -2983,6 +3003,78 @@ function TrashModal({ trashed, accounts, me, isAdmin, myPerms, onRestore, onPurg
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** « Mes serveurs » : changer de serveur avec le même compte, en créer un nouveau, ou en rejoindre un autre. */
+function ServersModal({ me, session, notify, onClose, initialCode = "" }) {
+  const [list, setList] = useState(null);
+  const [mode, setMode] = useState(initialCode ? "join" : "list");   // list | create | join
+  const [busy, setBusy] = useState(false);
+  const [f, setF] = useState({ serverName: "", code: initialCode, username: "", displayName: me.display_name || "" });
+  const set = (k) => (e) => setF(v => ({ ...v, [k]: e.target.value }));
+  const load = async () => { try { const r = await callApi('/api/manage-account', { action: 'servers-list' }, session); setList(r.servers); } catch (e) { notify(e.message, "err"); setList([]); } };
+  useEffect(() => { load(); }, []);
+  const switchTo = async (userId) => {
+    setBusy(true);
+    try {
+      const r = await callApi('/api/manage-account', { action: 'servers-switch', userId }, session);
+      let { error } = await supabase.auth.verifyOtp({ token_hash: r.tokenHash, type: 'magiclink' });
+      if (error) ({ error } = await supabase.auth.verifyOtp({ token_hash: r.tokenHash, type: 'email' }));
+      if (error) throw error;
+      window.location.reload();
+    } catch (e) { notify(e.message, "err"); setBusy(false); }
+  };
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const body = mode === "create" ? { action: 'servers-create', serverName: f.serverName, username: f.username, displayName: f.displayName } : { action: 'servers-join', code: f.code, username: f.username, displayName: f.displayName };
+      const r = await callApi('/api/manage-account', body, session);
+      if (r.status === "approved") { await switchTo(r.userId); return; }
+      notify("Demande envoyée : l'administrateur de ce serveur doit l'approuver.");
+      setMode("list"); setF(v => ({ ...v, serverName: "", code: "", username: "" })); await load();
+    } catch (e) { notify(e.message, "err"); }
+    setBusy(false);
+  };
+  const roleLabel = (r) => (ROLES.find(x => x.id === r) || {}).label || r;
+  return (
+    <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" data-servers-modal style={{ ...modalStyle, width: 460, maxHeight: "92vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <h2 style={{ fontFamily: "Fraunces, serif", fontSize: 20, fontWeight: 600, margin: 0 }}>{mode === "create" ? "Créer un serveur" : mode === "join" ? "Rejoindre un serveur" : "Mes serveurs"}</h2>
+          <button type="button" onClick={onClose} style={{ ...iconBtn, border: "none" }} aria-label="Fermer"><I.X size={18} /></button>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 14px" }}>{mode === "list" ? "Un seul compte, plusieurs serveurs : chaque serveur reste un espace séparé, avec son propre profil." : "Ton adresse email et ton mot de passe sont les mêmes ; seuls l'identifiant et le nom affiché sont propres à ce serveur."}</p>
+        {mode === "list" ? (<>
+          {!list && <div style={{ display: "grid", placeItems: "center", padding: 20 }}><Spinner /></div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+            {(list || []).map(s => (
+              <button key={s.userId} type="button" data-server-row={s.userId} disabled={busy || s.current} onClick={() => switchTo(s.userId)} style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: s.current ? "var(--panel)" : "var(--bg)", border: `1px solid ${s.current ? "var(--accent)" : "var(--border-soft)"}`, borderRadius: 10, padding: "11px 14px", cursor: s.current ? "default" : "pointer", color: "var(--text)" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{s.serverName}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>{s.displayName} · {roleLabel(s.role)}{s.status === "pending" ? " · en attente d'approbation" : ""}</div>
+                </div>
+                {s.current ? <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent-2)" }}>ICI</span> : <span style={{ color: "var(--text-dimmer)" }}>→</span>}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button type="button" data-servers-create onClick={() => setMode("create")} style={{ ...primaryBtn, flex: 1 }}>＋ Créer un serveur</button>
+            <button type="button" data-servers-join onClick={() => setMode("join")} style={{ ...secondaryBtn, flex: 1 }}>Rejoindre un serveur</button>
+          </div>
+        </>) : (<>
+          {mode === "create" && <Field label="Nom du serveur"><input autoFocus data-f-server value={f.serverName} maxLength={60} onChange={set("serverName")} placeholder="Famille, Travail, Association…" style={inputStyle} /></Field>}
+          {mode === "join" && <Field label="Code du serveur ou lien d'invitation"><input autoFocus data-f-code value={f.code} onChange={set("code")} placeholder="abcd1234 ou https://…/app/?invite=…" style={inputStyle} /></Field>}
+          <Field label="Identifiant dans ce serveur (pour les mentions)"><input data-f-username value={f.username} onChange={set("username")} placeholder="3 à 30 caractères, unique" style={inputStyle} /></Field>
+          <Field label="Nom affiché dans ce serveur"><input data-f-display value={f.displayName} onChange={set("displayName")} style={inputStyle} /></Field>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="button" onClick={() => setMode("list")} style={{ ...secondaryBtn, flex: 1 }}>Retour</button>
+            <button type="button" data-servers-submit onClick={submit} disabled={busy || !f.username.trim() || !f.displayName.trim() || (mode === "create" ? !f.serverName.trim() : !f.code.trim())} style={{ ...primaryBtn, flex: 1, opacity: busy ? 0.6 : 1 }}>{busy ? "…" : mode === "create" ? "Créer et y aller" : "Rejoindre"}</button>
+          </div>
+        </>)}
       </div>
     </div>
   );
@@ -4058,7 +4150,7 @@ function AdminMembers({ me, session, approved, pending, tasks, notify }) {
         await callApi('/api/manage-account', { action: 'update', id: draft.id, newPassword: draft.password || null, patch: { username: draft.username, display_name: draft.displayName, color: draft.color, role: draft.role, permissions: draft.permissions } }, session);
         notify("Compte mis à jour.");
       } else {
-        await callApi('/api/create-account', { username: draft.username, email: draft.email, password: draft.password, displayName: draft.displayName, color: draft.color, role: draft.role, permissions: draft.permissions }, session);
+        await callApi('/api/manage-account', { action: 'create', username: draft.username, email: draft.email, password: draft.password, displayName: draft.displayName, color: draft.color, role: draft.role, permissions: draft.permissions }, session);
         notify(`Compte « ${draft.displayName} » créé.`);
       }
       setShowForm(false); setEditing(null);

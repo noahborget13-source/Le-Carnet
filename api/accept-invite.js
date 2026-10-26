@@ -91,7 +91,8 @@ export default async function handler(req, res) {
     const { invite, serverName } = loaded;
 
     if (action === 'check') {
-      return res.status(200).json({ ok: true, serverName, email: invite.email, role: invite.role });
+      const { data: acc } = await supabaseAdmin.from('profiles').select('id').ilike('email', invite.email).limit(1);
+      return res.status(200).json({ ok: true, serverName, email: invite.email, role: invite.role, existingAccount: Boolean(acc && acc.length) });
     }
     if (action !== 'accept') return res.status(400).json({ error: 'Action inconnue.' });
 
@@ -111,7 +112,7 @@ export default async function handler(req, res) {
     });
     if (createErr) {
       const msg = /already|registered|exists/i.test(createErr.message)
-        ? 'Cette adresse a déjà un compte. Connecte-toi plutôt.' : createErr.message;
+        ? 'Cette adresse a déjà un compte Le Carnet : connecte-toi avec, puis ouvre le menu « Mes serveurs » → « Rejoindre » et colle ce lien d\'invitation.' : createErr.message;
       return res.status(400).json({ error: msg });
     }
 

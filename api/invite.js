@@ -82,9 +82,10 @@ export default async function handler(req, res) {
       const role = ROLES.includes(body.role) ? body.role : 'member';
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Adresse email invalide.' });
 
-      const { data: existing } = await supabaseAdmin.from('profiles').select('id').ilike('email', email).limit(1);
+      // Une adresse qui a déjà un compte dans un AUTRE serveur peut être invitée ; elle rejoindra avec son compte existant.
+      const { data: existing } = await supabaseAdmin.from('profiles').select('id').eq('server_id', caller.server_id).ilike('email', email).limit(1);
       if (existing && existing.length) {
-        return res.status(400).json({ error: "Cette adresse a déjà un compte sur Le Carnet. Un compte ne peut appartenir qu'à un seul serveur." });
+        return res.status(400).json({ error: "Cette adresse fait déjà partie de ton serveur." });
       }
 
       // Une seule invitation en attente par adresse et par serveur : on remplace l'ancienne.
