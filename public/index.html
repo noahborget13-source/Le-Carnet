@@ -151,6 +151,10 @@
   .roles-wrap { overflow-x: auto; }
   .note { color: var(--text-dimmer); font-size: 13.5px; margin-top: 12px; }
 
+  .pn-day { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 22px; margin-bottom: 12px; }
+  .pn-day h3 { font-size: 16px; margin: 0 0 8px; text-transform: capitalize; }
+  .pn-day ul { margin: 0; padding-left: 18px; color: var(--text-dim); font-size: 14.5px; line-height: 1.6; }
+  .pn-new { display: inline-block; font: 700 11px Inter, system-ui, sans-serif; background: #5B9EF5; color: #fff; border-radius: 10px; padding: 1px 8px; margin-left: 8px; vertical-align: middle; text-transform: none; }
   details { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 10px; }
   summary { cursor: pointer; font-weight: 600; font-size: 16px; }
   details p { color: var(--text-dim); margin: 10px 0 0; font-size: 15px; }
@@ -180,7 +184,7 @@
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="2" width="18" height="20" rx="2.5" fill="#5B6EF5" opacity="0.15"/><rect x="3" y="2" width="18" height="20" rx="2.5" stroke="#5B6EF5" stroke-width="1.5"/><line x1="7" y1="7" x2="15" y2="7" stroke="#9B7EF5" stroke-width="1.5" stroke-linecap="round"/><line x1="7" y1="11" x2="17" y2="11" stroke="#5B9EF5" stroke-width="1.5" stroke-linecap="round"/><line x1="7" y1="15" x2="13" y2="15" stroke="#5FBF8B" stroke-width="1.5" stroke-linecap="round"/></svg>
       Le Carnet
     </a>
-    <div class="links"><a href="#fonctionnalites">Fonctionnalités</a><a href="#comment">Comment ça marche</a><a href="#roles">Droits</a><a href="#faq">FAQ</a></div>
+    <div class="links"><a href="#fonctionnalites">Fonctionnalités</a><a href="#comment">Comment ça marche</a><a href="#roles">Droits</a><a href="#nouveautes">Nouveautés</a><a href="#faq">FAQ</a></div>
     <div class="nav-actions"><a class="btn small" href="/app/">Se connecter</a><a class="btn small primary" href="/app/?tab=signup">Créer un compte</a></div>
   </nav>
 
@@ -249,6 +253,13 @@
     </div>
   </section>
 
+  <section id="nouveautes" hidden>
+    <div class="wrap" style="max-width: 780px">
+      <div class="section-head"><h2>Nouveautés</h2><p>Les dernières améliorations de Le Carnet, jour par jour.</p></div>
+      <div id="patchnotes"></div>
+    </div>
+  </section>
+
   <section id="faq">
     <div class="wrap" style="max-width: 780px">
       <div class="section-head"><h2>Questions fréquentes</h2></div>
@@ -275,6 +286,21 @@
 <footer>
   <div class="wrap">© 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget · <a href="/confidentialite.html">Confidentialité</a> · <a href="mailto:lecarnetvercel@gmail.com">Contact : lecarnetvercel@gmail.com</a></div>
 </footer>
+<script>
+  // Nouveautés : lues dans /patchnotes.json (une entrée par jour). Si le fichier est inaccessible, la section reste masquée.
+  (function () {
+    fetch('/patchnotes.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : []; }).then(function (days) {
+      if (!days || !days.length) return;
+      var box = document.getElementById('patchnotes'), sec = document.getElementById('nouveautes');
+      function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+      function fr(d) { return new Date(d + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }); }
+      function card(n, i) { return '<div class="pn-day"><h3>' + esc(fr(n.date)) + (i === 0 ? '<span class="pn-new">Dernière mise à jour</span>' : '') + '</h3><ul>' + n.items.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>'; }
+      var html = days.slice(0, 3).map(card).join('');
+      if (days.length > 3) html += '<details><summary>Voir les mises à jour précédentes</summary>' + days.slice(3).map(function (n, i) { return card(n, i + 3); }).join('') + '</details>';
+      box.innerHTML = html; sec.hidden = false;
+    }).catch(function () {});
+  })();
+</script>
 <script>
   // Annonce programmée (table system_alerts : message + display_at). Même règle que dans l'application.
   (function () {
