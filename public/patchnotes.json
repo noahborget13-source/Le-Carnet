@@ -1,0 +1,21 @@
+[
+  {
+    "date": "2026-10-26",
+    "items": [
+      "Réunions : tu peux ajouter ton propre lien d'appel (Google Meet, Zoom, Teams…). Il est utilisé dans l'appli, les e-mails et les rappels.",
+      "Tâches : un bouton 🔗 copie le lien direct vers une tâche ; ouvrir ce lien affiche la tâche.",
+      "Profil : export de tes tâches en CSV (Excel) et de ton agenda en .ics (Google Agenda, Outlook, Apple).",
+      "Un même compte peut rejoindre plusieurs serveurs (menu « Mes serveurs »).",
+      "Pièces jointes : tu peux joindre des fichiers et des photos dans le salon et les messages privés (📎), dès la création d'une tâche ou d'une réunion, et sur une tâche même si tu ne peux pas la modifier (5 Mo max par fichier).",
+      "Nouveau : cette page de nouveautés."
+    ]
+  },
+  {
+    "date": "2026-10-25",
+    "items": [
+      "Mobile : barre du bas fixe et plus compacte, menu « Plus », administration redessinée.",
+      "Projets avec accès privé, pièces jointes dans les réunions.",
+      "Statistiques personnelles dans le Profil."
+    ]
+  }
+]

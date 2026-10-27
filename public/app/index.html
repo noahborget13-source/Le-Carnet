@@ -2491,72 +2491,41 @@ function MyStats({ me, tasks, projects }) {
   );
 }
 
-/* ---------------- Patch notes : une entrée par jour (la plus récente en premier) ----------------
-   `items` = ce que voient tous les membres (accueil) ; `tech` = détails réservés à l'administrateur du site. */
-const PATCH_NOTES = [
-  { date: "2026-10-26",
-    items: [
-      "Réunions : tu peux ajouter ton propre lien d'appel (Google Meet, Zoom, Teams…). Il est utilisé dans l'appli, les e-mails et les rappels.",
-      "Tâches : un bouton 🔗 copie le lien direct vers une tâche ; ouvrir ce lien affiche la tâche.",
-      "Profil : export de tes tâches en CSV (Excel) et de ton agenda en .ics (Google Agenda, Outlook, Apple).",
-      "Un même compte peut rejoindre plusieurs serveurs (menu « Mes serveurs »).",
-      "Nouveau : cette page de nouveautés.",
-      "Pièces jointes : tu peux maintenant joindre des fichiers et des photos dans le salon et les messages privés (📎), dès la création d'une tâche ou d'une réunion, et sur une tâche même si tu ne peux pas la modifier (5 Mo max par fichier)."],
-    tech: [
-      "migration-14-pj-messages-taches.sql : table message_attachments (RLS : lecture selon les règles des messages, ajout seulement sur ses propres messages) ; politique d'ajout des pièces jointes de tâche élargie à tout membre non invité qui voit la tâche. Les fichiers partagent le seau task-files (chemin serveur/messages/…).",
-      "migration-13-lien-appel.sql : colonne meetings.call_url (https uniquement, 300 caractères max).",
-      "migration-12-comptes-multi-serveurs.sql : table account_links ; changement de serveur via lien magique + verifyOtp (à tester une fois sur le vrai Supabase).",
-      "api/_meeting.js : meetingLink() utilisé par notify-meeting et cron-reminders.",
-      "Toujours 12 fonctions serverless (limite Vercel Hobby) : ne pas ajouter de fichier dans api/ sans en fusionner un autre."] },
-  { date: "2026-10-25",
-    items: [
-      "Mobile : barre du bas fixe et plus compacte, menu « Plus », administration redessinée.",
-      "Projets avec accès privé, pièces jointes dans les réunions.",
-      "Statistiques personnelles dans le Profil."],
-    tech: [
-      "migration-11-projets-pj-reunions.sql : projects, project_members, meeting_attachments, fonctions can_see_project / can_manage_project, trigger tasks_project_guard.",
-      "Fusion de create-account dans manage-account (limite des 12 fonctions)."] },
-];
+/* ---------------- Patch notes ----------------
+   Les nouveautés visibles de tous sont dans /patchnotes.json (affichées sur la page d'accueil du site).
+   Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
+const PATCH_TECH = {
+  "2026-10-26": [
+    "migration-13-lien-appel.sql : colonne meetings.call_url (https uniquement, 300 caractères max).",
+    "migration-14-pj-messages-taches.sql : table message_attachments (RLS : lecture selon les règles des messages, ajout seulement sur ses propres messages) ; politique d'ajout des pièces jointes de tâche élargie à tout membre non invité qui voit la tâche. Les fichiers partagent le seau task-files (chemin serveur/messages/…).",
+    "migration-12-comptes-multi-serveurs.sql : table account_links ; changement de serveur via lien magique + verifyOtp (à tester une fois sur le vrai Supabase).",
+    "api/_meeting.js : meetingLink() utilisé par notify-meeting et cron-reminders.",
+    "Toujours 12 fonctions serverless (limite Vercel Hobby) : ne pas ajouter de fichier dans api/ sans en fusionner un autre."],
+  "2026-10-25": [
+    "migration-11-projets-pj-reunions.sql : projects, project_members, meeting_attachments, fonctions can_see_project / can_manage_project, trigger tasks_project_guard.",
+    "Fusion de create-account dans manage-account (limite des 12 fonctions)."],
+};
 const frDate = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-function PatchNotesCard({ me }) {
-  const [all, setAll] = useState(false);
-  const seenKey = "carnet-patch-seen-" + me.id;
-  const latest = PATCH_NOTES[0].date;
-  const [seen, setSeen] = useState(() => { try { return localStorage.getItem(seenKey) || ""; } catch (_) { return ""; } });
-  const isNew = seen < latest;
-  const mark = () => { try { localStorage.setItem(seenKey, latest); } catch (_) {} setSeen(latest); };
-  const list = all ? PATCH_NOTES : PATCH_NOTES.slice(0, 1);
-  return (
-    <div data-patch-card style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "14px 18px", marginBottom: 22 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>🆕 Nouveautés</span>
-        {isNew && <span data-patch-new style={{ background: "#5B9EF5", color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px" }}>Nouveau</span>}
-        <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          {isNew && <button type="button" data-patch-seen onClick={mark} style={{ ...chipBtn, padding: "4px 10px", fontSize: 12 }}>Marquer comme lu</button>}
-          {PATCH_NOTES.length > 1 && <button type="button" data-patch-toggle onClick={() => setAll(v => !v)} style={{ ...chipBtn, padding: "4px 10px", fontSize: 12 }}>{all ? "Réduire" : "Voir tout"}</button>}
-        </span>
-      </div>
-      {list.map(n => (
-        <div key={n.date} style={{ marginTop: 6 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dimmer)", textTransform: "capitalize", marginBottom: 4 }}>{frDate(n.date)}</div>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
-        </div>
-      ))}
-    </div>
-  );
-}
 /** Onglet réservé à l'administrateur du site : historique complet, avec les détails techniques. */
 function AdminPatchNotes() {
+  const [days, setDays] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/patchnotes.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : [])).then(d => { if (alive) setDays(d || []); }).catch(() => { if (alive) setDays([]); });
+    return () => { alive = false; };
+  }, []);
   return (
     <div data-admin-patchnotes>
-      <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "0 0 16px" }}>Historique complet, jour par jour. Les membres ne voient que les « Nouveautés » de l'accueil ; les détails techniques ci-dessous ne sont visibles que par toi.</p>
-      {PATCH_NOTES.map(n => (
+      <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "0 0 16px" }}>Historique complet, jour par jour. Le texte « vu par les membres » est celui de la page d'accueil du site (fichier <code>public/patchnotes.json</code>) ; les détails techniques ne sont visibles que par toi.</p>
+      {!days && <div style={{ display: "grid", placeItems: "center", padding: 20 }}><Spinner /></div>}
+      {days && days.length === 0 && <EmptyState text="Impossible de charger les nouveautés." />}
+      {(days || []).map(n => (
         <div key={n.date} style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 14 }}>
           <div style={{ fontFamily: "Fraunces, serif", fontSize: 17, fontWeight: 600, textTransform: "capitalize", marginBottom: 8 }}>{frDate(n.date)}</div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dimmer)", marginBottom: 4 }}>Vu par les membres</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dimmer)", marginBottom: 4 }}>Vu par les membres (page d'accueil)</div>
           <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin)", marginBottom: 4 }}>Détails techniques (admin)</div>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.tech.map((x, i) => <li key={i}>{x}</li>)}</ul>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>{(PATCH_TECH[n.date] || ["Aucun détail technique."]).map((x, i) => <li key={i}>{x}</li>)}</ul>
         </div>
       ))}
     </div>
@@ -2598,7 +2567,6 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
         <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", textTransform: "capitalize" }}>{dateLabel}</p>
       </div>
       <MyDay me={me} accounts={accounts} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} events={events} onOpen={onOpen} goTo={goTo} />
-      <PatchNotesCard me={me} />
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 26 }}>
         <StatCard value={mine.length} label="À faire pour moi" hex="#5B9EF5" onClick={() => goTo("tasks")} />
         <StatCard value={late.length} label="En retard" hex="#FF6B5E" onClick={() => goTo("tasks")} />
