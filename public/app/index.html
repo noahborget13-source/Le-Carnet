@@ -1056,6 +1056,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [projects, setProjects] = useState([]);
   const [projectMembers, setProjectMembers] = useState([]);
   const [meetingFiles, setMeetingFiles] = useState([]);
+  const [messageFiles, setMessageFiles] = useState([]);
   const [showHelp, setShowHelp] = useState(false);
   const [inviteFromUrl] = useState(() => { try { const t = new URLSearchParams(window.location.search).get("invite"); return t && t.length >= 20 ? t : ""; } catch (_) { return ""; } });
   const [taskFromUrl] = useState(() => { try { return new URLSearchParams(window.location.search).get("task") || ""; } catch (_) { return ""; } });
@@ -1085,6 +1086,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   useLiveTable('projects', setProjects);
   useLiveTable('project_members', setProjectMembers);
   const reloadMeetingFiles = useLiveTable('meeting_attachments', setMeetingFiles);
+  useLiveTable('message_attachments', setMessageFiles);
   useEffect(() => { const id = setInterval(() => setClock(c => c + 1), 60000); return () => clearInterval(id); }, []);
 
   useEffect(() => { if (tab === "admin" && !isAdmin) setTab("home"); }, [tab, isAdmin]);
@@ -1176,7 +1178,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "tasks" && <TasksView projects={projects} projectMembers={projectMembers} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} events={teamEvents} isAdmin={isAdmin} notify={notify} me={me} onOpen={openFromAnywhere} />}
         {tab === "meetings" && <MeetingsView meetingFiles={meetingFiles} onFilesChanged={reloadMeetingFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} tasks={tasks} notify={notify} />}
-        {tab === "messages" && <MessagesView me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} reactions={reactions} accounts={people} messages={messages} channelMsgs={channelMsgs} pollVotes={pollVotes} reloadVotes={reloadVotes} notify={notify} />}
+        {tab === "messages" && <MessagesView messageFiles={messageFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} reactions={reactions} accounts={people} messages={messages} channelMsgs={channelMsgs} pollVotes={pollVotes} reloadVotes={reloadVotes} notify={notify} />}
         {tab === "profile" && <ProfileView accounts={accounts} projects={projects} meetings={meetings} attendees={attendees} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} tasks={tasks} leaves={leaves} notify={notify} onChanged={onProfileChanged} onLogout={onLogout} />}
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} leaves={leaves} meetings={meetings} attendees={attendees} notify={notify} onChanged={onProfileChanged} />}
         <SiteFooter />
@@ -1451,7 +1453,7 @@ function CalendarFeedCard({ session, notify, card }) {
 
 /* ---------------- Réunions ---------------- */
 const RESP = { accepted: ["✓", "#5FBF8B", "a accepté"], declined: ["✗", "#FF6B5E", "a refusé"], invited: ["?", "#9098A8", "n'a pas répondu"] };
-function MeetingForm({ initial, me, accounts, attendees, leaves, tasks, onCancel, onSaved, session, notify }) {
+function MeetingForm({ fileCount = 0, initial, me, accounts, attendees, leaves, tasks, onCancel, onSaved, session, notify }) {
   const startInit = initial ? Date.parse(initial.starts_at) : null;
   const [title, setTitle] = useState(initial?.title || "");
   const [notes, setNotes] = useState(initial?.notes || "");
@@ -1460,6 +1462,7 @@ function MeetingForm({ initial, me, accounts, attendees, leaves, tasks, onCancel
   const [to, setTo] = useState(initial ? parisHM(Date.parse(initial.ends_at)) : "11:00");
   const [people, setPeople] = useState(() => initial ? attendees.filter(a => a.meeting_id === initial.id && a.user_id !== me.id).map(a => a.user_id) : []);
   const [busy, setBusy] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState([]);
   const [callUrlText, setCallUrlText] = useState(initial?.call_url || "");
   const callUrlOk = !callUrlText.trim() || /^https:\/\/\S+$/.test(callUrlText.trim());
   const others = accounts.filter(a => a.id !== me.id);
@@ -1511,6 +1514,10 @@ function MeetingForm({ initial, me, accounts, attendees, leaves, tasks, onCancel
       let sent = 0, conflicts = 0;
       if (people.length || initial) { try { const r = await callApi("/api/notify-meeting", { action: initial ? "update" : "invite", meetingId: id }, session); sent = r.sent || 0; conflicts = r.conflicts || 0; } catch (_) {} }
       notify((initial ? "Réunion mise à jour" : "Réunion créée") + (sent ? ` · ${sent} email(s) envoyé(s)` : "") + (conflicts ? ` · ${conflicts} conflit(s) signalé(s)` : "") + ".");
+      if (pendingFiles.length) {
+        const n = await uploadAttachments(pendingFiles, { me, folder: "reunions/" + id, table: "meeting_attachments", extra: { meeting_id: id }, existing: fileCount, noun: "réunion", notify });
+        if (n < pendingFiles.length) notify("Réunion enregistrée, mais certains fichiers n'ont pas pu être joints.", "err");
+      }
       onSaved();
     } catch (err) { notify(err.message, "err"); }
     setBusy(false);
@@ -1535,6 +1542,7 @@ function MeetingForm({ initial, me, accounts, attendees, leaves, tasks, onCancel
             ); })}
           </div>
         </div>
+        <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Pièces jointes (ordre du jour, présentation…)</div><PendingFiles files={pendingFiles} setFiles={setPendingFiles} disabled={busy} /></div>
         <Field label="Lien d'appel (facultatif — Meet, Zoom, Teams…)"><input data-call-url type="url" value={callUrlText} onChange={ev => setCallUrlText(ev.target.value)} maxLength={300} style={{ ...inputStyle, ...(callUrlOk ? {} : { borderColor: "var(--danger, #c0392b)" }) }} placeholder="https://… (sinon : appel vidéo du Carnet)" /></Field>
         <Field label="Notes (optionnel)"><textarea value={notes} onChange={ev => setNotes(ev.target.value)} rows={2} maxLength={1000} style={{ ...inputStyle, resize: "vertical" }} placeholder="Ordre du jour, documents à lire…" /></Field>
         <SlotFinder ids={ids} accounts={accounts} tasks={tasks} durationMin={valid ? Math.round((e - s) / 60000) : 60} ignoreMeetingId={initial && initial.id} onPick={(x) => { setDay(x.day); setFrom(x.from); setTo(x.to); }} />
@@ -1690,7 +1698,7 @@ function MeetingsView({ me, session, isAdmin, myPerms = {}, accounts, meetings, 
         <button type="button" onClick={() => setShowPast(v => !v)} style={{ ...chipBtn, marginTop: 20 }}>{showPast ? "Masquer" : "Voir"} les réunions passées ({past.length})</button>
         {showPast && <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>{past.map(m => <MeetingCard key={m.id} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={cancel} notify={notify} session={session} canMakeTasks={isAdmin || !!myPerms.createTasks} files={meetingFiles.filter(f => f.meeting_id === m.id)} onFilesChanged={onFilesChanged} />)}</div>}
       </>)}
-      {form && <MeetingForm initial={form === "new" ? null : form} me={me} accounts={accounts} attendees={attendees} leaves={leaves} tasks={tasks} session={session} notify={notify} onCancel={() => setForm(null)} onSaved={() => setForm(null)} />}
+      {form && <MeetingForm fileCount={form === "new" ? 0 : meetingFiles.filter(a => a.meeting_id === form.id).length} initial={form === "new" ? null : form} me={me} accounts={accounts} attendees={attendees} leaves={leaves} tasks={tasks} session={session} notify={notify} onCancel={() => setForm(null)} onSaved={() => setForm(null)} />}
     </div>
   );
 }
@@ -2483,6 +2491,78 @@ function MyStats({ me, tasks, projects }) {
   );
 }
 
+/* ---------------- Patch notes : une entrée par jour (la plus récente en premier) ----------------
+   `items` = ce que voient tous les membres (accueil) ; `tech` = détails réservés à l'administrateur du site. */
+const PATCH_NOTES = [
+  { date: "2026-10-26",
+    items: [
+      "Réunions : tu peux ajouter ton propre lien d'appel (Google Meet, Zoom, Teams…). Il est utilisé dans l'appli, les e-mails et les rappels.",
+      "Tâches : un bouton 🔗 copie le lien direct vers une tâche ; ouvrir ce lien affiche la tâche.",
+      "Profil : export de tes tâches en CSV (Excel) et de ton agenda en .ics (Google Agenda, Outlook, Apple).",
+      "Un même compte peut rejoindre plusieurs serveurs (menu « Mes serveurs »).",
+      "Nouveau : cette page de nouveautés.",
+      "Pièces jointes : tu peux maintenant joindre des fichiers et des photos dans le salon et les messages privés (📎), dès la création d'une tâche ou d'une réunion, et sur une tâche même si tu ne peux pas la modifier (5 Mo max par fichier)."],
+    tech: [
+      "migration-14-pj-messages-taches.sql : table message_attachments (RLS : lecture selon les règles des messages, ajout seulement sur ses propres messages) ; politique d'ajout des pièces jointes de tâche élargie à tout membre non invité qui voit la tâche. Les fichiers partagent le seau task-files (chemin serveur/messages/…).",
+      "migration-13-lien-appel.sql : colonne meetings.call_url (https uniquement, 300 caractères max).",
+      "migration-12-comptes-multi-serveurs.sql : table account_links ; changement de serveur via lien magique + verifyOtp (à tester une fois sur le vrai Supabase).",
+      "api/_meeting.js : meetingLink() utilisé par notify-meeting et cron-reminders.",
+      "Toujours 12 fonctions serverless (limite Vercel Hobby) : ne pas ajouter de fichier dans api/ sans en fusionner un autre."] },
+  { date: "2026-10-25",
+    items: [
+      "Mobile : barre du bas fixe et plus compacte, menu « Plus », administration redessinée.",
+      "Projets avec accès privé, pièces jointes dans les réunions.",
+      "Statistiques personnelles dans le Profil."],
+    tech: [
+      "migration-11-projets-pj-reunions.sql : projects, project_members, meeting_attachments, fonctions can_see_project / can_manage_project, trigger tasks_project_guard.",
+      "Fusion de create-account dans manage-account (limite des 12 fonctions)."] },
+];
+const frDate = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+function PatchNotesCard({ me }) {
+  const [all, setAll] = useState(false);
+  const seenKey = "carnet-patch-seen-" + me.id;
+  const latest = PATCH_NOTES[0].date;
+  const [seen, setSeen] = useState(() => { try { return localStorage.getItem(seenKey) || ""; } catch (_) { return ""; } });
+  const isNew = seen < latest;
+  const mark = () => { try { localStorage.setItem(seenKey, latest); } catch (_) {} setSeen(latest); };
+  const list = all ? PATCH_NOTES : PATCH_NOTES.slice(0, 1);
+  return (
+    <div data-patch-card style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "14px 18px", marginBottom: 22 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span style={{ fontWeight: 600, fontSize: 14 }}>🆕 Nouveautés</span>
+        {isNew && <span data-patch-new style={{ background: "#5B9EF5", color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px" }}>Nouveau</span>}
+        <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          {isNew && <button type="button" data-patch-seen onClick={mark} style={{ ...chipBtn, padding: "4px 10px", fontSize: 12 }}>Marquer comme lu</button>}
+          {PATCH_NOTES.length > 1 && <button type="button" data-patch-toggle onClick={() => setAll(v => !v)} style={{ ...chipBtn, padding: "4px 10px", fontSize: 12 }}>{all ? "Réduire" : "Voir tout"}</button>}
+        </span>
+      </div>
+      {list.map(n => (
+        <div key={n.date} style={{ marginTop: 6 }}>
+          <div style={{ fontSize: 12, color: "var(--text-dimmer)", textTransform: "capitalize", marginBottom: 4 }}>{frDate(n.date)}</div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+/** Onglet réservé à l'administrateur du site : historique complet, avec les détails techniques. */
+function AdminPatchNotes() {
+  return (
+    <div data-admin-patchnotes>
+      <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "0 0 16px" }}>Historique complet, jour par jour. Les membres ne voient que les « Nouveautés » de l'accueil ; les détails techniques ci-dessous ne sont visibles que par toi.</p>
+      {PATCH_NOTES.map(n => (
+        <div key={n.date} style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 14 }}>
+          <div style={{ fontFamily: "Fraunces, serif", fontSize: 17, fontWeight: 600, textTransform: "capitalize", marginBottom: 8 }}>{frDate(n.date)}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dimmer)", marginBottom: 4 }}>Vu par les membres</div>
+          <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin)", marginBottom: 4 }}>Détails techniques (admin)</div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.tech.map((x, i) => <li key={i}>{x}</li>)}</ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], attendees = [], events = [], onOpen, goTo, projects = [] }) {
   const mine = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id));
   const late = mine.filter(t => t.due && dueInfo(t).late);
@@ -2518,6 +2598,7 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
         <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", textTransform: "capitalize" }}>{dateLabel}</p>
       </div>
       <MyDay me={me} accounts={accounts} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} events={events} onOpen={onOpen} goTo={goTo} />
+      <PatchNotesCard me={me} />
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 26 }}>
         <StatCard value={mine.length} label="À faire pour moi" hex="#5B9EF5" onClick={() => goTo("tasks")} />
         <StatCard value={late.length} label="En retard" hex="#FF6B5E" onClick={() => goTo("tasks")} />
@@ -2879,7 +2960,8 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
     return error ? error.message : null;
   };
   const saveTask = async (draft) => {
-    const { saveAsTemplate, ...data } = draft;
+    const { saveAsTemplate, __files = [], ...data } = draft;
+    let taskId = data.id || null;
     data.assignee = (data.assignees || [])[0] || null;
     let message = "";
     if (data.id) {
@@ -2892,8 +2974,13 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
     } else {
       const { data: created, error } = await supabase.from('tasks').insert({ ...data, done: false, created_by: me.id, server_id: me.server_id }).select().single();
       if (error) { notify(error.message, "err"); return; }
+      taskId = created ? created.id : null;
       const sent = created ? await tellAssignees(created.id, (data.assignees || []).filter(x => x !== me.id)) : 0;
       message = sent ? "Tâche créée · email envoyé." : "Tâche créée.";
+    }
+    if (__files.length && taskId) {
+      const n = await uploadAttachments(__files, { me, folder: taskId, table: "task_attachments", extra: { task_id: taskId }, existing: attachments.filter(a => a.task_id === taskId).length, noun: "tâche", notify });
+      if (n < __files.length) message += " (certains fichiers n'ont pas pu être joints)";
     }
     if (saveAsTemplate) {
       const err = await saveTemplate(data, saveAsTemplate);
@@ -3299,6 +3386,7 @@ function TaskCard({ task, project, accounts, me, isAdmin, myPerms, commentCount,
   );
 }
 function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], onDeleteTemplate, onCancel, onSave, projects = [], projectMembers = [], defaultProject = "" }) {
+  const [pendingFiles, setPendingFiles] = useState([]);
   const [title, setTitle] = useState(initial?.title || "");
   const [notes, setNotes] = useState(initial?.notes || "");
   const [label, setLabel] = useState(initial?.label || LABELS[0].id);
@@ -3341,6 +3429,7 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
       assignees, assignee: assignees[0] || null, project_id: projectId || null,
       tags: parseTags(tagsText), subtasks: pendingSub, recurrence: recurrence || null,
       saveAsTemplate: asTemplate ? (tplName.trim() || title.trim()) : null,
+      __files: pendingFiles,
     });
   };
   const selectedTpl = (templates || []).find(x => x.id === tplId);
@@ -3424,6 +3513,10 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}><I.Palette size={13} /> Étiquette de couleur</div>
           <div style={{ display: "flex", gap: 9 }}>{LABELS.map(l => (<button key={l.id} type="button" title={l.name} onClick={() => setLabel(l.id)} style={{ width: 28, height: 28, borderRadius: "50%", background: l.hex, cursor: "pointer", border: label === l.id ? "2.5px solid var(--text)" : "2.5px solid transparent" }} />))}</div>
         </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Pièces jointes</div>
+          <PendingFiles files={pendingFiles} setFiles={setPendingFiles} />
+        </div>
         <div style={{ marginBottom: 22, background: "var(--bg)", borderRadius: 10, padding: "10px 12px" }}>
           <label style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13, cursor: "pointer" }}><input type="checkbox" checked={asTemplate} onChange={e => setAsTemplate(e.target.checked)} style={{ width: 15, height: 15, accentColor: "var(--accent)" }} /> Enregistrer aussi comme modèle réutilisable</label>
           {asTemplate && <input value={tplName} onChange={e => setTplName(e.target.value)} placeholder={"Nom du modèle (par défaut : " + (title.trim() || "titre") + ")"} style={{ ...inputStyle, marginTop: 10 }} />}
@@ -3437,6 +3530,64 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
 /* ============================================================
    Détail d'une tâche : sous-tâches + pièces jointes + commentaires
    ============================================================ */
+/** Envoie des fichiers dans le stockage privé puis enregistre une ligne par fichier. Retourne le nombre envoyé. */
+async function uploadAttachments(files, { me, folder, table, extra, existing = 0, max = MAX_FILES_PER_TASK, noun = "tâche", notify }) {
+  let count = existing, done = 0;
+  for (const f0 of files) {
+    const f = await shrinkImage(f0);
+    if (count >= max) { notify(`Maximum ${max} fichiers par ${noun}.`, "err"); break; }
+    if (f.size > MAX_FILE_BYTES) { notify(`« ${f.name} » dépasse 5 Mo.`, "err"); continue; }
+    const safe = f.name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80) || "fichier";
+    const path = `${me.server_id}/${folder}/${uid()}-${safe}`;
+    const up = await supabase.storage.from('task-files').upload(path, f, { contentType: f.type || undefined, upsert: false });
+    if (up.error) { notify(up.error.message, "err"); continue; }
+    const { error } = await supabase.from(table).insert({ ...extra, server_id: me.server_id, uploader_id: me.id, path, filename: f.name, size: f.size, mime: f.type || null });
+    if (error) { await supabase.storage.from('task-files').remove([path]); notify(error.message, "err"); continue; }
+    count++; done++;
+  }
+  return done;
+}
+/** Sélecteur de fichiers « en attente » (formulaires et messagerie) : les fichiers partent quand on enregistre / envoie. */
+function PendingFiles({ files, setFiles, max = MAX_FILES_PER_TASK, compact, disabled }) {
+  const fileRef = useRef(null), camRef = useRef(null);
+  const add = (list) => { const next = [...files, ...Array.from(list || [])].slice(0, max); setFiles(next); if (fileRef.current) fileRef.current.value = ""; if (camRef.current) camRef.current.value = ""; };
+  return (
+    <div data-pending-files>
+      <input ref={fileRef} data-pending-input type="file" multiple onChange={e => add(e.target.files)} style={{ display: "none" }} />
+      <input ref={camRef} type="file" accept="image/*" capture="environment" aria-label="Prendre une photo" onChange={e => add(e.target.files)} style={{ display: "none" }} />
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        <button type="button" data-pending-add onClick={() => fileRef.current && fileRef.current.click()} disabled={disabled} title="Joindre un fichier" aria-label="Joindre un fichier" style={compact ? { ...iconBtn, padding: "0 12px" } : { ...chipBtn, fontSize: 12.5 }}>{compact ? "📎" : "📎 Joindre un fichier"}</button>
+        <button type="button" onClick={() => camRef.current && camRef.current.click()} disabled={disabled} title="Prendre une photo" aria-label="Prendre une photo" style={compact ? { ...iconBtn, padding: "0 12px" } : { ...chipBtn, fontSize: 12.5 }}>{compact ? "📷" : "📷 Photo"}</button>
+        {!compact && <span style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>5 Mo max chacun</span>}
+      </div>
+      {files.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+          {files.map((f, i) => (
+            <span key={i} data-pending-chip style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 16, padding: "3px 4px 3px 10px", fontSize: 12.5, maxWidth: 220 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+              <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} aria-label={"Retirer " + f.name} style={{ ...iconBtn, border: "none", padding: 3 }}><I.X size={12} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+/** Fichiers attachés à un message (salon ou privé). */
+function MessageFiles({ items, me, isAdmin, notify }) {
+  if (!items.length) return null;
+  const remove = async (att) => {
+    const { error } = await supabase.from('message_attachments').delete().eq('id', att.id);
+    if (error) { notify(error.message, "err"); return; }
+    await supabase.storage.from('task-files').remove([att.path]);
+  };
+  return (
+    <div data-message-files style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 6, maxWidth: 340, color: "var(--text)" }}>
+      {items.map(a => <AttachmentRow key={a.id} att={a} notify={notify} canDelete={a.uploader_id === me.id || isAdmin} onDelete={() => remove(a)} />)}
+    </div>
+  );
+}
+
 function AttachmentRow({ att, canDelete, onDelete, notify }) {
   const [thumb, setThumb] = useState(null);
   const isImage = (att.mime || "").startsWith("image/");
@@ -3475,6 +3626,7 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
   const people = assigneeIds(task).map(id => accounts.find(a => a.id === id)).filter(Boolean);
   const own = task.created_by === me.id;
   const canEdit = isAdmin || myPerms.editAnyTask || (own && myPerms.editOwnTask);
+  const canAttach = me.role !== "guest";
   const canComment = isAdmin || myPerms.sendMessages;
   const subtasks = task.subtasks || [];
   const sorted = [...comments].sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -3582,7 +3734,7 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <div style={{ fontSize: 12.5, color: "var(--text-dim)", fontWeight: 600 }}>Pièces jointes · {attachments.length}</div>
-            {canEdit && (<>
+            {canAttach && (<>
               <input ref={fileRef} type="file" multiple onChange={e => upload(e.target.files)} style={{ display: "none" }} />
               <input ref={camRef} type="file" accept="image/*" capture="environment" aria-label="Prendre une photo" onChange={e => upload(e.target.files)} style={{ display: "none" }} />
               <span style={{ display: "inline-flex", gap: 6 }}>
@@ -3591,7 +3743,7 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
               </span>
             </>)}
           </div>
-          {attachments.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>{canEdit ? "Aucun fichier. Photos, PDF, documents… (5 Mo max chacun)" : "Aucun fichier."}</div>}
+          {attachments.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>{canAttach ? "Aucun fichier. Photos, PDF, documents… (5 Mo max chacun)" : "Aucun fichier."}</div>}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {attachments.map(a => <AttachmentRow key={a.id} att={a} notify={notify} canDelete={a.uploader_id === me.id || isAdmin} onDelete={() => removeAttachment(a)} />)}
           </div>
@@ -3825,13 +3977,24 @@ function PollCard({ kind, msg, me, isAdmin, accounts, votes, onChanged, notify }
 /* ============================================================
    Messages : salon du serveur + conversations privées
    ============================================================ */
-function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, channelMsgs, pollVotes, reloadVotes, notify, reactions = [] }) {
+/** Bouton 📎 de la messagerie : ouvre le sélecteur de fichiers. */
+function MsgAttachButton({ onPick }) {
+  const ref = useRef(null);
+  return (<>
+    <input ref={ref} data-msg-input type="file" multiple onChange={e => { onPick(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
+    <button type="button" data-msg-attach onClick={() => ref.current && ref.current.click()} title="Joindre un fichier ou une photo (5 Mo max)" aria-label="Joindre un fichier" style={{ ...iconBtn, padding: "0 12px" }}>📎</button>
+  </>);
+}
+function MessagesView({ messageFiles = [], me, session, isAdmin, myPerms, accounts, messages, channelMsgs, pollVotes, reloadVotes, notify, reactions = [] }) {
   const contacts = useMemo(() => accounts.filter(a => a.id !== me.id), [accounts, me.id]);
   const [activeId, setActiveId] = useState("channel");
   const [draft, setDraft] = useState("");
   const [open, setOpen] = useState(false);          // mobile : conversation ouverte en plein écran
   const [showPoll, setShowPoll] = useState(false);
+  const [pending, setPending] = useState([]);
+  const [sending, setSending] = useState(false);
   const scrollRef = useRef(null);
+  const filesOf = (kind, id) => messageFiles.filter(a => (kind === "channel" ? a.channel_message_id : a.message_id) === id);
   const isChannel = activeId === "channel";
   useEffect(() => { document.body.classList.toggle("chat-open", open); return () => document.body.classList.remove("chat-open"); }, [open]);
   const pick = (id) => { setActiveId(id); setOpen(true); };
@@ -3844,18 +4007,28 @@ function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, chann
   const lastChannel = channel[channel.length - 1];
 
   const send = async () => {
-    const text = draft.trim();
-    if (!text || !canSend) return;
-    setDraft("");
+    const typed = draft.trim();
+    if ((!typed && !pending.length) || !canSend || sending) return;
+    const files = pending;
+    const text = typed || (files.length === 1 ? "📎 " + files[0].name : `📎 ${files.length} fichiers`).slice(0, 200);
+    setDraft(""); setPending([]); setSending(true);
+    const sendFiles = async (id) => {
+      if (!files.length) return;
+      const n = await uploadAttachments(files, { me, folder: "messages/" + id, table: "message_attachments", extra: isChannel ? { channel_message_id: id } : { message_id: id }, max: 10, noun: "message", notify });
+      if (n < files.length) notify(n ? "Message envoyé, mais certains fichiers n'ont pas pu être joints." : "Message envoyé, mais les fichiers n'ont pas pu être joints.", "err");
+    };
     if (isChannel) {
       const { data, error } = await supabase.from('channel_messages').insert({ server_id: me.server_id, from_id: me.id, text: text.slice(0, 2000) }).select().single();
-      if (error) { notify(error.message, "err"); setDraft(text); return; }
+      if (error) { notify(error.message, "err"); setDraft(typed); setPending(files); setSending(false); return; }
+      if (data) await sendFiles(data.id);
       if (data && text.includes("@")) notifyMention('channel', data.id, session);
     } else {
       const { data, error } = await supabase.from('messages').insert({ from_id: me.id, to_id: activeId, text, server_id: me.server_id }).select().single();
-      if (error) { notify(error.message, "err"); setDraft(text); return; }
+      if (error) { notify(error.message, "err"); setDraft(typed); setPending(files); setSending(false); return; }
+      if (data) await sendFiles(data.id);
       if (data) callApi('/api/notify-dm', { messageId: data.id }, session).catch(() => {});
     }
+    setSending(false);
   };
   const startCall = async () => {
     if (!canSend || (!isChannel && !activeUser)) return;
@@ -3878,7 +4051,12 @@ function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, chann
     return true;
   };
   const votesFor = (kind, id) => (pollVotes || []).filter(v => v.msg_kind === kind && v.msg_id === id);
-  const delChannel = async (id) => { const { error } = await supabase.from('channel_messages').delete().eq('id', id); if (error) notify(error.message, "err"); };
+  const delChannel = async (id) => {
+    const paths = filesOf('channel', id).map(a => a.path);
+    const { error } = await supabase.from('channel_messages').delete().eq('id', id);
+    if (error) { notify(error.message, "err"); return; }
+    if (paths.length) await supabase.storage.from('task-files').remove(paths);
+  };
   const activeUser = accounts.find(a => a.id === activeId);
   const fmt = (ts) => new Date(ts).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const listBtn = (selected) => ({ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "12px 14px", background: selected ? "var(--panel-2)" : "transparent", border: "none", borderBottom: "1px solid #21252d", cursor: "pointer", textAlign: "left" });
@@ -3920,6 +4098,7 @@ function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, chann
                       {m.poll
                         ? <PollCard kind="channel" msg={m} me={me} isAdmin={isAdmin} accounts={accounts} votes={votesFor("channel", m.id)} onChanged={reloadVotes} notify={notify} />
                         : <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}><RichText text={m.text} accounts={accounts} /></div>}
+                      <MessageFiles items={filesOf("channel", m.id)} me={me} isAdmin={isAdmin} notify={notify} />
                       <ReactionBar kind="channel" targetId={m.id} reactions={reactions} me={me} accounts={accounts} notify={notify} />
                     </div>
                     {(m.from_id === me.id || isAdmin) && <button type="button" onClick={() => delChannel(m.id)} title="Supprimer" style={{ ...iconBtn, padding: 4, alignSelf: "flex-start", border: "none", color: "var(--text-dimmer)" }}><I.Trash size={13} /></button>}
@@ -3928,13 +4107,15 @@ function MessagesView({ me, session, isAdmin, myPerms, accounts, messages, chann
               })}
             </>) : activeUser ? (<>
               {thread.length === 0 && <EmptyState text="Aucun message. Dites bonjour !" />}
-              {thread.map(m => m.poll ? (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", width: "min(400px, 94%)" }}><div style={{ fontSize: 10.5, color: "var(--text-dimmer)", margin: "0 0 3px 4px", textAlign: m.from_id === me.id ? "right" : "left" }}>{fmt(m.ts)}</div><PollCard kind="dm" msg={m} me={me} isAdmin={isAdmin} accounts={accounts} votes={votesFor("dm", m.id)} onChanged={reloadVotes} notify={notify} /></div>) : (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", maxWidth: "70%", background: m.from_id === me.id ? "linear-gradient(135deg,var(--accent),var(--accent-2))" : "var(--panel-2)", color: m.from_id === me.id ? "#fff" : "var(--text)", padding: "9px 13px", borderRadius: 12, borderBottomRightRadius: m.from_id === me.id ? 3 : 12, borderBottomLeftRadius: m.from_id === me.id ? 12 : 3, fontSize: 13.5, wordBreak: "break-word" }}><RichText text={m.text} accounts={accounts} /><div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>{fmt(m.ts)}</div></div>))}
+              {thread.map(m => m.poll ? (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", width: "min(400px, 94%)" }}><div style={{ fontSize: 10.5, color: "var(--text-dimmer)", margin: "0 0 3px 4px", textAlign: m.from_id === me.id ? "right" : "left" }}>{fmt(m.ts)}</div><PollCard kind="dm" msg={m} me={me} isAdmin={isAdmin} accounts={accounts} votes={votesFor("dm", m.id)} onChanged={reloadVotes} notify={notify} /></div>) : (<div key={m.id} style={{ alignSelf: m.from_id === me.id ? "flex-end" : "flex-start", maxWidth: "70%", background: m.from_id === me.id ? "linear-gradient(135deg,var(--accent),var(--accent-2))" : "var(--panel-2)", color: m.from_id === me.id ? "#fff" : "var(--text)", padding: "9px 13px", borderRadius: 12, borderBottomRightRadius: m.from_id === me.id ? 3 : 12, borderBottomLeftRadius: m.from_id === me.id ? 12 : 3, fontSize: 13.5, wordBreak: "break-word" }}><RichText text={m.text} accounts={accounts} /><MessageFiles items={filesOf("dm", m.id)} me={me} isAdmin={isAdmin} notify={notify} /><div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>{fmt(m.ts)}</div></div>))}
             </>) : <EmptyState text="Choisis une conversation." />}
           </div>
-          <div style={{ display: "flex", gap: 10, padding: 14, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+          {pending.length > 0 && <div data-msg-pending style={{ padding: "8px 14px 0", borderTop: "1px solid var(--border)", flexShrink: 0 }}><PendingFiles files={pending} setFiles={setPending} max={10} compact /></div>}
+          <div style={{ display: "flex", gap: 10, padding: 14, borderTop: pending.length ? "none" : "1px solid var(--border)", flexShrink: 0 }}>
             {isChannel
               ? <MentionInput value={draft} onChange={setDraft} onSubmit={send} disabled={!canSend} people={contacts} placeholder={canSend ? "Écrire dans le salon… (@ pour mentionner)" : "Ton rôle ne permet pas d'envoyer de messages"} style={{ ...inputStyle, background: "var(--bg)", opacity: canSend ? 1 : 0.5 }} />
               : <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") send(); }} disabled={!canSend || !activeUser} placeholder={canSend ? "Écrire un message…" : "Ton rôle ne permet pas d'envoyer de messages"} style={{ ...inputStyle, flex: 1, background: "var(--bg)", opacity: canSend ? 1 : 0.5 }} />}
+            {canSend && (isChannel || activeUser) && <MsgAttachButton onPick={(list) => setPending(p => [...p, ...list].slice(0, 10))} />}
             {canSend && (isChannel || activeUser) && <button type="button" onClick={startCall} title="Lancer un appel vidéo" aria-label="Lancer un appel vidéo" style={{ ...iconBtn, padding: "0 12px" }}><I.Video size={16} /></button>}
             {canSend && (isChannel || activeUser) && <button type="button" onClick={() => setShowPoll(true)} title="Créer un sondage" aria-label="Créer un sondage" style={{ ...iconBtn, padding: "0 12px" }}><I.Poll size={16} /></button>}
             <button type="button" onClick={send} disabled={!canSend} style={{ background: "linear-gradient(135deg,var(--accent),var(--accent-2))", border: "none", color: "#fff", borderRadius: 9, padding: "0 16px", cursor: canSend ? "pointer" : "not-allowed", opacity: canSend ? 1 : 0.5, display: "grid", placeItems: "center" }}><I.Send size={16} /></button>
@@ -4569,7 +4750,7 @@ function AdminView({ me, session, accounts, tasks, leaves = [], meetings = [], a
   };
   useEffect(() => { supabase.from('servers').select('*').eq('id', me.server_id).single().then(({ data }) => setServer(data)); }, [me.server_id]);
   useEffect(() => { supabase.rpc('is_platform_admin').then(({ data, error }) => setSiteAdmin(!error && data === true)); loadMail(); }, []);
-  const cur = sub === "site" && !siteAdmin ? "overview" : sub;
+  const cur = (sub === "site" || sub === "patch") && !siteAdmin ? "overview" : sub;
   const tabs = [
     { id: "overview", label: "Aperçu" },
     { id: "members", label: "Membres", badge: pending.length },
@@ -4579,7 +4760,7 @@ function AdminView({ me, session, accounts, tasks, leaves = [], meetings = [], a
     { id: "settings", label: "Réglages" },
     { id: "status", label: "Statut" },
     { id: "activity", label: "Activité" },
-    ...(siteAdmin ? [{ id: "site", label: "Site" }] : []),
+    ...(siteAdmin ? [{ id: "patch", label: "Patch notes" }, { id: "site", label: "Site" }] : []),
   ];
 
   return (
@@ -4606,6 +4787,7 @@ function AdminView({ me, session, accounts, tasks, leaves = [], meetings = [], a
       </>)}
       {cur === "status" && <AdminStatus session={session} notify={notify} go={go} />}
       {cur === "activity" && <ActivityLog accounts={accounts} bare />}
+      {cur === "patch" && <AdminPatchNotes />}
       {cur === "site" && <AdminSite notify={notify} />}
     </div>
   );
