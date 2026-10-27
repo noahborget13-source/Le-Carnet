@@ -17,5 +17,74 @@
       "Projets avec accès privé, pièces jointes dans les réunions.",
       "Statistiques personnelles dans le Profil."
     ]
+  },
+  {
+    "date": "2026-10-24",
+    "items": [
+      "Comptes-rendus dans les réunions (modifiables par l'organisateur et l'administrateur).",
+      "Anniversaires (facultatifs, jour et mois seulement) et événements d'équipe posés par l'administrateur, visibles dans le calendrier.",
+      "Réactions (👍 ✅ …) sur les commentaires de tâches et les messages du salon.",
+      "Historique des modifications d'une tâche (visible par l'administrateur).",
+      "Résumé du lundi et e-mails pour les messages privés (réglables dans le Profil).",
+      "Page « Statut » dans l'administration : suivi des e-mails envoyés."
+    ]
+  },
+  {
+    "date": "2026-10-22",
+    "items": [
+      "Réunions avec appel vidéo intégré, invités, réponses (accepter / refuser) et rappels par e-mail.",
+      "Congés : demandes des membres, validation par l'administrateur.",
+      "Horaires de disponibilité par personne et « Occupé quand ? » : on voit les créneaux libres sans jamais voir le titre des tâches des autres.",
+      "Connexion d'un agenda Google / iCal pour tenir compte de ses rendez-vous extérieurs."
+    ]
+  },
+  {
+    "date": "2026-10-21",
+    "items": [
+      "L'application s'installe sur téléphone et ordinateur (icône, plein écran).",
+      "Maintenance programmée : début et fin automatiques, avec une page dédiée.",
+      "Annonces programmées affichées en bandeau."
+    ]
+  },
+  {
+    "date": "2026-10-20",
+    "items": [
+      "Rappels par e-mail des échéances et envoi automatique chaque matin.",
+      "E-mail lorsqu'une tâche t'est assignée.",
+      "Outils d'administration : état de l'envoi des e-mails et réinitialisation de mot de passe."
+    ]
+  },
+  {
+    "date": "2026-10-19",
+    "items": [
+      "Heure d'échéance sur les tâches (ou « toute la journée »).",
+      "Préférences d'e-mails par personne.",
+      "Sondages dans le salon et les messages privés."
+    ]
+  },
+  {
+    "date": "2026-10-17",
+    "items": [
+      "Salon de discussion commun à tout le serveur.",
+      "Plusieurs personnes assignées par tâche, colonne « En cours » (vue Kanban).",
+      "Pièces jointes sur les tâches, modèles de tâches, corbeille et journal d'activité.",
+      "Réglages du serveur : nom, code d'invitation, transfert de l'administration."
+    ]
+  },
+  {
+    "date": "2026-10-14",
+    "items": [
+      "Plusieurs serveurs : chaque équipe, famille ou groupe d'amis a son espace séparé.",
+      "Invitations par e-mail et par code.",
+      "Tâches enrichies : étiquettes, sous-tâches, tâches récurrentes et commentaires."
+    ]
+  },
+  {
+    "date": "2026-10-11",
+    "items": [
+      "Ouverture de Le Carnet : tâches avec échéance et priorité, calendrier et messagerie privée.",
+      "Rôles (administrateur, modérateur, membre, invité) avec droits réglables un par un.",
+      "Inscription avec approbation de l'administrateur."
+    ]
   }
 ]

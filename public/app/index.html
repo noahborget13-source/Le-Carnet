@@ -2501,6 +2501,13 @@ const PATCH_TECH = {
     "migration-12-comptes-multi-serveurs.sql : table account_links ; changement de serveur via lien magique + verifyOtp (à tester une fois sur le vrai Supabase).",
     "api/_meeting.js : meetingLink() utilisé par notify-meeting et cron-reminders.",
     "Toujours 12 fonctions serverless (limite Vercel Hobby) : ne pas ajouter de fichier dans api/ sans en fusionner un autre."],
+  "2026-10-24": ["migration-09-notes-evenements.sql (comptes-rendus, anniversaires, événements d'équipe) et migration-10-reactions-historique-statut.sql (réactions, historique, résumé du lundi, journal des e-mails)."],
+  "2026-10-22": ["migration-08-conges-reunions.sql : horaires, congés, réunions, invités, flux d'agenda (lien secret côté serveur), fonction de créneaux occupés."],
+  "2026-10-21": ["migration-07-maintenance-programmee.sql : réparation de system_alerts.id, maintenance_active ; PWA : manifest.webmanifest + sw.js."],
+  "2026-10-20": ["api/cron-reminders.js + api/admin-tools.js ; planification pg_cron (planifier-rappels.sql) avec CRON_SECRET."],
+  "2026-10-19": ["migration-06-emails-sondages.sql : heure d'échéance, préférences e-mail, suivi des envois, sondages, administrateur du site."],
+  "2026-10-17": ["migration-05-plus.sql : salon, assignés multiples, pièces jointes (seau task-files), modèles, corbeille, journal d'activité."],
+  "2026-10-14": ["migration-02-servers.sql, migration-03-invites.sql, migration-04-tasks-plus.sql."],
   "2026-10-25": [
     "migration-11-projets-pj-reunions.sql : projects, project_members, meeting_attachments, fonctions can_see_project / can_manage_project, trigger tasks_project_guard.",
     "Fusion de create-account dans manage-account (limite des 12 fonctions)."],
