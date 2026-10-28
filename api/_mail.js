@@ -35,10 +35,12 @@ export function button(link, label) {
   return `<p style="margin:22px 0"><a href="${esc(link)}" style="background:#5B9EF5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block">${esc(label)}</a></p>`;
 }
 
-// Nom affiché de l'expéditeur : « Léa (via Le Carnet) ». L'adresse reste celle du compte Gmail du site (Gmail l'impose),
-// mais le nom indique de qui vient le message, et « Répondre » écrit à la bonne personne (replyTo).
-export const via = (name) => (name ? `${String(name).replace(/[\r\n"<>]/g, ' ').trim().slice(0, 50)} (via Le Carnet)` : 'Le Carnet');
-const fromLabel = (name) => String(name || process.env.MAIL_FROM_NAME || 'Le Carnet').replace(/[\r\n"<>]/g, ' ').trim().slice(0, 80) || 'Le Carnet';
+// Expéditeur : tous les emails partent de « Le Carnet » (adresse du compte Gmail du site), jamais au nom d'un membre.
+// Le nom de la personne concernée figure dans le texte du message ; « Répondre » écrit à cette personne (replyTo).
+// `via()` est conservée pour les appelants existants : elle renvoie toujours « Le Carnet ».
+const SENDER_NAME = () => String(process.env.MAIL_FROM_NAME || 'Le Carnet').replace(/[\r\n"<>]/g, ' ').trim().slice(0, 80) || 'Le Carnet';
+export const via = () => SENDER_NAME();
+const fromLabel = () => SENDER_NAME();
 
 // Journal des envois (page « Statut » de l'administration) : résultat + sujet, jamais l'adresse du destinataire.
 let logClient;
@@ -57,7 +59,7 @@ export async function sendMail({ to, subject, text, html, replyTo, icalEvent, fr
   await logMail(true, subject);
 }
 async function sendRaw({ to, subject, text, html, replyTo, icalEvent, fromName }) {
-  await getTransporter().sendMail({ from: `"${fromLabel(fromName)}" <${process.env.GMAIL_USER}>`, to, subject, text, html, ...(replyTo ? { replyTo } : {}), ...(icalEvent ? { icalEvent } : {}) });
+  await getTransporter().sendMail({ from: `"${fromLabel()}" <${process.env.GMAIL_USER}>`, to, subject, text, html, ...(replyTo ? { replyTo } : {}), ...(icalEvent ? { icalEvent } : {}) });
 }
 
 // Extrait les @identifiants d'un texte (sans le @, en minuscules, sans doublon).
