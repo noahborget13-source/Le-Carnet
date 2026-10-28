@@ -43,7 +43,7 @@ export default async function handler(req, res) {
             text: `${caller.display_name} demande un congé ${period(leave)}.${leave.reason ? ' Motif : ' + leave.reason : ''}${overlap.length ? `\nDéjà absent(s) sur cette période : ${overlap.join(', ')}.` : ''}\n${site}/app/`,
             html: layout(`<p><strong>${esc(caller.display_name)}</strong> demande un congé :</p>
               <div style="border-left:4px solid #E8A33D;background:#fff9ee;padding:12px 14px;border-radius:6px"><div style="font-size:16px;font-weight:bold">${esc(period(leave))}</div>${leave.reason ? `<div style="font-size:13px;margin-top:6px">${esc(leave.reason)}</div>` : ''}</div>${overlapHtml}
-              <p style="font-size:13px;color:#556">Tu peux accepter ou refuser dans Le Carnet → Admin → Congés.</p>${button(`${site}/app/`, 'Ouvrir Le Carnet')}`),
+              <p style="font-size:13px;color:#556">Vous pouvez accepter ou refuser dans Le Carnet → Admin → Congés.</p>${button(`${site}/app/`, 'Ouvrir Le Carnet')}`),
           });
           sent++;
         } catch (_) { /* on continue */ }
@@ -59,13 +59,13 @@ export default async function handler(req, res) {
       const approved = leave.status === 'approved';
       const direct = approved && !leave.decided_by;       // posé directement par l'administrateur
       const color = approved ? '#2F9E6B' : '#D6453A';
-      const title = direct ? 'Un congé a été posé pour toi' : approved ? 'Ton congé est accepté' : 'Ta demande de congé est refusée';
+      const title = direct ? 'Un congé a été posé pour vous' : approved ? 'Votre congé est accepté' : 'Votre demande de congé est refusée';
       await sendMail({
         to: person.email, subject: `${approved ? '✅' : '❌'} ${title}`,
         text: `${title} : ${period(leave)}.${leave.admin_note ? ' Message : ' + leave.admin_note : ''}`,
         html: layout(`<p>Bonjour ${esc(person.display_name)},</p><p>${esc(title)} :</p>
           <div style="border-left:4px solid ${color};padding:12px 14px;border-radius:6px;background:#f6f8fa"><div style="font-size:16px;font-weight:bold">${esc(period(leave))}</div>${leave.admin_note ? `<div style="font-size:13px;margin-top:6px">${esc(leave.admin_note)}</div>` : ''}</div>
-          ${approved ? '<p style="font-size:13px;color:#556">Pendant ce congé, tu ne recevras pas de rappels par email et les autres verront que tu es absent(e).</p>' : ''}${button(`${site}/app/`, 'Ouvrir Le Carnet')}`),
+          ${approved ? '<p style="font-size:13px;color:#556">Pendant ce congé, vous ne recevrez pas de rappels par email et les autres verront que vous êtes absent(e).</p>' : ''}${button(`${site}/app/`, 'Ouvrir Le Carnet')}`),
       });
       return res.status(200).json({ ok: true, sent: 1 });
     }

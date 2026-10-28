@@ -1,8 +1,16 @@
 [
   {
+    "date": "2026-10-28",
+    "items": [
+      "Le site s'adresse désormais à vous (vouvoiement) partout : page d'accueil, application et e-mails.",
+      "Correction : la fenêtre de création d'une tâche ou d'une réunion se ferme dès l'enregistrement, même si l'envoi des e-mails ou des fichiers est lent.",
+      "Un double clic sur « Créer » ne crée plus la tâche deux fois."
+    ]
+  },
+  {
     "date": "2026-10-27",
     "items": [
-      "Export Word : tes tâches (ou toutes celles que tu vois) en document .docx, depuis ton Profil.",
+      "Export Word : vos tâches (ou toutes celles que vous voyez) en document .docx, depuis votre Profil.",
       "Une tâche peut être dupliquée en un clic (bouton « Dupliquer » dans son détail).",
       "Une tâche en retard ou à venir peut être reportée à demain ou d'une semaine en un clic.",
       "La page d'accueil du site affiche maintenant l'historique des nouveautés."
@@ -11,11 +19,11 @@
   {
     "date": "2026-10-26",
     "items": [
-      "Réunions : tu peux ajouter ton propre lien d'appel (Google Meet, Zoom, Teams…). Il est utilisé dans l'appli, les e-mails et les rappels.",
+      "Réunions : vous pouvez ajouter votre propre lien d'appel (Google Meet, Zoom, Teams…). Il est utilisé dans l'appli, les e-mails et les rappels.",
       "Tâches : un bouton 🔗 copie le lien direct vers une tâche ; ouvrir ce lien affiche la tâche.",
-      "Profil : export de tes tâches en CSV (Excel) et de ton agenda en .ics (Google Agenda, Outlook, Apple).",
+      "Profil : export de vos tâches en CSV (Excel) et de votre agenda en .ics (Google Agenda, Outlook, Apple).",
       "Un même compte peut rejoindre plusieurs serveurs (menu « Mes serveurs »).",
-      "Pièces jointes : tu peux joindre des fichiers et des photos dans le salon et les messages privés (📎), dès la création d'une tâche ou d'une réunion, et sur une tâche même si tu ne peux pas la modifier (5 Mo max par fichier).",
+      "Pièces jointes : vous pouvez joindre des fichiers et des photos dans le salon et les messages privés (📎), dès la création d'une tâche ou d'une réunion, et sur une tâche même si vous ne pouvez pas la modifier (5 Mo max par fichier).",
       "Nouveau : cette page de nouveautés."
     ]
   },
@@ -59,7 +67,7 @@
     "date": "2026-10-20",
     "items": [
       "Rappels par e-mail des échéances et envoi automatique chaque matin.",
-      "E-mail lorsqu'une tâche t'est assignée.",
+      "E-mail lorsqu'une tâche vous est assignée.",
       "Outils d'administration : état de l'envoi des e-mails et réinitialisation de mot de passe."
     ]
   },

@@ -1,4 +1,4 @@
-// Résumé du lundi : construit l'email « ta semaine » (fonction pure, testable).
+// Résumé du lundi : construit l'email « votre semaine » (fonction pure, testable).
 import { esc, layout, button } from './_mail.js';
 import { addDays, hhmm, TZ } from './_time.js';
 
@@ -33,12 +33,12 @@ export function buildWeeklyMail({ person, monday, tasks = [], overdue = 0, meeti
     ].sort((a, b) => a.sort.localeCompare(b.sort)),
   })).filter(x => x.items.length);
 
-  const hello = `<p>Bonjour ${esc(person.display_name)}, voici ta semaine du ${esc(dayLabel(monday, { day: 'numeric', month: 'long' }))} au ${esc(dayLabel(sunday, { day: 'numeric', month: 'long' }))}.</p>`;
+  const hello = `<p>Bonjour ${esc(person.display_name)}, voici votre semaine du ${esc(dayLabel(monday, { day: 'numeric', month: 'long' }))} au ${esc(dayLabel(sunday, { day: 'numeric', month: 'long' }))}.</p>`;
   const box = (title, color, inner) => `<p style="margin:18px 0 6px;font-weight:bold;color:${color}">${title}</p>${inner}`;
-  let html = hello, text = `Ta semaine du ${dayLabel(monday, { day: 'numeric', month: 'long' })} au ${dayLabel(sunday, { day: 'numeric', month: 'long' })}\n`;
-  if (doneLastWeek > 0) { html += `<p style="background:#e8f5ee;border-left:4px solid #2F9E6B;padding:8px 12px;border-radius:6px">✅ La semaine dernière, tu as terminé <strong>${doneLastWeek}</strong> tâche${doneLastWeek > 1 ? 's' : ''}. Bravo !</p>`; text += `\nLa semaine dernière : ${doneLastWeek} tâche${doneLastWeek > 1 ? 's' : ''} terminée${doneLastWeek > 1 ? 's' : ''}.\n`; }
-  if (overdue) { html += `<p style="background:#fdecea;border-left:4px solid #D6453A;padding:8px 12px;border-radius:6px">⏰ Tu as <strong>${overdue}</strong> tâche${overdue > 1 ? 's' : ''} en retard.</p>`; text += `\n⏰ ${overdue} tâche(s) en retard\n`; }
-  if (myLeave.length) { html += `<p style="background:#e8f5ee;border-left:4px solid #2F9E6B;padding:8px 12px;border-radius:6px">🌴 Tu es en congé : ${myLeave.map(l => esc(span(l.start_date, l.end_date))).join(' ; ')}.</p>`; text += `\n🌴 Tu es en congé : ${myLeave.map(l => span(l.start_date, l.end_date)).join(' ; ')}\n`; }
+  let html = hello, text = `Votre semaine du ${dayLabel(monday, { day: 'numeric', month: 'long' })} au ${dayLabel(sunday, { day: 'numeric', month: 'long' })}\n`;
+  if (doneLastWeek > 0) { html += `<p style="background:#e8f5ee;border-left:4px solid #2F9E6B;padding:8px 12px;border-radius:6px">✅ La semaine dernière, vous avez terminé <strong>${doneLastWeek}</strong> tâche${doneLastWeek > 1 ? 's' : ''}. Bravo !</p>`; text += `\nLa semaine dernière : ${doneLastWeek} tâche${doneLastWeek > 1 ? 's' : ''} terminée${doneLastWeek > 1 ? 's' : ''}.\n`; }
+  if (overdue) { html += `<p style="background:#fdecea;border-left:4px solid #D6453A;padding:8px 12px;border-radius:6px">⏰ Vous avez <strong>${overdue}</strong> tâche${overdue > 1 ? 's' : ''} en retard.</p>`; text += `\n⏰ ${overdue} tâche(s) en retard\n`; }
+  if (myLeave.length) { html += `<p style="background:#e8f5ee;border-left:4px solid #2F9E6B;padding:8px 12px;border-radius:6px">🌴 Vous êtes en congé : ${myLeave.map(l => esc(span(l.start_date, l.end_date))).join(' ; ')}.</p>`; text += `\n🌴 Vous êtes en congé : ${myLeave.map(l => span(l.start_date, l.end_date)).join(' ; ')}\n`; }
   if (perDay.length) {
     html += box('Au programme', '#3d7bd9', perDay.map(x => `<div style="margin:8px 0 2px;font-weight:bold;text-transform:capitalize">${esc(dayLabel(x.d))}</div><ul style="margin:0;padding-left:18px">${x.items.map(i => `<li><span style="color:#667">${esc(i.hm)}</span> ${esc(i.label)}</li>`).join('')}</ul>`).join(''));
     text += '\nAu programme\n' + perDay.map(x => `${dayLabel(x.d)}\n${x.items.map(i => `  ${i.hm} ${i.label}`).join('\n')}`).join('\n') + '\n';
@@ -46,7 +46,7 @@ export function buildWeeklyMail({ person, monday, tasks = [], overdue = 0, meeti
   if (events.length) { html += box('Dans l\'équipe', '#c76d00', `<ul style="margin:0;padding-left:18px">${events.map(e => `<li>🎉 ${esc(e.title)} <span style="color:#667">(${esc(span(e.start_date, e.end_date))})</span></li>`).join('')}</ul>`); text += '\nDans l\'équipe\n' + events.map(e => `  🎉 ${e.title} (${span(e.start_date, e.end_date)})`).join('\n') + '\n'; }
   if (birthdays.length) { html += box('Anniversaires', '#c2488a', `<ul style="margin:0;padding-left:18px">${birthdays.map(b => `<li>🎂 ${esc(b.name)} <span style="color:#667">(${esc(dayLabel(b.day, { weekday: 'long', day: 'numeric' }))})</span></li>`).join('')}</ul>`); text += '\nAnniversaires\n' + birthdays.map(b => `  🎂 ${b.name} (${dayLabel(b.day, { weekday: 'long', day: 'numeric' })})`).join('\n') + '\n'; }
   if (away.length) { html += box('Absents cette semaine', '#2F7F5A', `<ul style="margin:0;padding-left:18px">${away.map(a => `<li>🌴 ${esc(a.name)} <span style="color:#667">(${esc(span(a.start_date, a.end_date))})</span></li>`).join('')}</ul>`); text += '\nAbsents cette semaine\n' + away.map(a => `  🌴 ${a.name} (${span(a.start_date, a.end_date)})`).join('\n') + '\n'; }
-  html += button(link, 'Ouvrir Le Carnet') + `<p style="font-size:12px;color:#889">Tu peux désactiver ce résumé dans Le Carnet → Profil → Notifications.</p>`;
+  html += button(link, 'Ouvrir Le Carnet') + `<p style="font-size:12px;color:#889">Vous pouvez désactiver ce résumé dans Le Carnet → Profil → Notifications.</p>`;
   const n = tasks.length + meetings.length;
-  return { subject: `Ta semaine : ${n ? `${n} élément${n > 1 ? 's' : ''} au programme` : 'les nouvelles de l\'équipe'}`, text: text + link, html: layout(html) };
+  return { subject: `Votre semaine : ${n ? `${n} élément${n > 1 ? 's' : ''} au programme` : 'les nouvelles de l\'équipe'}`, text: text + link, html: layout(html) };
 }

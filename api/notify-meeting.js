@@ -86,15 +86,15 @@ export default async function handler(req, res) {
         await sendMail({
           to: p.email, replyTo: organizer.email, fromName: via(caller.display_name),
           subject: `${updated ? 'Réunion modifiée' : 'Invitation'} : ${meeting.title}`,
-          text: `${caller.display_name} ${updated ? 'a modifié' : "t'invite à"} la réunion « ${meeting.title} » : ${when}.\nAppel vidéo : ${link}\n${site}/app/`,
-          html: layout(`<p><strong>${esc(caller.display_name)}</strong> ${updated ? 'a modifié la réunion' : "t'invite à une réunion"} :</p>
+          text: `${caller.display_name} ${updated ? 'a modifié' : "vous invite à"} la réunion « ${meeting.title} » : ${when}.\nAppel vidéo : ${link}\n${site}/app/`,
+          html: layout(`<p><strong>${esc(caller.display_name)}</strong> ${updated ? 'a modifié la réunion' : "vous invite à une réunion"} :</p>
             <div style="border-left:4px solid #5B9EF5;background:#f4f7fd;padding:12px 14px;border-radius:6px">
               <div style="font-size:16px;font-weight:bold">${esc(meeting.title)}</div>
               <div style="font-size:13px;color:#556;margin-top:4px">${esc(when)}</div>
               ${names ? `<div style="font-size:13px;margin-top:6px">Participants : ${esc(names)}</div>` : ''}
               ${meeting.notes ? `<div style="font-size:13px;margin-top:8px">${esc(meeting.notes).replace(/\n/g, '<br>')}</div>` : ''}
             </div>${warn}${button(link, "Rejoindre l'appel vidéo")}
-            <p style="font-size:13px;color:#556">Un fichier d'agenda est joint : ouvre-le pour l'ajouter à Google Agenda. Tu peux aussi répondre dans <a href="${esc(site)}/app/">Le Carnet</a> (onglet Réunions).</p>`),
+            <p style="font-size:13px;color:#556">Un fichier d'agenda est joint : ouvrez-le pour l'ajouter à Google Agenda. Vous pouvez aussi répondre dans <a href="${esc(site)}/app/">Le Carnet</a> (onglet Réunions).</p>`),
           icalEvent: { method: 'REQUEST', content: ics },
         });
         sent++;
@@ -110,7 +110,7 @@ export default async function handler(req, res) {
         await sendMail({
           to: organizer.email, subject: `Conflit d'horaire : ${meeting.title}`,
           text: `Certains participants ne sont pas disponibles pour « ${meeting.title} » (${when}) :\n- ${lines.join('\n- ')}`,
-          html: layout(`<p>La réunion <strong>${esc(meeting.title)}</strong> (${esc(when)}) tombe à un moment où certains participants ne sont pas disponibles.</p>${warnBox(lines)}<p style="font-size:13px;color:#556">Les personnes concernées ont été prévenues. Tu peux déplacer la réunion depuis l'onglet Réunions.</p>${button(`${site}/app/`, 'Ouvrir Le Carnet')}`),
+          html: layout(`<p>La réunion <strong>${esc(meeting.title)}</strong> (${esc(when)}) tombe à un moment où certains participants ne sont pas disponibles.</p>${warnBox(lines)}<p style="font-size:13px;color:#556">Les personnes concernées ont été prévenues. Vous pouvez déplacer la réunion depuis l'onglet Réunions.</p>${button(`${site}/app/`, 'Ouvrir Le Carnet')}`),
         });
         warned = 1;
       } catch (_) { /* on continue */ }

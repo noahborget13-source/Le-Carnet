@@ -29,15 +29,15 @@ async function sendMail({ to, serverName, inviterName, role, link }) {
   const html = `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1f2430">
     <h2 style="margin:0 0 12px">Le Carnet</h2>
-    <p><strong>${esc(inviterName)}</strong> t'invite à rejoindre « <strong>${esc(serverName)}</strong> » en tant que ${esc(ROLE_LABELS[role])}.</p>
+    <p><strong>${esc(inviterName)}</strong> vous invite à rejoindre « <strong>${esc(serverName)}</strong> » en tant que ${esc(ROLE_LABELS[role])}.</p>
     <p style="margin:24px 0"><a href="${esc(link)}" style="background:#5B9EF5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block">Créer mon compte</a></p>
-    <p style="font-size:13px;color:#667">Ce lien est personnel et valable 7 jours. Si le bouton ne marche pas, copie cette adresse dans ton navigateur :<br>${esc(link)}</p>
+    <p style="font-size:13px;color:#667">Ce lien est personnel et valable 7 jours. Si le bouton ne marche pas, copiez cette adresse dans votre navigateur :<br>${esc(link)}</p>
   </div>`;
   await transporter.sendMail({
     from: `"Le Carnet" <${user}>`,
     to,
-    subject: `${inviterName} t'invite sur Le Carnet (${serverName})`,
-    text: `${inviterName} t'invite à rejoindre « ${serverName} » sur Le Carnet.\nCrée ton compte ici (valable 7 jours) : ${link}`,
+    subject: `${inviterName} vous invite sur Le Carnet (${serverName})`,
+    text: `${inviterName} vous invite à rejoindre « ${serverName} » sur Le Carnet.\nCréez votre compte ici (valable 7 jours) : ${link}`,
     html,
   });
 }
@@ -85,7 +85,7 @@ export default async function handler(req, res) {
       // Une adresse qui a déjà un compte dans un AUTRE serveur peut être invitée ; elle rejoindra avec son compte existant.
       const { data: existing } = await supabaseAdmin.from('profiles').select('id').eq('server_id', caller.server_id).ilike('email', email).limit(1);
       if (existing && existing.length) {
-        return res.status(400).json({ error: "Cette adresse fait déjà partie de ton serveur." });
+        return res.status(400).json({ error: "Cette adresse fait déjà partie de votre serveur." });
       }
 
       // Une seule invitation en attente par adresse et par serveur : on remplace l'ancienne.

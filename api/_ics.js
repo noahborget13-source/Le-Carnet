@@ -206,8 +206,8 @@ export function normalizeIcsUrl(input) {
 /** Télécharge un agenda iCal (limite de taille et de durée, aucune redirection suivie) et renvoie son texte. */
 export async function fetchIcs(url, fetchImpl = fetch) {
   const res = await fetchImpl(url, { redirect: 'manual', signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined, headers: { Accept: 'text/calendar, text/plain, */*' } });
-  if (res.status >= 300 && res.status < 400) throw new Error("L'adresse redirige ailleurs : copie à nouveau le lien secret depuis les réglages de l'agenda.");
-  if (res.status === 404 || res.status === 403 || res.status === 401) throw new Error("L'agenda est introuvable ou le lien secret a été réinitialisé. Copie le nouveau lien.");
+  if (res.status >= 300 && res.status < 400) throw new Error("L'adresse redirige ailleurs : copiez à nouveau le lien secret depuis les réglages de l'agenda.");
+  if (res.status === 404 || res.status === 403 || res.status === 401) throw new Error("L'agenda est introuvable ou le lien secret a été réinitialisé. Copiez le nouveau lien.");
   if (!res.ok) throw new Error('Lecture de l\'agenda impossible (erreur ' + res.status + ').');
   const len = Number(res.headers.get('content-length') || 0);
   if (len > 8 * 1024 * 1024) throw new Error('Agenda trop volumineux.');

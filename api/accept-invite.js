@@ -55,7 +55,7 @@ async function handleGoogle(req, res, action) {
   if (!username || !displayName) return res.status(400).json({ error: 'Identifiant et nom affiché requis.' });
   if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Identifiant : 3 à 30 caractères (lettres, chiffres, . _ -).' });
   const { data: taken } = await supabaseAdmin.from('profiles').select('id').ilike('username', username).limit(1);
-  if (taken && taken.length) return res.status(400).json({ error: 'Cet identifiant est déjà pris, choisis-en un autre.' });
+  if (taken && taken.length) return res.status(400).json({ error: 'Cet identifiant est déjà pris, choisissez-en un autre.' });
 
   const { error: profileErr } = await supabaseAdmin.from('profiles').insert({
     id: user.id, server_id: invite.server_id, username, email: user.email, display_name: displayName,
@@ -63,7 +63,7 @@ async function handleGoogle(req, res, action) {
     role: invite.role, permissions: ROLE_DEFAULT_PERMS[invite.role] || ROLE_DEFAULT_PERMS.member, status: 'approved',
   });
   if (profileErr) {
-    const msg = /duplicate|unique/i.test(profileErr.message) ? 'Cet identifiant est déjà pris, choisis-en un autre.' : profileErr.message;
+    const msg = /duplicate|unique/i.test(profileErr.message) ? 'Cet identifiant est déjà pris, choisissez-en un autre.' : profileErr.message;
     return res.status(400).json({ error: msg });
   }
   await supabaseAdmin.from('invites').update({ used_at: nowIso }).eq('id', invite.id);
@@ -75,7 +75,7 @@ async function loadInvite(token) {
   const { data: invite } = await supabaseAdmin.from('invites').select('*').eq('token', token).single();
   if (!invite) return { error: "Lien d'invitation invalide." };
   if (invite.used_at) return { error: 'Cette invitation a déjà été utilisée.' };
-  if (new Date(invite.expires_at) < new Date()) return { error: "Cette invitation a expiré. Demande à l'administrateur de t'en renvoyer une." };
+  if (new Date(invite.expires_at) < new Date()) return { error: "Cette invitation a expiré. Demandez à l'administrateur de vous en renvoyer une." };
   const { data: server } = await supabaseAdmin.from('servers').select('name').eq('id', invite.server_id).single();
   return { invite, serverName: server?.name || 'Le Carnet' };
 }
@@ -105,14 +105,14 @@ export default async function handler(req, res) {
     if (password.length < 8) return res.status(400).json({ error: 'Le mot de passe doit faire au moins 8 caractères.' });
 
     const { data: taken } = await supabaseAdmin.from('profiles').select('id').ilike('username', username).limit(1);
-    if (taken && taken.length) return res.status(400).json({ error: 'Cet identifiant est déjà pris, choisis-en un autre.' });
+    if (taken && taken.length) return res.status(400).json({ error: 'Cet identifiant est déjà pris, choisissez-en un autre.' });
 
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email: invite.email, password, email_confirm: true,
     });
     if (createErr) {
       const msg = /already|registered|exists/i.test(createErr.message)
-        ? 'Cette adresse a déjà un compte Le Carnet : connecte-toi avec, puis ouvre le menu « Mes serveurs » → « Rejoindre » et colle ce lien d\'invitation.' : createErr.message;
+        ? 'Cette adresse a déjà un compte Le Carnet : connectez-vous avec, puis ouvrez le menu « Mes serveurs » → « Rejoindre » et collez ce lien d\'invitation.' : createErr.message;
       return res.status(400).json({ error: msg });
     }
 
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
     });
     if (profileErr) {
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
-      const msg = /duplicate|unique/i.test(profileErr.message) ? 'Cet identifiant est déjà pris, choisis-en un autre.' : profileErr.message;
+      const msg = /duplicate|unique/i.test(profileErr.message) ? 'Cet identifiant est déjà pris, choisissez-en un autre.' : profileErr.message;
       return res.status(400).json({ error: msg });
     }
 
