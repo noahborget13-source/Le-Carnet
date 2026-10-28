@@ -82,7 +82,7 @@ async function handleServers(req, res, body) {
   if (action === 'servers-switch') {
     const target = String(body.userId || '');
     const g = await groupOf(meId);
-    if (!g.members.includes(target) || target === meId) return res.status(403).json({ error: "Ce serveur n'est pas relié à ton compte." });
+    if (!g.members.includes(target) || target === meId) return res.status(403).json({ error: "Ce serveur n'est pas relié à votre compte." });
     const { data: tu } = await supabaseAdmin.auth.admin.getUserById(target);
     if (!tu?.user?.email) return res.status(404).json({ error: 'Compte introuvable.' });
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({ type: 'magiclink', email: tu.user.email });
@@ -104,9 +104,9 @@ async function handleServers(req, res, body) {
   }
 
   // Les actions suivantes ajoutent un serveur : compte approuvé obligatoire
-  if (myProfile.status !== 'approved') return res.status(403).json({ error: 'Ton compte doit d\'abord être approuvé.' });
+  if (myProfile.status !== 'approved') return res.status(403).json({ error: 'Votre compte doit d\'abord être approuvé.' });
   const g0 = await groupOf(meId);
-  if (g0.members.length >= 10) return res.status(400).json({ error: 'Tu as atteint le maximum de 10 serveurs.' });
+  if (g0.members.length >= 10) return res.status(400).json({ error: 'Vous avez atteint le maximum de 10 serveurs.' });
   const username = String(body.username || '').trim();
   const displayName = String(body.displayName || '').trim();
   if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Identifiant : 3 à 30 caractères (lettres, chiffres, . _ -).' });
@@ -138,7 +138,7 @@ async function handleServers(req, res, body) {
     // Soit un code de serveur, soit un lien / jeton d'invitation reçu par email
     let raw = String(body.code || '').trim();
     const m = /invite=([A-Za-z0-9]+)/.exec(raw); if (m) raw = m[1];
-    if (!raw) return res.status(400).json({ error: "Colle un code de serveur ou un lien d'invitation." });
+    if (!raw) return res.status(400).json({ error: "Collez un code de serveur ou un lien d'invitation." });
     let serverId = null, role = 'member', status = 'pending', perms = {}, inviteId = null;
     if (raw.length >= 20) {
       const { data: inv } = await supabaseAdmin.from('invites').select('*').eq('token', raw).maybeSingle();
@@ -153,7 +153,7 @@ async function handleServers(req, res, body) {
     }
     const g = await groupOf(meId);
     const { data: already } = await supabaseAdmin.from('profiles').select('id').eq('server_id', serverId).in('id', g.members).limit(1);
-    if (already && already.length) return res.status(400).json({ error: 'Tu fais déjà partie de ce serveur.' });
+    if (already && already.length) return res.status(400).json({ error: 'Vous faites déjà partie de ce serveur.' });
     const shadow = await createShadowUser(myProfile.email);
     const { error: pe } = await supabaseAdmin.from('profiles').insert({ id: shadow.id, server_id: serverId, username, email: myProfile.email, display_name: displayName, color, role, permissions: perms, status });
     if (pe) { await supabaseAdmin.auth.admin.deleteUser(shadow.id); return res.status(400).json({ error: pe.message }); }
@@ -172,7 +172,7 @@ async function createAccountByAdmin(me, body, res) {
   const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({ email, password, email_confirm: true });
   if (createErr) {
     const msg = /already|registered|exists/i.test(createErr.message)
-      ? "Cette adresse a déjà un compte Le Carnet. Utilise plutôt « Inviter par email » : la personne rejoindra ton serveur avec son compte existant." : createErr.message;
+      ? "Cette adresse a déjà un compte Le Carnet. Utilisez plutôt « Inviter par email » : la personne rejoindra votre serveur avec son compte existant." : createErr.message;
     return res.status(400).json({ error: msg });
   }
   const { error: profileErr } = await supabaseAdmin.from('profiles').insert({
@@ -267,7 +267,7 @@ export default async function handler(req, res) {
     if (action === 'update-self') return await updateSelf(me, body, res);
     if (action === 'delete-self') {
       if (me.role === 'admin') {
-        return res.status(400).json({ error: "Tu es l'administrateur de ce serveur : transfère d'abord l'administration à quelqu'un d'autre." });
+        return res.status(400).json({ error: "Vous êtes l'administrateur de ce serveur : transférez d'abord l'administration à quelqu'un d'autre." });
       }
       const plan = await planHandoff(me.id);
       await supabaseAdmin.from('profiles').delete().eq('id', me.id);
@@ -281,7 +281,7 @@ export default async function handler(req, res) {
     if (action === 'create') return await createAccountByAdmin(me, body, res);
     const { data: target } = await supabaseAdmin.from('profiles').select('role, server_id, status').eq('id', id).single();
     if (!target || target.server_id !== me.server_id) {
-      return res.status(403).json({ error: 'Ce compte ne fait pas partie de ton serveur.' });
+      return res.status(403).json({ error: 'Ce compte ne fait pas partie de votre serveur.' });
     }
 
     if (action === 'delete') {
@@ -309,7 +309,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'transfer-admin') {
-      if (id === me.id) return res.status(400).json({ error: 'Tu es déjà administrateur.' });
+      if (id === me.id) return res.status(400).json({ error: 'Vous êtes déjà administrateur.' });
       if (target.status !== 'approved') return res.status(400).json({ error: "Cette personne n'a pas encore été approuvée." });
       const up = await supabaseAdmin.from('profiles').update({ role: 'admin', permissions: ALL_PERMS }).eq('id', id);
       if (up.error) return res.status(400).json({ error: up.error.message });

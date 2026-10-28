@@ -33,8 +33,8 @@ export default async function handler(req, res) {
       await sendMail({
         to: to.email, fromName: via(caller.display_name), ...(caller.email ? { replyTo: caller.email } : {}),
         subject: `Message de ${caller.display_name}`,
-        text: `${caller.display_name} t'a écrit dans Le Carnet :\n${excerpt}\n${link}`,
-        html: layout(`<p><strong>${esc(caller.display_name)}</strong> t'a écrit :</p><div style="border-left:4px solid #5B9EF5;background:#f4f7fd;padding:12px 14px;border-radius:6px;white-space:pre-wrap">${esc(excerpt)}</div>${button(link, 'Répondre dans Le Carnet')}<p style="font-size:12px;color:#889">Tu ne recevras pas d'autre email de ${esc(caller.display_name)} avant 30 minutes. Tu peux désactiver ces emails dans Profil → Notifications.</p>`),
+        text: `${caller.display_name} vous a écrit dans Le Carnet :\n${excerpt}\n${link}`,
+        html: layout(`<p><strong>${esc(caller.display_name)}</strong> vous a écrit :</p><div style="border-left:4px solid #5B9EF5;background:#f4f7fd;padding:12px 14px;border-radius:6px;white-space:pre-wrap">${esc(excerpt)}</div>${button(link, 'Répondre dans Le Carnet')}<p style="font-size:12px;color:#889">Vous ne recevrez pas d'autre email de ${esc(caller.display_name)} avant 30 minutes. Vous pouvez désactiver ces emails dans Profil → Notifications.</p>`),
       });
     } catch (_) { return res.status(200).json({ ok: true, sent: 0 }); }
     await supabaseAdmin.from('event_notifications').upsert({ kind: 'dm', item_id: caller.id, user_id: to.id, stamp: msg.id, sent_at: new Date().toISOString() }, { onConflict: 'kind,item_id,user_id' });

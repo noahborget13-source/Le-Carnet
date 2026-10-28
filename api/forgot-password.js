@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' });
   try {
     const identifier = String((req.body || {}).identifier || '').trim();
-    if (!identifier || identifier.length > 120) return res.status(400).json({ error: 'Renseigne ton email ou ton identifiant.' });
+    if (!identifier || identifier.length > 120) return res.status(400).json({ error: 'Renseignez votre email ou votre identifiant.' });
     if (!mailConfigured()) return res.status(500).json({ error: "L'envoi d'emails n'est pas encore configuré sur ce site." });
 
     const column = identifier.includes('@') ? 'email' : 'username';
@@ -28,8 +28,8 @@ export default async function handler(req, res) {
           await sendMail({
             to: profile.email,
             subject: 'Nouveau mot de passe — Le Carnet',
-            text: `Bonjour ${profile.display_name}, voici le lien pour choisir un nouveau mot de passe (valable peu de temps) : ${link}\nSi tu n'as rien demandé, ignore ce message.`,
-            html: layout(`<p>Bonjour ${esc(profile.display_name)},</p><p>Tu as demandé à changer ton mot de passe.</p>${button(link, 'Choisir un nouveau mot de passe')}<p style="font-size:13px;color:#667">Ce lien est valable peu de temps. Si tu n'as rien demandé, ignore simplement ce message.</p>`),
+            text: `Bonjour ${profile.display_name}, voici le lien pour choisir un nouveau mot de passe (valable peu de temps) : ${link}\nSi vous n'avez rien demandé, ignorez ce message.`,
+            html: layout(`<p>Bonjour ${esc(profile.display_name)},</p><p>Vous avez demandé à changer votre mot de passe.</p>${button(link, 'Choisir un nouveau mot de passe')}<p style="font-size:13px;color:#667">Ce lien est valable peu de temps. Si vous n'avez rien demandé, ignorez simplement ce message.</p>`),
           });
         }
       }

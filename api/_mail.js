@@ -27,7 +27,7 @@ function getTransporter() {
 export function layout(innerHtml) {
   return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1f2430">
     <h2 style="margin:0 0 14px">Le Carnet</h2>${innerHtml}
-    <p style="font-size:12px;color:#889;margin-top:28px">Tu reçois cet email parce que tu as un compte sur Le Carnet.</p>
+    <p style="font-size:12px;color:#889;margin-top:28px">Vous recevez cet email parce que vous avez un compte sur Le Carnet.</p>
   </div>`;
 }
 

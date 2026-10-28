@@ -67,7 +67,7 @@ export default async function handler(req, res) {
         await sendMail({
           to: caller.email, subject: `Conflit d'horaire : ${task.title}`,
           text: `La tâche « ${task.title} » (${due}) tombe à un moment où certains ne sont pas disponibles :\n- ${lines.join('\n- ')}`,
-          html: layout(`<p>La tâche <strong>${esc(task.title)}</strong> (${esc(due)}) tombe à un moment où certaines personnes ne sont pas disponibles.</p>${warnBox(lines)}<p style="font-size:13px;color:#556">Les personnes concernées ont été prévenues. Tu peux changer l'échéance ou l'assigné depuis Le Carnet.</p>${button(link, 'Ouvrir Le Carnet')}`),
+          html: layout(`<p>La tâche <strong>${esc(task.title)}</strong> (${esc(due)}) tombe à un moment où certaines personnes ne sont pas disponibles.</p>${warnBox(lines)}<p style="font-size:13px;color:#556">Les personnes concernées ont été prévenues. Vous pouvez changer l'échéance ou l'assigné depuis Le Carnet.</p>${button(link, 'Ouvrir Le Carnet')}`),
         });
         warned = 1;
       } catch (_) { /* on continue */ }
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
       const mine = conflicts.get(t.id);
       const warn = mine && wants(t, 'notify_conflicts') ? warnBox(mine.map(r => reasonText(r, t.display_name, 'you').replace(/^./, c => c.toUpperCase()))) : '';
       const html = layout(`
-        <p><strong>${esc(caller.display_name)}</strong> t'a assigné une tâche :</p>
+        <p><strong>${esc(caller.display_name)}</strong> vous a assigné une tâche :</p>
         <div style="border-left:4px solid #5B9EF5;background:#f4f7fd;padding:12px 14px;border-radius:6px">
           <div style="font-size:16px;font-weight:bold">${esc(task.title)}</div>
           <div style="font-size:13px;color:#556;margin-top:4px">Priorité : ${esc(PRIO[task.priority] || 'Normale')}${due ? ` · Échéance : ${esc(due)}` : ''}</div>
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
         await sendMail({
           to: t.email, fromName: via(caller.display_name), ...(caller.email ? { replyTo: caller.email } : {}),
           subject: `Nouvelle tâche : ${task.title}`,
-          text: `${caller.display_name} t'a assigné la tâche « ${task.title} ».${due ? ` Échéance : ${due}.` : ''}${mine ? ` Attention : ${mine.map(r => reasonText(r, t.display_name, 'you')).join(' ; ')}.` : ''}\n${link}`,
+          text: `${caller.display_name} vous a assigné la tâche « ${task.title} ».${due ? ` Échéance : ${due}.` : ''}${mine ? ` Attention : ${mine.map(r => reasonText(r, t.display_name, 'you')).join(' ; ')}.` : ''}\n${link}`,
           html,
         });
         sent++;

@@ -51,9 +51,9 @@ export default async function handler(req, res) {
       try {
         await sendMail({
           to: t.email, fromName: via(caller.display_name), ...(caller.email ? { replyTo: caller.email } : {}),
-          subject: `${caller.display_name} t'a mentionné(e)`,
-          text: `${caller.display_name} t'a mentionné(e) ${where} :\n${excerpt}\n${link}`,
-          html: layout(`<p><strong>${esc(caller.display_name)}</strong> t'a mentionné(e) ${esc(where)} :</p>
+          subject: `${caller.display_name} vous a mentionné(e)`,
+          text: `${caller.display_name} vous a mentionné(e) ${where} :\n${excerpt}\n${link}`,
+          html: layout(`<p><strong>${esc(caller.display_name)}</strong> vous a mentionné(e) ${esc(where)} :</p>
             <div style="border-left:4px solid #5B9EF5;background:#f4f7fd;padding:10px 14px;border-radius:6px;white-space:pre-wrap">${esc(excerpt)}</div>${button(link, 'Ouvrir Le Carnet')}`),
         });
         sent++;

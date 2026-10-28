@@ -33,7 +33,7 @@ async function cleanup() {
 
 const row = (t, extra, color) =>
   `<li style="margin:7px 0"><strong>${esc(t.title)}</strong><br><span style="font-size:12.5px;color:${color}">${esc(extra)}</span></li>`;
-const footnote = '<p style="font-size:12px;color:#889;margin-top:18px">Tu choisis les emails que tu reçois dans Le Carnet → Profil → Notifications.</p>';
+const footnote = '<p style="font-size:12px;color:#889;margin-top:18px">Vous choisissez les emails que vous recevez dans Le Carnet → Profil → Notifications.</p>';
 
 function buildMail(kind, person, items, link) {
   const hello = `<p>Bonjour ${esc(person.display_name)},</p>`;
@@ -43,7 +43,7 @@ function buildMail(kind, person, items, link) {
     return {
       subject: sorted.length === 1 ? `⏰ Plus que ${minutesLabel(sorted[0].minutesLeft)} : ${sorted[0].task.title}` : `⏰ ${sorted.length} tâches arrivent à échéance`,
       text: sorted.map(i => `- ${i.task.title} — ${dueText(i.task)} (dans ${minutesLabel(i.minutesLeft)})`).join('\n') + `\n${link}`,
-      html: layout(`${hello}<p>${sorted.length === 1 ? 'Il te reste peu de temps pour cette tâche :' : 'Il te reste peu de temps pour ces tâches :'}</p><ul style="padding-left:18px">${lines}</ul>${button(link, 'Ouvrir Le Carnet')}${footnote}`),
+      html: layout(`${hello}<p>${sorted.length === 1 ? 'Il vous reste peu de temps pour cette tâche :' : 'Il vous reste peu de temps pour ces tâches :'}</p><ul style="padding-left:18px">${lines}</ul>${button(link, 'Ouvrir Le Carnet')}${footnote}`),
     };
   }
   if (kind === 'overdue') {
@@ -62,7 +62,7 @@ function buildMail(kind, person, items, link) {
   return {
     subject: today.length ? `Aujourd'hui : ${today.length} tâche${today.length > 1 ? 's' : ''} à faire` : `Demain : ${tomorrow.length} tâche${tomorrow.length > 1 ? 's' : ''} à prévoir`,
     text: txt("Aujourd'hui", today) + txt('Demain', tomorrow) + link,
-    html: layout(`${hello}<p>Voici ce qui t'attend :</p>${sec("Aujourd'hui", today, '#c76d00')}${sec('Demain', tomorrow, '#3d7bd9')}${button(link, 'Ouvrir Le Carnet')}${footnote}`),
+    html: layout(`${hello}<p>Voici ce qui vous attend :</p>${sec("Aujourd'hui", today, '#c76d00')}${sec('Demain', tomorrow, '#3d7bd9')}${button(link, 'Ouvrir Le Carnet')}${footnote}`),
   };
 }
 
@@ -166,7 +166,7 @@ async function meetingReminders(room, link) {
         await sendMail({
           to: p.email, subject: `⏰ Réunion dans ${min} min : ${m.title}`,
           text: `« ${m.title} » commence dans ${min} minutes (${whenText(m)}).\nAppel vidéo : ${meetingLink(m)}`,
-          html: layout(`<p>Bonjour ${esc(p.display_name)},</p><p>La réunion <strong>${esc(m.title)}</strong> commence dans <strong>${min} min</strong> (${esc(whenText(m))}).</p>${button(meetingLink(m), "Rejoindre l'appel vidéo")}<p style="font-size:12px;color:#889">Tu choisis les emails que tu reçois dans Le Carnet → Profil → Notifications.</p>`),
+          html: layout(`<p>Bonjour ${esc(p.display_name)},</p><p>La réunion <strong>${esc(m.title)}</strong> commence dans <strong>${min} min</strong> (${esc(whenText(m))}).</p>${button(meetingLink(m), "Rejoindre l'appel vidéo")}<p style="font-size:12px;color:#889">Vous choisissez les emails que vous recevez dans Le Carnet → Profil → Notifications.</p>`),
         });
         sent++; marks.push({ kind: 'meeting_remind', item_id: m.id, user_id: p.id, stamp: m.starts_at, sent_at: new Date().toISOString() });
       } catch (_) { /* on réessaiera au prochain passage */ }
@@ -214,7 +214,7 @@ async function weeklySummary(room, link) {
     const out = new Set(); for (const l of myLeave) for (let i = 0; i < 5; i++) { const d = addDays(monday, i); if (l.start_date <= d && l.end_date >= d) out.add(d); }
     if (out.size >= 5) { covered.add(p.id); continue; }
     const myMeetingIds = new Set((atts || []).filter(a => a.user_id === p.id && a.response !== 'declined').map(a => a.meeting_id));
-    const bdays = members.filter(m => m.server_id === p.server_id && m.birthday).map(m => { for (let i = 0; i < 7; i++) { const d = addDays(monday, i); if (d.slice(5) === m.birthday) return { name: m.id === p.id ? 'toi' : m.display_name, day: d }; } return null; }).filter(Boolean);
+    const bdays = members.filter(m => m.server_id === p.server_id && m.birthday).map(m => { for (let i = 0; i < 7; i++) { const d = addDays(monday, i); if (d.slice(5) === m.birthday) return { name: m.id === p.id ? 'vous' : m.display_name, day: d }; } return null; }).filter(Boolean);
     const mail = buildWeeklyMail({
       person: p, monday, link, doneLastWeek: (doneLast || []).filter(t => assigneesOf(t).includes(p.id)).length,
       tasks: mine.filter(t => t.due >= monday),
@@ -245,7 +245,7 @@ async function conflictScan(room, link) {
       await sendMail({
         to: person.email, subject: `Conflit d'horaire : ${title}`,
         text: `« ${title} » (${whenLabel})${byName ? `, ${kind === 'conflict_meeting' ? 'organisée' : 'créée'} par ${byName}` : ''} : ${lines.join(' ; ')}.\n${link}`,
-        html: layout(`<p>Bonjour ${esc(person.display_name)},</p><p><strong>${esc(title)}</strong> (${esc(whenLabel)})${byName ? ` — ${kind === 'conflict_meeting' ? 'organisée' : 'créée'} par <strong>${esc(byName)}</strong> —` : ''} tombe à un moment où tu n'es pas disponible.</p>${warnBox(lines)}${button(link, 'Ouvrir Le Carnet')}<p style="font-size:12px;color:#889">Tu choisis les emails que tu reçois dans Le Carnet → Profil → Notifications.</p>`),
+        html: layout(`<p>Bonjour ${esc(person.display_name)},</p><p><strong>${esc(title)}</strong> (${esc(whenLabel)})${byName ? ` — ${kind === 'conflict_meeting' ? 'organisée' : 'créée'} par <strong>${esc(byName)}</strong> —` : ''} tombe à un moment où vous n'êtes pas disponible.</p>${warnBox(lines)}${button(link, 'Ouvrir Le Carnet')}<p style="font-size:12px;color:#889">Vous choisissez les emails que vous recevez dans Le Carnet → Profil → Notifications.</p>`),
       });
       sent++; marks.push({ kind, item_id: item, user_id: person.id, stamp, sent_at: new Date().toISOString() });
     } catch (_) { /* on réessaiera */ }

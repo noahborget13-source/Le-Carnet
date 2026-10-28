@@ -92,11 +92,11 @@ export function conflictReasons({ startMs, endMs, user, busy = [], tasks = [], a
 export function reasonText(r, name, voice = 'you') {
   const you = voice === 'you';
   switch (r.kind) {
-    case 'leave': return you ? 'tu es en congé à cette date' : `${name} est en congé à cette date`;
-    case 'hours': return you ? "c'est en dehors de tes horaires de disponibilité" : `c'est en dehors des horaires de disponibilité de ${name}`;
-    case 'meeting': return you ? `tu as déjà une réunion à ce moment-là${r.label ? ` (« ${r.label} »${r.by ? `, organisée par ${r.by}` : ''})` : ''}` : `${name} a déjà une réunion à ce moment-là`;
-    case 'google': return you ? 'ton agenda externe (Google…) est occupé à ce moment-là' : `l'agenda externe de ${name} est occupé à ce moment-là`;
-    case 'task': return you ? `tu as déjà une autre tâche à la même heure (« ${r.label} »${r.by ? `, créée par ${r.by}` : ''})` : `${name} a déjà une tâche à la même heure (« ${r.label} »${r.by ? `, créée par ${r.by}` : ''})`;
+    case 'leave': return you ? 'vous êtes en congé à cette date' : `${name} est en congé à cette date`;
+    case 'hours': return you ? "c'est en dehors de vos horaires de disponibilité" : `c'est en dehors des horaires de disponibilité de ${name}`;
+    case 'meeting': return you ? `vous avez déjà une réunion à ce moment-là${r.label ? ` (« ${r.label} »${r.by ? `, organisée par ${r.by}` : ''})` : ''}` : `${name} a déjà une réunion à ce moment-là`;
+    case 'google': return you ? 'votre agenda externe (Google…) est occupé à ce moment-là' : `l'agenda externe de ${name} est occupé à ce moment-là`;
+    case 'task': return you ? `vous avez déjà une autre tâche à la même heure (« ${r.label} »${r.by ? `, créée par ${r.by}` : ''})` : `${name} a déjà une tâche à la même heure (« ${r.label} »${r.by ? `, créée par ${r.by}` : ''})`;
     default: return '';
   }
 }

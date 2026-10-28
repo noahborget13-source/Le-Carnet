@@ -97,7 +97,7 @@ export default async function handler(req, res) {
         .eq('server_id', me.server_id).eq('action', 'mail.sent').gte('created_at', hourAgo);
       if ((recent || 0) >= 10) return res.status(429).json({ error: "Trop d'envois en peu de temps : réessaie dans une heure." });
 
-      // Destinataires : uniquement des membres approuvés de TON serveur (jamais d'adresse libre).
+      // Destinataires : uniquement des membres approuvés de VOTRE serveur (jamais d'adresse libre).
       const { data: members } = await supabaseAdmin.from('profiles')
         .select('id, email, display_name').eq('server_id', me.server_id).eq('status', 'approved');
       const wanted = (req.body || {}).all === true ? null : new Set(Array.isArray((req.body || {}).userIds) ? req.body.userIds : []);
@@ -116,14 +116,14 @@ export default async function handler(req, res) {
           replyTo: me.email, fromName: via(me.display_name),
           subject,
           text: `${message}\n\n— ${me.display_name} (administrateur de Le Carnet)\n${link}`,
-          html: layout(`${body}<p style="margin:18px 0 0;font-size:13px;color:#556">— ${esc(me.display_name)}, administrateur de Le Carnet<br>Tu peux répondre directement à cet email.</p>`),
+          html: layout(`${body}<p style="margin:18px 0 0;font-size:13px;color:#556">— ${esc(me.display_name)}, administrateur de Le Carnet<br>Vous pouvez répondre directement à cet email.</p>`),
         })));
         results.forEach(r => (r.status === 'fulfilled' ? sent++ : failed++));
       }
       if (sent) {
         try { await supabaseAdmin.from('activity').insert({ server_id: me.server_id, actor_id: me.id, action: 'mail.sent', label: `${subject} (${sent} destinataire${sent > 1 ? 's' : ''})`.slice(0, 200) }); } catch (_) { /* le journal ne bloque pas */ }
       }
-      if (!sent) return res.status(502).json({ error: "Aucun email n'a pu partir. Vérifie la configuration Gmail." });
+      if (!sent) return res.status(502).json({ error: "Aucun email n'a pu partir. Vérifiez la configuration Gmail." });
       return res.status(200).json({ ok: true, sent, failed });
     }
 
