@@ -5,7 +5,9 @@
       "Le site s'adresse désormais à vous (vouvoiement) partout : page d'accueil, application et e-mails.",
       "Correction : la fenêtre de création d'une tâche ou d'une réunion se ferme dès l'enregistrement, même si l'envoi des e-mails ou des fichiers est lent.",
       "Un double clic sur « Créer » ne crée plus la tâche deux fois.",
-      "E-mails : tous les messages partent désormais de « Le Carnet », et non plus au nom du membre qui a créé la tâche ou la réunion. Son nom figure dans le texte du message."
+      "E-mails : tous les messages partent désormais de « Le Carnet », et non plus au nom du membre qui a créé la tâche ou la réunion. Son nom figure dans le texte du message.",
+      "Messagerie : une pastille rouge indique les messages non lus, sur l'onglet Messages et sur chaque conversation. Elle disparaît dès que vous ouvrez la conversation.",
+      "Tâches : le bouton « Sélectionner » (vue Liste) permet de terminer, reporter à demain ou mettre à la corbeille plusieurs tâches d'un coup, avec possibilité d'annuler la suppression."
     ]
   },
   {
