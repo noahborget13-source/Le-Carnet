@@ -1068,6 +1068,11 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [inviteFromUrl] = useState(() => { try { const t = new URLSearchParams(window.location.search).get("invite"); return t && t.length >= 20 ? t : ""; } catch (_) { return ""; } });
   const [taskFromUrl] = useState(() => { try { return new URLSearchParams(window.location.search).get("task") || ""; } catch (_) { return ""; } });
   const [tasksReady, setTasksReady] = useState(false);
+  // Messages non lus : on retient, par conversation, la date du dernier message lu (propre à cet appareil)
+  const readKey = "carnet-read-" + me.id;
+  const [readMap, setReadMap] = useState(() => { try { const v = JSON.parse(localStorage.getItem(readKey) || "null"); if (v && v.init) return v; } catch (_) {} return { init: new Date().toISOString() }; });
+  useEffect(() => { try { localStorage.setItem(readKey, JSON.stringify(readMap)); } catch (_) {} }, [readMap]);
+  const markRead = (key, ts) => setReadMap(prev => ((prev[key] || prev.init) >= ts ? prev : { ...prev, [key]: ts }));
   const [showServers, setShowServers] = useState(Boolean(inviteFromUrl));
   useEffect(() => { if (inviteFromUrl) { try { window.history.replaceState({}, "", window.location.pathname); } catch (_) {} } }, []);
   const [serverName, setServerName] = useState("");
@@ -1100,6 +1105,13 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const tasks = useMemo(() => tasksAll.filter(t => !t.deleted_at), [tasksAll]);
   const trashed = useMemo(() => tasksAll.filter(t => t.deleted_at).sort((a, b) => b.deleted_at.localeCompare(a.deleted_at)), [tasksAll]);
   const people = useMemo(() => accounts.filter(a => a.status !== "pending"), [accounts]);
+  const unread = useMemo(() => {
+    const lr = (k) => readMap[k] || readMap.init, u = {};
+    for (const m of channelMsgs) if (m.from_id !== me.id && m.ts > lr("channel")) u.channel = (u.channel || 0) + 1;
+    for (const m of messages) if (m.to_id === me.id && m.ts > lr(m.from_id)) u[m.from_id] = (u[m.from_id] || 0) + 1;
+    return u;
+  }, [messages, channelMsgs, readMap, me.id]);
+  const unreadTotal = Object.values(unread).reduce((n, x) => n + x, 0);
   const openTask = openId ? tasks.find(t => t.id === openId) : null;
   // Lien direct vers une tâche (?task=…) : ouvre la tâche, ou explique pourquoi elle est introuvable
   useEffect(() => {
@@ -1153,7 +1165,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         <div className="app-sidebar-brand" style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 8px" }}><NotebookMark size={24} /><span style={{ fontFamily: "Fraunces, serif", fontSize: 18 }}>Le Carnet</span></div>
         <button type="button" className="app-sidebar-footer-label" data-servers-open onClick={() => setShowServers(true)} title="Changer de serveur, en créer ou en rejoindre un autre" style={{ display: "flex", alignItems: "center", gap: 8, margin: "-6px 0 0", padding: "8px 10px", background: "var(--bg-2)", border: "1px solid var(--border-soft)", borderRadius: 9, color: "var(--text)", fontSize: 13, cursor: "pointer", textAlign: "left" }}><span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>{serverName || "Mon serveur"}</span><span style={{ color: "var(--text-dimmer)" }}>⇄</span></button>
         <nav style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
-          {tabs.map(t => (<button key={t.id} className={t.secondary ? "tab-secondary" : undefined} onClick={() => goTab(t.id)} aria-current={tab === t.id ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: tab === t.id ? 600 : 500, cursor: "pointer", textAlign: "left" }}><t.icon size={17} /> {t.label}</button>))}
+          {tabs.map(t => (<button key={t.id} className={t.secondary ? "tab-secondary" : undefined} onClick={() => goTab(t.id)} aria-current={tab === t.id ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: tab === t.id ? 600 : 500, cursor: "pointer", textAlign: "left" }}><t.icon size={17} /> {t.label}{t.id === "messages" && unreadTotal > 0 && <span data-unread-badge aria-label={unreadTotal + " message(s) non lu(s)"} style={{ background: "#FF6B5E", color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px", marginLeft: "auto" }}>{unreadTotal > 99 ? "99+" : unreadTotal}</span>}</button>))}
         
           <button type="button" className="tab-more" onClick={() => setMoreOpen(v => !v)} aria-expanded={moreOpen} aria-label="Plus" style={{ alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: (moreOpen || tabs.some(t => t.secondary && t.id === tab)) ? "var(--panel-2)" : "transparent", border: "none", color: (moreOpen || tabs.some(t => t.secondary && t.id === tab)) ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: 500, cursor: "pointer" }}><I.More size={17} /> Plus</button>
         </nav>
@@ -1185,7 +1197,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "tasks" && <TasksView projects={projects} projectMembers={projectMembers} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} events={teamEvents} isAdmin={isAdmin} notify={notify} me={me} onOpen={openFromAnywhere} />}
         {tab === "meetings" && <MeetingsView meetingFiles={meetingFiles} onFilesChanged={reloadMeetingFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} tasks={tasks} notify={notify} />}
-        {tab === "messages" && <MessagesView messageFiles={messageFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} reactions={reactions} accounts={people} messages={messages} channelMsgs={channelMsgs} pollVotes={pollVotes} reloadVotes={reloadVotes} notify={notify} />}
+        {tab === "messages" && <MessagesView unread={unread} markRead={markRead} messageFiles={messageFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} reactions={reactions} accounts={people} messages={messages} channelMsgs={channelMsgs} pollVotes={pollVotes} reloadVotes={reloadVotes} notify={notify} />}
         {tab === "profile" && <ProfileView accounts={accounts} projects={projects} meetings={meetings} attendees={attendees} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} tasks={tasks} leaves={leaves} notify={notify} onChanged={onProfileChanged} onLogout={onLogout} />}
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} leaves={leaves} meetings={meetings} attendees={attendees} notify={notify} onChanged={onProfileChanged} />}
         <SiteFooter />
@@ -2511,7 +2523,7 @@ function MyStats({ me, tasks, projects }) {
    Les nouveautés visibles de tous sont dans /patchnotes.json (affichées sur la page d'accueil du site).
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const PATCH_TECH = {
-  "2026-10-28": ["Fermeture immédiate des fenêtres : e-mails et fichiers partent en arrière-plan ; callApi() abandonne après 30 s ; bouton de création désactivé pendant l'enregistrement.", "Vouvoiement : textes de public/, de l'appli et des e-mails (api/*.js). Les tests ont été mis à jour en conséquence."],
+  "2026-10-28": ["Fermeture immédiate des fenêtres : e-mails et fichiers partent en arrière-plan ; callApi() abandonne après 30 s ; bouton de création désactivé pendant l'enregistrement.", "Messages non lus : état « lu » mémorisé par appareil (localStorage carnet-read-<id>), sans table ni migration. Sélection multiple : mises à jour tâche par tâche, soumises aux politiques RLS existantes.", "Expéditeur des e-mails : toujours « Le Carnet » (api/_mail.js, via() et fromLabel()) ; le Reply-To reste l\'adresse de la personne concernée. Variable facultative MAIL_FROM_NAME pour changer le nom affiché.", "Vouvoiement : textes de public/, de l'appli et des e-mails (api/*.js). Les tests ont été mis à jour en conséquence."],
   "2026-10-27": ["Export .docx : ZIP minimal écrit à la main (aucune bibliothèque ajoutée, aucun fichier dans api/), vérifié avec python-docx et LibreOffice.", "Dupliquer / Reporter : simples insert / update sur tasks, soumis aux politiques RLS existantes (aucune migration)."],
   "2026-10-26": [
     "migration-13-lien-appel.sql : colonne meetings.call_url (https uniquement, 300 caractères max).",
@@ -3089,6 +3101,35 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
   };
   const toggleDone = (t) => setStatus(t, t.done ? "todo" : "done");
 
+  // ---- Sélection multiple (vue Liste) : terminer, reporter ou supprimer plusieurs tâches d'un coup
+  const [selectMode, setSelectMode] = useState(false);
+  const [picked, setPicked] = useState([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const canDeleteTask = (t) => isAdmin || myPerms.deleteAnyTask || (t.created_by === me.id && myPerms.deleteOwnTask);
+  const pickedTasks = visible.filter(t => picked.includes(t.id));
+  const exitSelect = () => { setSelectMode(false); setPicked([]); };
+  const bulk = async (kind) => {
+    if (bulkBusy || !pickedTasks.length) return;
+    const allowed = pickedTasks.filter(t => (kind === "delete" ? canDeleteTask(t) : canEditTask(t)) && (kind !== "done" || !t.done) && (kind !== "tomorrow" || (t.due && !t.done)));
+    const skipped = pickedTasks.length - allowed.length;
+    if (!allowed.length) { notify(kind === "tomorrow" ? "Aucune tâche sélectionnée n'a d'échéance à reporter." : kind === "done" ? "Ces tâches sont déjà terminées ou vous ne pouvez pas les modifier." : "Vous n'avez pas le droit d'agir sur ces tâches.", "err"); return; }
+    setBulkBusy(true);
+    let ok = 0;
+    const tomorrow = shiftDay(parisDay(), 1);
+    for (const t of allowed) {
+      let error = null;
+      if (kind === "done") { await setStatus(t, "done"); ok++; continue; }
+      if (kind === "tomorrow") ({ error } = await supabase.from('tasks').update({ due: tomorrow }).eq('id', t.id));
+      else ({ error } = await supabase.rpc('trash_task', { p_id: t.id }));
+      if (!error) ok++;
+    }
+    setBulkBusy(false);
+    const what = kind === "done" ? "terminée(s)" : kind === "tomorrow" ? "reportée(s) à demain" : "placée(s) dans la corbeille";
+    const undo = kind === "delete" && ok ? { label: "Annuler", onClick: async () => { for (const t of allowed) await supabase.rpc('restore_task', { p_id: t.id }); } } : undefined;
+    notify(`${ok} tâche(s) ${what}${skipped ? ` · ${skipped} ignorée(s) (droits ou état)` : ""}.`, ok ? "ok" : "err", undo);
+    exitSelect();
+  };
+
   const counts = { open: tasks.filter(t => !t.done).length, late: tasks.filter(t => !t.done && t.due && dueInfo(t).late).length };
   const viewBtn = (id, Icon, title) => (
     <button key={id} type="button" title={title} onClick={() => changeView(id)} style={{ ...chipBtn, display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", background: view === id ? "var(--panel-2)" : "var(--bg-2)", color: view === id ? "var(--text)" : "var(--text-dim)", borderColor: view === id ? "var(--accent)" : "var(--border-soft)" }}><Icon size={14} /> <span className="hide-mobile">{title}</span></button>
@@ -3109,6 +3150,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
         <div style={{ display: "flex", gap: 6 }}>{viewBtn("list", I.List, "Liste")}{viewBtn("kanban", I.Columns, "Kanban")}{viewBtn("week", I.Calendar, "Semaine")}</div>
         <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}><I.Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)" }} /><input data-search value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher (titre, notes, #étiquette)…" style={{ ...inputStyle, paddingLeft: 32, background: "var(--bg-2)" }} /></div>
         <SelectPill icon={I.Sort} value={sortBy} onChange={setSortBy} options={[{ value: "priority", label: "Trier : priorité" }, { value: "due", label: "Trier : échéance" }, { value: "title", label: "Trier : titre" }]} />
+        {view === "list" && <button type="button" data-select-toggle onClick={() => (selectMode ? exitSelect() : setSelectMode(true))} style={{ ...chipBtn, borderColor: selectMode ? "var(--accent)" : "var(--border-soft)", color: selectMode ? "var(--text)" : "var(--text-dim)" }}>{selectMode ? "✕ Quitter la sélection" : "☑ Sélectionner"}</button>}
         {view === "list" && <SelectPill icon={I.Filter} value={filterDone} onChange={setFilterDone} options={[{ value: "open", label: "À faire" }, { value: "done", label: "Terminées" }, { value: "all", label: "Toutes" }]} />}
         {projects.length > 0 && <SelectPill icon={I.Filter} value={filterProject} onChange={setFilterProject} options={[{ value: "", label: "Tous les projets" }, { value: "none", label: "Sans projet" }, ...projects.map(p => ({ value: p.id, label: (p.is_private ? "🔒 " : "") + p.name }))]} />}
         <button onClick={() => setFilterMine(m => !m)} style={{ ...chipBtn, background: filterMine ? "var(--panel-2)" : "var(--bg-2)", color: filterMine ? "var(--text)" : "var(--text-dim)", borderColor: filterMine ? "var(--accent)" : "var(--border-soft)" }}>Assignées à moi</button>
@@ -3118,7 +3160,21 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
       {view === "list" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {visible.length === 0 && <EmptyState text="Aucune tâche ici." />}
-          {visible.map(t => (<TaskCard key={t.id} task={t} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} project={projects.find(p => p.id === t.project_id)} commentCount={comments.filter(c => c.task_id === t.id).length} attachCount={attachments.filter(a => a.task_id === t.id).length} onOpen={() => onOpen(t.id)} onTagClick={setQuery} onToggle={() => toggleDone(t)} onEdit={() => openEdit(t)} onDelete={() => removeTask(t)} />))}
+          {visible.map(t => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {selectMode && <input type="checkbox" data-pick={t.id} checked={picked.includes(t.id)} onChange={() => setPicked(p => (p.includes(t.id) ? p.filter(x => x !== t.id) : [...p, t.id]))} aria-label={"Sélectionner « " + t.title + " »"} style={{ width: 18, height: 18, flexShrink: 0, accentColor: "var(--accent)", cursor: "pointer" }} />}
+              <div style={{ flex: 1, minWidth: 0 }}><TaskCard task={t} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} project={projects.find(p => p.id === t.project_id)} commentCount={comments.filter(c => c.task_id === t.id).length} attachCount={attachments.filter(a => a.task_id === t.id).length} onOpen={() => onOpen(t.id)} onTagClick={setQuery} onToggle={() => toggleDone(t)} onEdit={() => openEdit(t)} onDelete={() => removeTask(t)} /></div>
+            </div>
+          ))}
+          {selectMode && (
+            <div data-bulk-bar style={{ position: "sticky", bottom: 12, zIndex: 20, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 14px", boxShadow: "0 8px 30px rgba(0,0,0,.35)" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, marginRight: "auto" }}>{pickedTasks.length} sélectionnée(s)</span>
+              <button type="button" data-bulk="all" onClick={() => setPicked(picked.length === visible.length ? [] : visible.map(t => t.id))} style={chipBtn}>{picked.length === visible.length && visible.length ? "Tout désélectionner" : "Tout sélectionner"}</button>
+              <button type="button" data-bulk="done" disabled={!pickedTasks.length || bulkBusy} onClick={() => bulk("done")} style={{ ...chipBtn, opacity: pickedTasks.length ? 1 : 0.5 }}>✓ Terminer</button>
+              <button type="button" data-bulk="tomorrow" disabled={!pickedTasks.length || bulkBusy} onClick={() => bulk("tomorrow")} style={{ ...chipBtn, opacity: pickedTasks.length ? 1 : 0.5 }}>⏭ Reporter à demain</button>
+              <button type="button" data-bulk="delete" disabled={!pickedTasks.length || bulkBusy} onClick={() => bulk("delete")} style={{ ...chipBtn, color: "#FF9A8F", opacity: pickedTasks.length ? 1 : 0.5 }}>🗑 Corbeille</button>
+            </div>
+          )}
         </div>
       ) : view === "week" ? (
         <WeekBoard tasks={visible} accounts={accounts} canEditTask={canEditTask} onOpen={onOpen} onMoveDue={moveDue} />
@@ -4066,7 +4122,7 @@ function MsgAttachButton({ onPick }) {
     <button type="button" data-msg-attach onClick={() => ref.current && ref.current.click()} title="Joindre un fichier ou une photo (5 Mo max)" aria-label="Joindre un fichier" style={{ ...iconBtn, padding: "0 12px" }}>📎</button>
   </>);
 }
-function MessagesView({ messageFiles = [], me, session, isAdmin, myPerms, accounts, messages, channelMsgs, pollVotes, reloadVotes, notify, reactions = [] }) {
+function MessagesView({ unread = {}, markRead = () => {}, messageFiles = [], me, session, isAdmin, myPerms, accounts, messages, channelMsgs, pollVotes, reloadVotes, notify, reactions = [] }) {
   const contacts = useMemo(() => accounts.filter(a => a.id !== me.id), [accounts, me.id]);
   const [activeId, setActiveId] = useState("channel");
   const [draft, setDraft] = useState("");
@@ -4086,6 +4142,12 @@ function MessagesView({ messageFiles = [], me, session, isAdmin, myPerms, accoun
   useEffect(() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [shownLen, activeId, open]);
   const lastMsgFor = (id) => messages.filter(m => (m.from_id === me.id && m.to_id === id) || (m.from_id === id && m.to_id === me.id)).sort((a, b) => new Date(b.ts) - new Date(a.ts))[0];
   const lastChannel = channel[channel.length - 1];
+  // La conversation ouverte (sur mobile : seulement une fois ouverte) est lue dès que son dernier message est affiché
+  const latestTs = isChannel ? (lastChannel && lastChannel.ts) : (thread.length && thread[thread.length - 1].ts);
+  useEffect(() => {
+    const visible = open || (window.matchMedia && window.matchMedia("(min-width: 821px)").matches);
+    if (visible && latestTs && !document.hidden) markRead(activeId, latestTs);
+  }, [activeId, latestTs, open]);
 
   const send = async () => {
     const typed = draft.trim();
@@ -4150,12 +4212,12 @@ function MessagesView({ messageFiles = [], me, session, isAdmin, myPerms, accoun
         <div className="paper chat-list" style={{ width: 250, flexShrink: 0, borderRight: "1px solid var(--border)", overflowY: "auto" }}>
           <button onClick={() => pick("channel")} style={listBtn(isChannel)}>
             <div style={{ width: 32, height: 32, borderRadius: 10, background: "#5B6EF526", color: "var(--accent-2)", display: "grid", placeItems: "center", flexShrink: 0 }}><I.Hash size={16} /></div>
-            <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>Général</div><div style={{ fontSize: 11.5, color: "var(--text-dimmer)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lastChannel ? lastChannel.text : "Salon de tout le serveur"}</div></div>
+            <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>Général{unread.channel > 0 && !isChannel && <span data-unread-conv style={{ background: "#FF6B5E", color: "#fff", borderRadius: 10, fontSize: 10.5, fontWeight: 700, padding: "0 6px" }}>{unread.channel}</span>}</div><div style={{ fontSize: 11.5, color: "var(--text-dimmer)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lastChannel ? lastChannel.text : "Salon de tout le serveur"}</div></div>
           </button>
           {contacts.map(u => { const last = lastMsgFor(u.id); return (
             <button key={u.id} onClick={() => pick(u.id)} style={listBtn(activeId === u.id)}>
               <Avatar user={u} size={32} />
-              <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{u.display_name}</div><div style={{ fontSize: 11.5, color: "var(--text-dimmer)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{last ? last.text : "Aucun message"}</div></div>
+              <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>{u.display_name}{unread[u.id] > 0 && activeId !== u.id && <span data-unread-conv style={{ background: "#FF6B5E", color: "#fff", borderRadius: 10, fontSize: 10.5, fontWeight: 700, padding: "0 6px" }}>{unread[u.id]}</span>}</div><div style={{ fontSize: 11.5, color: "var(--text-dimmer)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{last ? last.text : "Aucun message"}</div></div>
             </button>
           );})}
         </div>
