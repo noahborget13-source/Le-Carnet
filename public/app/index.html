@@ -300,6 +300,7 @@ const I = {
   Plus: p => <Icon {...p} path={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>} />,
   X: p => <Icon {...p} path={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} />,
   Send: p => <Icon {...p} path={<><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>} />,
+  Chart: p => <Icon {...p} path={<><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="7" width="3" height="11"/><rect x="17" y="10" width="3" height="8"/></>} />,
   Shield: p => <Icon {...p} path={<path d="M12 2 4 5v6c0 5 3.4 9 8 11 4.6-2 8-6 8-11V5l-8-3z"/>} />,
   Trash: p => <Icon {...p} path={<><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></>} />,
   UserPlus: p => <Icon {...p} path={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></>} />,
@@ -1128,6 +1129,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
     { id: "tasks", label: "Tâches", icon: I.Check },
     { id: "calendar", label: "Calendrier", icon: I.Calendar },
     { id: "meetings", label: "Réunions", icon: I.Video, secondary: true },
+    { id: "reports", label: "Rapports", icon: I.Chart, secondary: true },
     { id: "messages", label: "Messages", icon: I.Message },
     { id: "profile", label: "Profil", icon: I.User, secondary: true },
     ...(isAdmin ? [{ id: "admin", label: "Admin", icon: I.Shield, secondary: true }] : []),
@@ -1148,7 +1150,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       if (document.querySelector(".modal-card")) return;
       const k = ev.key.toLowerCase();
       if (Date.now() - gAt < 1500) {
-        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", m: "messages", p: "profile", a: "admin" };
+        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", m: "messages", p: "profile", a: "admin" };
         gAt = 0;
         if (map[k] && (k !== "a" || isAdmin)) { setTab(map[k]); ev.preventDefault(); }
         return;
@@ -1199,6 +1201,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "tasks" && <TasksView projects={projects} projectMembers={projectMembers} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} events={teamEvents} isAdmin={isAdmin} notify={notify} me={me} onOpen={openFromAnywhere} />}
         {tab === "meetings" && <MeetingsView meetingFiles={meetingFiles} onFilesChanged={reloadMeetingFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} tasks={tasks} notify={notify} />}
+        {tab === "reports" && <ReportsView me={me} accounts={people} tasks={tasks} projects={projects} meetings={meetings} attendees={attendees} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "messages" && <MessagesView unread={unread} markRead={markRead} messageFiles={messageFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} reactions={reactions} accounts={people} messages={messages} channelMsgs={channelMsgs} pollVotes={pollVotes} reloadVotes={reloadVotes} notify={notify} />}
         {tab === "profile" && <ProfileView accounts={accounts} projects={projects} meetings={meetings} attendees={attendees} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} tasks={tasks} leaves={leaves} notify={notify} onChanged={onProfileChanged} onLogout={onLogout} />}
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} leaves={leaves} meetings={meetings} attendees={attendees} notify={notify} onChanged={onProfileChanged} />}
@@ -1835,7 +1838,7 @@ function dayExtras(iso, events = [], accounts = []) {
   };
 }
 
-const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
+const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
 function ShortcutsHelp({ onClose, isAdmin }) {
   return (
     <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
@@ -2317,6 +2320,118 @@ function BrowserNotifCard({ card }) {
 }
 
 /* ---------------- Tâches : vue Semaine (glisser-déposer pour replanifier) ---------------- */
+/* ---------------- Rapports ---------------- */
+const REPORT_PERIODS = [[7, "7 jours"], [30, "30 jours"], [90, "90 jours"]];
+/** Calcule tous les indicateurs d'un rapport (fonction pure, testable). */
+function computeReport({ tasks, meetings, attendees, accounts, projects, days, projectId, today }) {
+  const from = shiftDay(today, -(days - 1));
+  const dayOf = (iso) => (iso ? parisDay(Date.parse(iso)) : null);
+  const inRange = (d) => d && d >= from && d <= today;
+  const list = tasks.filter(t => !t.deleted_at && (!projectId || (projectId === "none" ? !t.project_id : t.project_id === projectId)));
+  const created = list.filter(t => inRange(dayOf(t.created_at)));
+  const done = list.filter(t => t.done && inRange(dayOf(t.done_at)));
+  const open = list.filter(t => !t.done);
+  const late = open.filter(t => t.due && t.due < today);
+  const dueIn = list.filter(t => t.due && t.due >= from && t.due <= today);
+  const onTime = dueIn.filter(t => t.done && dayOf(t.done_at) && dayOf(t.done_at) <= t.due);
+  const lead = done.map(t => daysBetween(dayOf(t.created_at), dayOf(t.done_at))).filter(n => n >= 0);
+  const avgLead = lead.length ? lead.reduce((a, b) => a + b, 0) / lead.length : null;
+  // Série temporelle : un point par jour (jusqu'à 30 jours), sinon par semaine
+  const step = days > 31 ? 7 : 1;
+  const series = [];
+  for (let d = from; d <= today; d = shiftDay(d, step)) {
+    const end = shiftDay(d, step - 1);
+    series.push({ day: d, created: created.filter(t => { const x = dayOf(t.created_at); return x >= d && x <= end; }).length, done: done.filter(t => { const x = dayOf(t.done_at); return x >= d && x <= end; }).length });
+  }
+  const people = accounts.filter(a => a.status !== "pending").map(a => {
+    const mine = list.filter(t => assigneeIds(t).includes(a.id));
+    return { user: a, done: mine.filter(t => t.done && inRange(dayOf(t.done_at))).length, open: mine.filter(t => !t.done).length, late: mine.filter(t => !t.done && t.due && t.due < today).length };
+  }).filter(r => r.done || r.open).sort((a, b) => b.done - a.done || b.open - a.open);
+  const byProject = [...projects.map(p => ({ id: p.id, name: p.name })), { id: "none", name: "Sans projet" }].map(p => {
+    const mine = list.filter(t => (p.id === "none" ? !t.project_id : t.project_id === p.id));
+    return { ...p, done: mine.filter(t => t.done && inRange(dayOf(t.done_at))).length, open: mine.filter(t => !t.done).length };
+  }).filter(r => r.done || r.open);
+  const byLabel = LABELS.map(l => ({ ...l, done: done.filter(t => t.label === l.id).length, open: open.filter(t => t.label === l.id).length })).filter(r => r.done || r.open);
+  const mts = meetings.filter(m => inRange(parisDay(Date.parse(m.starts_at))));
+  const hours = mts.reduce((a, m) => a + (Date.parse(m.ends_at) - Date.parse(m.starts_at)) / 3600e3, 0);
+  return { from, created: created.length, done: done.length, open: open.length, late: late.length, lateTasks: late, dueCount: dueIn.length, onTimeRate: dueIn.length ? Math.round(onTime.length / dueIn.length * 100) : null, avgLead, series, people, byProject, byLabel, meetings: mts.length, meetingHours: hours };
+}
+function BarRow({ label, value, max, color, extra, avatar }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, marginBottom: 7 }}>
+      <div style={{ width: 150, flexShrink: 0, display: "flex", alignItems: "center", gap: 6, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{avatar}{label}</div>
+      <div style={{ flex: 1, background: "var(--bg)", borderRadius: 6, height: 14, overflow: "hidden" }}><div style={{ width: (max ? Math.max(value / max * 100, value ? 3 : 0) : 0) + "%", height: "100%", background: color || "var(--accent)", borderRadius: 6 }} /></div>
+      <div style={{ width: 120, flexShrink: 0, color: "var(--text-dim)", fontSize: 12 }}><strong style={{ color: "var(--text)" }}>{value}</strong>{extra}</div>
+    </div>
+  );
+}
+function ReportsView({ me, accounts, tasks, projects, meetings, attendees, onOpen, notify }) {
+  const [days, setDays] = useState(30);
+  const [projectId, setProjectId] = useState("");
+  const today = parisDay();
+  const r = useMemo(() => computeReport({ tasks, meetings, attendees, accounts, projects, days, projectId, today }), [tasks, meetings, attendees, accounts, projects, days, projectId, today]);
+  const maxSeries = Math.max(1, ...r.series.map(x => Math.max(x.created, x.done)));
+  const kpi = (id, value, label, hint, color) => (
+    <div data-kpi={id} style={{ flex: "1 1 150px", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
+      <div style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, color: color || "var(--text)" }}>{value}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{label}</div>
+      <div style={{ fontSize: 11.5, color: "var(--text-dimmer)", marginTop: 2 }}>{hint}</div>
+    </div>
+  );
+  const card = (title, children, id) => (<div data-report={id} style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 18px", marginBottom: 14 }}><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{title}</div>{children}</div>);
+  const exportCsv = () => {
+    const head = ["Personne", "Terminées sur la période", "En cours", "En retard"];
+    const rows = r.people.map(x => [x.user.display_name, x.done, x.open, x.late]);
+    downloadText(`rapport-${today}.csv`, "text/csv", "\ufeff" + [head, ...rows].map(l => l.map(csvCell).join(";")).join("\r\n") + "\r\n");
+    notify("Rapport exporté.");
+  };
+  const maxP = Math.max(1, ...r.people.map(x => x.done + x.open)), maxPr = Math.max(1, ...r.byProject.map(x => x.done + x.open)), maxL = Math.max(1, ...r.byLabel.map(x => x.done + x.open));
+  const w = 100 / r.series.length;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div><h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Rapports</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>Suivez l'avancement de l'équipe : tâches terminées, retards, charge par personne et par projet.</p></div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {REPORT_PERIODS.map(([n, l]) => <button key={n} type="button" data-report-days={n} aria-pressed={days === n} onClick={() => setDays(n)} style={{ ...chipBtn, borderColor: days === n ? "var(--accent)" : "var(--border-soft)", color: days === n ? "var(--text)" : "var(--text-dim)" }}>{l}</button>)}
+          {projects.length > 0 && <select data-report-project value={projectId} onChange={e => setProjectId(e.target.value)} aria-label="Projet" style={{ ...inputStyle, width: "auto", padding: "7px 10px" }}><option value="">Tous les projets</option><option value="none">Sans projet</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+          <button type="button" data-report-export onClick={exportCsv} style={chipBtn}>⬇ Exporter (CSV)</button>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+        {kpi("done", r.done, "Terminées", `sur les ${days} derniers jours`, "#5FBF8B")}
+        {kpi("created", r.created, "Créées", `sur les ${days} derniers jours`)}
+        {kpi("open", r.open, "En cours", "à ce jour")}
+        {kpi("late", r.late, "En retard", "à ce jour", r.late ? "#FF6B5E" : undefined)}
+        {kpi("ontime", r.onTimeRate === null ? "—" : r.onTimeRate + " %", "Ponctualité", r.dueCount ? `${r.dueCount} échéance(s) dans la période` : "aucune échéance dans la période")}
+        {kpi("lead", r.avgLead === null ? "—" : (r.avgLead < 1 ? "< 1 j" : Math.round(r.avgLead * 10) / 10 + " j"), "Délai moyen", "de la création à la fin")}
+      </div>
+      {card(days > 31 ? "Activité par semaine" : "Activité par jour", (<>
+        <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}><span><span style={{ display: "inline-block", width: 10, height: 10, background: "#5FBF8B", borderRadius: 2, marginRight: 5 }} />Terminées</span><span><span style={{ display: "inline-block", width: 10, height: 10, background: "var(--text-dimmer)", borderRadius: 2, marginRight: 5 }} />Créées</span></div>
+        <svg data-report-chart viewBox="0 0 100 40" preserveAspectRatio="none" style={{ width: "100%", height: 150, display: "block" }} role="img" aria-label="Tâches créées et terminées">
+          {r.series.map((x, i) => (<g key={x.day}>
+            <rect data-bar-created={x.created} x={i * w + w * 0.1} width={w * 0.38} y={40 - x.created / maxSeries * 38} height={x.created / maxSeries * 38} fill="var(--text-dimmer)" opacity="0.7"><title>{`${fmtDay(x.day, { day: "numeric", month: "short" })} : ${x.created} créée(s)`}</title></rect>
+            <rect data-bar-done={x.done} x={i * w + w * 0.5} width={w * 0.38} y={40 - x.done / maxSeries * 38} height={x.done / maxSeries * 38} fill="#5FBF8B"><title>{`${fmtDay(x.day, { day: "numeric", month: "short" })} : ${x.done} terminée(s)`}</title></rect>
+          </g>))}
+        </svg>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-dimmer)", marginTop: 4 }}><span>{fmtDay(r.from, { day: "numeric", month: "short" })}</span><span>{fmtDay(today, { day: "numeric", month: "short" })}</span></div>
+      </>), "chart")}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 380px", minWidth: 0 }}>
+          {card("Par personne", r.people.length === 0 ? <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucune tâche assignée.</div> : r.people.map(x => <BarRow key={x.user.id} avatar={<Avatar user={x.user} size={18} />} label={x.user.display_name} value={x.done} max={maxP} color="#5FBF8B" extra={` terminée${x.done > 1 ? "s" : ""} · ${x.open} en cours${x.late ? " · " + x.late + " en retard" : ""}`} />), "people")}
+        </div>
+        <div style={{ flex: "1 1 380px", minWidth: 0 }}>
+          {card("Par projet", r.byProject.length === 0 ? <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucune tâche.</div> : r.byProject.map(x => <BarRow key={x.id} label={x.name} value={x.done} max={maxPr} color="#5B9EF5" extra={` terminée${x.done > 1 ? "s" : ""} · ${x.open} en cours`} />), "projects")}
+          {card("Par étiquette", r.byLabel.length === 0 ? <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucune tâche.</div> : r.byLabel.map(x => <BarRow key={x.id} label={x.name} value={x.done} max={maxL} color={x.hex} extra={` terminée${x.done > 1 ? "s" : ""} · ${x.open} en cours`} />), "labels")}
+        </div>
+      </div>
+      {card("Réunions", <div data-report-meetings style={{ fontSize: 13.5 }}><strong>{r.meetings}</strong> réunion{r.meetings > 1 ? "s" : ""} sur la période, soit <strong>{Math.round(r.meetingHours * 10) / 10} h</strong> au total.</div>, "meetings")}
+      {r.lateTasks.length > 0 && card(`Tâches en retard (${r.lateTasks.length})`, (<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {r.lateTasks.slice().sort((a, b) => a.due.localeCompare(b.due)).slice(0, 10).map(t => <button key={t.id} type="button" data-late-task={t.id} onClick={() => onOpen(t.id)} style={{ ...chipBtn, justifyContent: "flex-start", textAlign: "left" }}>{t.title} <span style={{ color: "#FF9A8F", marginLeft: "auto" }}>{formatDue(t.due, daysUntil(t.due))}</span></button>)}
+      </div>), "late")}
+    </div>
+  );
+}
+
 /* ---------------- Chronologie (Gantt) ---------------- */
 const GANTT_SPANS = [[14, "2 semaines"], [28, "4 semaines"], [84, "12 semaines"]];
 function GanttBoard({ tasks, accounts, onOpen }) {
@@ -2669,6 +2784,7 @@ function MyStats({ me, tasks, projects }) {
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const PATCH_TECH = {
   "2026-10-29": [
+    "Onglet Rapports : ReportsView + computeReport() (fonction pure), graphique SVG, export CSV ; raccourci G puis S ; utilise tasks.done_at (migration 05), aucune nouvelle migration.",
     "Réunions récurrentes : colonnes series_id / recurrence / recurrence_until (migration 15), une réunion réelle par occurrence, un seul e-mail avec .ics multi-événements (notify-meeting, scope series).",
     "Chronologie : GanttBoard, tasks.start_date (migration 16) avec contrainte start_date <= due ; duePatch() garde le début cohérent lors des reports.","Filtre d'échéance et duplication de réunion : uniquement côté interface, sans migration ni nouvelle fonction serveur."],
   "2026-10-28": ["Fermeture immédiate des fenêtres : e-mails et fichiers partent en arrière-plan ; callApi() abandonne après 30 s ; bouton de création désactivé pendant l'enregistrement.", "Messages non lus : état « lu » mémorisé par appareil (localStorage carnet-read-<id>), sans table ni migration. Sélection multiple : mises à jour tâche par tâche, soumises aux politiques RLS existantes.", "Expéditeur des e-mails : toujours « Le Carnet » (api/_mail.js, via() et fromLabel()) ; le Reply-To reste l\'adresse de la personne concernée. Variable facultative MAIL_FROM_NAME pour changer le nom affiché.", "Vouvoiement : textes de public/, de l'appli et des e-mails (api/*.js). Les tests ont été mis à jour en conséquence."],

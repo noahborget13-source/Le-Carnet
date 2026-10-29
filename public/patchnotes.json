@@ -2,6 +2,7 @@
   {
     "date": "2026-10-29",
     "items": [
+      "Nouvel onglet « Rapports » : tâches terminées et créées, retards, ponctualité, délai moyen, activité par jour ou par semaine, répartition par personne, par projet et par étiquette, temps passé en réunion. Choix de la période (7, 30 ou 90 jours), filtre par projet et export CSV.",
       "Réunions récurrentes : créez une réunion qui se répète chaque jour, chaque semaine, toutes les deux semaines ou chaque mois, jusqu'à la date de votre choix (52 occurrences au maximum). Les invités ne reçoivent qu'un seul e-mail, avec toutes les dates dans leur agenda.",
       "Modification d'une série : vous choisissez de modifier « cette réunion seulement » ou « celle-ci et les suivantes ». À l'annulation, vous annulez une seule réunion ou toute la série.",
       "Nouvelle vue « Chronologie » dans les Tâches : chaque tâche apparaît sous forme de barre allant de sa date de début à son échéance, sur 2, 4 ou 12 semaines.",
