@@ -17,9 +17,11 @@ function fold(line) {
 }
 
 /** Fichier .ics : method = 'REQUEST' (invitation / mise à jour) ou 'CANCEL' (annulation). */
-export function buildIcs({ meeting, organizer, attendees, method = 'REQUEST', link, sequence = 0 }) {
-  const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Le Carnet//FR', 'CALSCALE:GREGORIAN', `METHOD:${method}`,
+export function buildIcs({ meeting, meetings, organizer, attendees, method = 'REQUEST', link, sequence = 0 }) {
+  // `meetings` : toutes les occurrences d'une série (un VEVENT chacune) ; sinon la seule réunion `meeting`.
+  const list = meetings && meetings.length ? meetings : [meeting];
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Le Carnet//FR', 'CALSCALE:GREGORIAN', `METHOD:${method}`];
+  for (const meeting of list) lines.push(
     'BEGIN:VEVENT',
     `UID:${meeting.id}@le-carnet`,
     `DTSTAMP:${icsDate(Date.now())}`,
@@ -27,14 +29,15 @@ export function buildIcs({ meeting, organizer, attendees, method = 'REQUEST', li
     `DTSTART:${icsDate(Date.parse(meeting.starts_at))}`,
     `DTEND:${icsDate(Date.parse(meeting.ends_at))}`,
     `SUMMARY:${icsText(meeting.title)}`,
-    `DESCRIPTION:${icsText((meeting.notes ? meeting.notes + '\n\n' : '') + 'Appel vidéo : ' + link)}`,
-    `LOCATION:${icsText(link)}`,
-    `URL:${link}`,
+    `DESCRIPTION:${icsText((meeting.notes ? meeting.notes + '\n\n' : '') + 'Appel vidéo : ' + (meetings && meetings.length ? meetingLink(meeting) : link))}`,
+    `LOCATION:${icsText(meetings && meetings.length ? meetingLink(meeting) : link)}`,
+    `URL:${meetings && meetings.length ? meetingLink(meeting) : link}`,
     `STATUS:${method === 'CANCEL' ? 'CANCELLED' : 'CONFIRMED'}`,
     `ORGANIZER;CN=${icsText(organizer.display_name)}:mailto:${organizer.email}`,
     ...attendees.map(a => `ATTENDEE;CN=${icsText(a.display_name)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${a.email}`),
-    'END:VEVENT', 'END:VCALENDAR',
-  ];
+    'END:VEVENT',
+  );
+  lines.push('END:VCALENDAR');
   return lines.map(fold).join('\r\n') + '\r\n';
 }
 
@@ -46,3 +49,10 @@ export function whenText(meeting) {
   return sameDay ? `${day}, de ${t(s)} à ${t(e)}` : `${day} à ${t(s)} → ${e.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ })} à ${t(e)}`;
 }
 export const warnBox = (htmlLines) => `<div style="border-left:4px solid #E8A33D;background:#fff6e5;padding:10px 14px;border-radius:6px;margin:14px 0;font-size:14px"><strong>⚠️ Conflit d'horaire</strong><ul style="margin:6px 0 0;padding-left:18px">${htmlLines.map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>`;
+
+export const RECURRENCE_LABEL = { daily: 'chaque jour', weekly: 'chaque semaine', biweekly: 'toutes les deux semaines', monthly: 'chaque mois' };
+/** « chaque semaine, jusqu'au 5 janvier (12 réunions) » */
+export function seriesText(first, count) {
+  const until = new Date(first.recurrence_until + 'T12:00:00Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return `${RECURRENCE_LABEL[first.recurrence] || 'régulièrement'}, jusqu'au ${until} (${count} réunion${count > 1 ? 's' : ''})`;
+}

@@ -1,11 +1,13 @@
 // Fonction serveur Vercel — emails d'une réunion : invitation, modification, annulation.
 //   { action: 'invite' | 'update', meetingId }  → email + fichier d'agenda (.ics) à chaque invité, avec le lien d'appel.
 //                                                   Si un invité est indisponible : avertissement dans son email + résumé à l'organisateur.
+//   scope: 'series' (réunion récurrente) → un seul email pour toute la série, avec un .ics contenant chaque occurrence ;
+//                                          pour 'cancel', toute la série est annulée et supprimée.
 //   { action: 'cancel', meetingId }              → prévient les invités puis supprime la réunion.
 import { createClient } from '@supabase/supabase-js';
 import { esc, siteUrl, layout, button, sendMail, mailConfigured, wants, via } from './_mail.js';
 import { loadBusy, conflictReasons, reasonText, reasonsStamp } from './_availability.js';
-import { meetingLink, buildIcs, whenText, warnBox } from './_meeting.js';
+import { meetingLink, buildIcs, whenText, warnBox, seriesText } from './_meeting.js';
 
 const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -20,11 +22,18 @@ export default async function handler(req, res) {
     if (!caller || caller.status !== 'approved') return res.status(403).json({ error: 'Accès refusé.' });
 
     const { action, meetingId } = req.body || {};
+    const wantSeries = (req.body || {}).scope === 'series';
     if (!['invite', 'update', 'cancel'].includes(action)) return res.status(400).json({ error: 'Action inconnue' });
     const { data: meeting } = await supabaseAdmin.from('meetings').select('*').eq('id', meetingId).single();
     if (!meeting || meeting.server_id !== caller.server_id) return res.status(404).json({ error: 'Réunion introuvable.' });
     if (meeting.created_by !== caller.id && caller.role !== 'admin') return res.status(403).json({ error: "Seul l'organisateur ou l'administrateur peut faire ça." });
 
+    // Série : toutes les occurrences (même serveur), de la plus proche à la plus lointaine
+    let occ = null;
+    if (wantSeries && meeting.series_id) {
+      const { data: all } = await supabaseAdmin.from('meetings').select('*').eq('series_id', meeting.series_id).eq('server_id', caller.server_id).order('starts_at');
+      if (all && all.length) occ = all;
+    }
     const { data: atts } = await supabaseAdmin.from('meeting_attendees').select('user_id, response').eq('meeting_id', meeting.id);
     const ids = [...new Set((atts || []).map(a => a.user_id))];
     const { data: people } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, server_id, work_hours, notify_meetings, notify_conflicts').in('id', ids.concat(meeting.created_by));
@@ -33,13 +42,13 @@ export default async function handler(req, res) {
     const attendees = ids.map(id => byId.get(id)).filter(p => p && p.status === 'approved' && p.server_id === caller.server_id && p.email);
     const link = meetingLink(meeting);
     const site = siteUrl(req);
-    const when = whenText(meeting);
+    const when = occ ? `${whenText(occ[0])} · ${seriesText(occ[0], occ.length)}` : whenText(meeting);
     const sequence = Math.floor(Date.parse(meeting.created_at || meeting.starts_at) / 1000) % 1000000 + Math.floor((Date.now() - 1.7e12) / 60000);
 
     if (action === 'cancel') {
       let sent = 0;
       if (mailConfigured()) {
-        const ics = buildIcs({ meeting, organizer, attendees, method: 'CANCEL', link, sequence });
+        const ics = buildIcs({ meeting, meetings: occ, organizer, attendees, method: 'CANCEL', link, sequence });
         for (const p of attendees) {
           if (p.id === caller.id || !wants(p, 'notify_meetings')) continue;
           try {
@@ -55,10 +64,11 @@ export default async function handler(req, res) {
       }
       // Les fichiers joints sont effacés du stockage avec la réunion
       try {
-        const { data: files } = await supabaseAdmin.from('meeting_attachments').select('path').eq('meeting_id', meeting.id);
+        const { data: files } = await supabaseAdmin.from('meeting_attachments').select('path').in('meeting_id', (occ || [meeting]).map(m => m.id));
         if (files && files.length) await supabaseAdmin.storage.from('task-files').remove(files.map(f => f.path));
       } catch (_) { /* sans gravité */ }
-      await supabaseAdmin.from('meetings').delete().eq('id', meeting.id);
+      if (occ) await supabaseAdmin.from('meetings').delete().eq('series_id', meeting.series_id).eq('server_id', caller.server_id);
+      else await supabaseAdmin.from('meetings').delete().eq('id', meeting.id);
       return res.status(200).json({ ok: true, sent });
     }
 
@@ -74,7 +84,7 @@ export default async function handler(req, res) {
     }
 
     // ---- invitation ou modification, avec fichier d'agenda ----
-    const ics = buildIcs({ meeting, organizer, attendees, method: 'REQUEST', link, sequence });
+    const ics = buildIcs({ meeting, meetings: occ, organizer, attendees, method: 'REQUEST', link, sequence });
     const names = attendees.map(a => a.display_name).join(', ');
     const updated = action === 'update';
     let sent = 0;

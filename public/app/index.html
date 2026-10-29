@@ -228,6 +228,8 @@ const durationLabel = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); i
 // Instant de l'échéance (heure du navigateur). Sans heure précise : la fin de la journée.
 const dueMoment = (t) => new Date(t.due + "T" + (t.due_time ? hhmm(t.due_time) + ":00" : "23:59:59")).getTime();
 // Clé de tri : date puis heure (les tâches « toute la journée » comptent pour 23h59).
+/** Changement d'échéance : le début éventuel suit s'il se retrouve après la nouvelle échéance (ou si la date disparaît). */
+const duePatch = (t, newDue) => ({ due: newDue, ...(t.start_date && (!newDue || t.start_date > newDue) ? { start_date: newDue || null } : {}) });
 const dueKey = (t) => (t.due ? t.due + " " + (t.due_time ? hhmm(t.due_time) : "23:59") : "9999-99-99 99:99");
 function dueInfo(t) {
   if (!t.due) return null;
@@ -1471,10 +1473,32 @@ function CalendarFeedCard({ session, notify, card }) {
 }
 
 /* ---------------- Réunions ---------------- */
+const RECUR = { daily: "chaque jour", weekly: "chaque semaine", biweekly: "toutes les deux semaines", monthly: "chaque mois" };
+const MAX_OCC = 52;
+/** Jours (AAAA-MM-JJ) des occurrences d'une série, du premier jour jusqu'au jour de fin inclus ; au plus 52. */
+function occurrenceDays(start, rule, until) {
+  const out = [];
+  if (!start || !until || !RECUR[rule] || until < start) return start ? [start] : [];
+  const [y0, m0, d0] = start.split("-").map(Number);
+  for (let k = 0; out.length < MAX_OCC; k++) {
+    let day;
+    if (rule === "monthly") {
+      const t = (m0 - 1) + k, y = y0 + Math.floor(t / 12), m = (t % 12) + 1;
+      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      if (d0 > last) { if (y > Number(until.slice(0, 4)) + 1) break; continue; }   // pas de 31 en avril : on saute ce mois
+      day = `${y}-${String(m).padStart(2, "0")}-${String(d0).padStart(2, "0")}`;
+    } else day = shiftDay(start, k * (rule === "daily" ? 1 : rule === "weekly" ? 7 : 14));
+    if (day > until) break;
+    out.push(day);
+  }
+  return out;
+}
+const daysBetween = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5);
 const RESP = { accepted: ["✓", "#5FBF8B", "a accepté"], declined: ["✗", "#FF6B5E", "a refusé"], invited: ["?", "#9098A8", "n'a pas répondu"] };
-function MeetingForm({ template = null, fileCount = 0, initial, me, accounts, attendees, leaves, tasks, onCancel, onSaved, session, notify }) {
+function MeetingForm({ meetings = [], template = null, fileCount = 0, initial, me, accounts, attendees, leaves, tasks, onCancel, onSaved, session, notify }) {
   const src = initial || template;   // « Dupliquer » : on part d'une réunion existante, comme nouvelle réunion (une semaine plus tard)
   const startInit = src ? Date.parse(src.starts_at) : null;
+  const day0 = () => (initial ? parisDay(startInit) : template ? dupDay() : shiftDay(parisDay(), 1));
   const dupDay = () => { const d = shiftDay(parisDay(startInit), 7), t = shiftDay(parisDay(), 1); return d < t ? t : d; };
   const [title, setTitle] = useState(src?.title || "");
   const [notes, setNotes] = useState(src?.notes || "");
@@ -1483,6 +1507,9 @@ function MeetingForm({ template = null, fileCount = 0, initial, me, accounts, at
   const [to, setTo] = useState(src ? parisHM(Date.parse(src.ends_at)) : "11:00");
   const [people, setPeople] = useState(() => src ? attendees.filter(a => a.meeting_id === src.id && a.user_id !== me.id).map(a => a.user_id) : []);
   const [busy, setBusy] = useState(false);
+  const [repeat, setRepeat] = useState("");                       // "" = pas de répétition (nouvelle réunion seulement)
+  const [until, setUntil] = useState(() => shiftDay(day0(), 90));
+  const [applyTo, setApplyTo] = useState("one");                  // modification d'une série : "one" | "following"
   const [pendingFiles, setPendingFiles] = useState([]);
   const [callUrlText, setCallUrlText] = useState(src?.call_url || "");
   const callUrlOk = !callUrlText.trim() || /^https:\/\/\S+$/.test(callUrlText.trim());
@@ -1490,6 +1517,9 @@ function MeetingForm({ template = null, fileCount = 0, initial, me, accounts, at
   const s = day && from ? parisInstant(day, from) : 0, e = day && to ? parisInstant(day, to) : 0;
   const valid = s && e > s && e - s <= 12 * 3600e3;
   const ids = [me.id, ...people];
+  const occDays = !initial && repeat ? occurrenceDays(day, repeat, until) : [];
+  const repeatOk = !repeat || (occDays.length >= 2 && until <= shiftDay(day, 366));
+  const inSeries = Boolean(initial && initial.series_id);
   const busyRows = useBusy(valid ? ids : [], s, e, initial && initial.id);
   const lines = useMemo(() => {
     if (!valid) return [];
@@ -1510,21 +1540,43 @@ function MeetingForm({ template = null, fileCount = 0, initial, me, accounts, at
     if (busy) return;
     if (!title.trim()) { notify("Donnez un titre à la réunion.", "err"); return; }
     if (!valid) { notify(e <= s ? "L'heure de fin doit être après le début." : "Une réunion dure 12 heures au maximum.", "err"); return; }
+    if (!repeatOk) { notify(occDays.length < 2 ? "La date de fin de répétition doit permettre au moins deux réunions." : "Une série ne peut pas dépasser un an.", "err"); return; }
     if (!callUrlOk || callUrlText.trim().length > 300) { notify("Le lien d'appel doit commencer par https:// (et faire 300 caractères au maximum).", "err"); return; }
     setBusy(true);
     try {
       const row = { title: title.trim().slice(0, 120), notes: notes.trim().slice(0, 1000), call_url: callUrlText.trim() || null, starts_at: new Date(s).toISOString(), ends_at: new Date(e).toISOString() };
-      let id;
+      let id, seriesScope = false;
       if (initial) {
         id = initial.id;
-        const { error } = await supabase.from("meetings").update(row).eq("id", id);
+        // Cette réunion seulement, ou celle-ci et les suivantes de la série (même titre, notes, lien, participants ; horaires décalés d'autant)
+        const targets = inSeries && applyTo === "following"
+          ? meetings.filter(x => x.series_id === initial.series_id && x.starts_at >= initial.starts_at).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+          : [initial];
+        seriesScope = targets.length > 1;
+        const shift = daysBetween(parisDay(startInit), day);
+        for (const t of targets) {
+          const rowT = t.id === initial.id ? row : { ...row, starts_at: new Date(parisInstant(shiftDay(parisDay(Date.parse(t.starts_at)), shift), from)).toISOString(), ends_at: new Date(parisInstant(shiftDay(parisDay(Date.parse(t.starts_at)), shift), to)).toISOString() };
+          const { error } = await supabase.from("meetings").update(rowT).eq("id", t.id);
+          if (error) throw new Error(error.message);
+          const old = attendees.filter(a => a.meeting_id === t.id && a.user_id !== me.id).map(a => a.user_id);
+          const moved = t.starts_at !== rowT.starts_at || t.ends_at !== rowT.ends_at;
+          const removed = moved ? old : old.filter(x => !people.includes(x));
+          const added = moved ? people : people.filter(x => !old.includes(x));
+          for (const uid_ of removed) await supabase.from("meeting_attendees").delete().eq("meeting_id", t.id).eq("user_id", uid_);
+          if (added.length) { const { error: e2 } = await supabase.from("meeting_attendees").insert(added.map(u => ({ meeting_id: t.id, user_id: u }))); if (e2) throw new Error(e2.message); }
+        }
+      } else if (occDays.length > 1) {
+        // Série : chaque occurrence est une vraie réunion (même salon d'appel, même identifiant de série)
+        const series_id = crypto.randomUUID ? crypto.randomUUID() : null;
+        if (!series_id) throw new Error("Ce navigateur ne permet pas de créer une série.");
+        const room = uid() + uid() + uid();
+        const rows = occDays.map(d => ({ ...row, starts_at: new Date(parisInstant(d, from)).toISOString(), ends_at: new Date(parisInstant(d, to)).toISOString(), room, series_id, recurrence: repeat, recurrence_until: until, server_id: me.server_id, created_by: me.id }));
+        const { data, error } = await supabase.from("meetings").insert(rows).select();
         if (error) throw new Error(error.message);
-        const old = attendees.filter(a => a.meeting_id === id && a.user_id !== me.id).map(a => a.user_id);
-        const moved = initial.starts_at !== row.starts_at || initial.ends_at !== row.ends_at;
-        const removed = moved ? old : old.filter(x => !people.includes(x));
-        const added = moved ? people : people.filter(x => !old.includes(x));
-        for (const uid_ of removed) await supabase.from("meeting_attendees").delete().eq("meeting_id", id).eq("user_id", uid_);
-        if (added.length) { const { error: e2 } = await supabase.from("meeting_attendees").insert(added.map(u => ({ meeting_id: id, user_id: u }))); if (e2) throw new Error(e2.message); }
+        const first = data.slice().sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
+        id = first.id; seriesScope = true;
+        const { error: e2 } = await supabase.from("meeting_attendees").insert(data.flatMap(m => [{ meeting_id: m.id, user_id: me.id, response: "accepted" }, ...people.map(u => ({ meeting_id: m.id, user_id: u }))]));
+        if (e2) throw new Error(e2.message);
       } else {
         const { data, error } = await supabase.from("meetings").insert({ ...row, server_id: me.server_id, created_by: me.id }).select().single();
         if (error) throw new Error(error.message);
@@ -1533,7 +1585,7 @@ function MeetingForm({ template = null, fileCount = 0, initial, me, accounts, at
         if (e2) throw new Error(e2.message);
       }
       // La réunion est enregistrée : la fenêtre se ferme tout de suite ; fichiers et e-mails partent ensuite, en arrière-plan.
-      notify(initial ? "Réunion mise à jour." : "Réunion créée.");
+      notify(initial ? (seriesScope ? "Réunions mises à jour." : "Réunion mise à jour.") : seriesScope ? `Série créée : ${occDays.length} réunions.` : "Réunion créée.");
       onSaved();
       const filesToSend = pendingFiles, wasEdit = Boolean(initial), hasGuests = people.length > 0;
       (async () => {
@@ -1543,7 +1595,7 @@ function MeetingForm({ template = null, fileCount = 0, initial, me, accounts, at
         }
         if (hasGuests || wasEdit) {
           try {
-            const r = await callApi("/api/notify-meeting", { action: wasEdit ? "update" : "invite", meetingId: id }, session);
+            const r = await callApi("/api/notify-meeting", { action: wasEdit ? "update" : "invite", meetingId: id, scope: seriesScope ? "series" : "one" }, session);
             const sent = r.sent || 0, conflicts = r.conflicts || 0;
             if (sent || conflicts) notify((sent ? `${sent} e-mail(s) envoyé(s)` : "") + (sent && conflicts ? " · " : "") + (conflicts ? `${conflicts} conflit(s) signalé(s)` : "") + ".");
           } catch (_) {}
@@ -1563,6 +1615,20 @@ function MeetingForm({ template = null, fileCount = 0, initial, me, accounts, at
           <div style={{ flex: "1 1 100px" }}><Field label="Fin"><input type="time" value={to} onChange={ev => setTo(ev.target.value)} style={inputStyle} aria-label="Heure de fin" /></Field></div>
         </div>
         <div style={{ fontSize: 11.5, color: "var(--text-dimmer)", margin: "-8px 0 14px" }}>Heure de Paris.</div>
+        {!initial && (
+          <div data-repeat-block style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 14 }}>
+            <div style={{ flex: "1 1 200px" }}><Field label="Répétition"><select data-repeat value={repeat} onChange={ev => setRepeat(ev.target.value)} style={inputStyle} aria-label="Répétition de la réunion"><option value="">Ne pas répéter</option>{Object.entries(RECUR).map(([k, v]) => <option key={k} value={k}>{v[0].toUpperCase() + v.slice(1)}</option>)}</select></Field></div>
+            {repeat && <div style={{ flex: "1 1 150px" }}><Field label="Jusqu'au"><input data-repeat-until type="date" value={until} min={day} max={shiftDay(day, 366)} onChange={ev => setUntil(ev.target.value)} style={inputStyle} aria-label="Fin de la répétition" /></Field></div>}
+            {repeat && <div data-repeat-count style={{ flex: "1 1 100%", fontSize: 12.5, color: repeatOk ? "var(--text-dim)" : "var(--danger, #c0392b)", marginTop: -6 }}>{!repeatOk ? "Choisissez une date de fin qui permette au moins deux réunions (un an maximum)." : `${occDays.length} réunion${occDays.length > 1 ? "s" : ""} seront créées${occDays.length >= MAX_OCC ? " (52 au maximum)" : ""}, la dernière le ${occDays[occDays.length - 1].split("-").reverse().join("/")}. Les invités reçoivent un seul e-mail.`}</div>}
+          </div>
+        )}
+        {inSeries && (
+          <div data-apply-to role="radiogroup" aria-label="Portée de la modification" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+            <span style={{ fontSize: 12.5, color: "var(--text-dim)", fontWeight: 500, width: "100%" }}>🔁 Cette réunion fait partie d'une série ({RECUR[initial.recurrence]})</span>
+            <button type="button" role="radio" aria-checked={applyTo === "one"} data-apply="one" onClick={() => setApplyTo("one")} style={{ ...chipBtn, borderColor: applyTo === "one" ? "var(--accent, #5B9EF5)" : undefined }}>Cette réunion seulement</button>
+            <button type="button" role="radio" aria-checked={applyTo === "following"} data-apply="following" onClick={() => setApplyTo("following")} style={{ ...chipBtn, borderColor: applyTo === "following" ? "var(--accent, #5B9EF5)" : undefined }}>Celle-ci et les suivantes</button>
+          </div>
+        )}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Participants {people.length ? `(${people.length})` : ""}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1578,7 +1644,7 @@ function MeetingForm({ template = null, fileCount = 0, initial, me, accounts, at
         <SlotFinder ids={ids} accounts={accounts} tasks={tasks} durationMin={valid ? Math.round((e - s) / 60000) : 60} ignoreMeetingId={initial && initial.id} onPick={(x) => { setDay(x.day); setFrom(x.from); setTo(x.to); }} />
         <ConflictBox lines={lines} />
         <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginBottom: 16, lineHeight: 1.5 }}>📹 Un lien d'appel vidéo est créé automatiquement. Les invités reçoivent un email avec un fichier à ajouter à leur agenda.</div>
-        <div style={{ display: "flex", gap: 10 }}><button type="button" onClick={onCancel} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" onClick={save} disabled={busy} style={{ ...primaryBtn, flex: 1, opacity: busy ? 0.6 : 1 }}>{busy ? "Enregistrement…" : initial ? "Enregistrer" : people.length ? "Créer et inviter" : "Créer la réunion"}</button></div>
+        <div style={{ display: "flex", gap: 10 }}><button type="button" onClick={onCancel} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" onClick={save} disabled={busy} style={{ ...primaryBtn, flex: 1, opacity: busy ? 0.6 : 1 }}>{busy ? "Enregistrement…" : initial ? "Enregistrer" : occDays.length > 1 ? `Créer ${occDays.length} réunions` : people.length ? "Créer et inviter" : "Créer la réunion"}</button></div>
       </div>
     </div>
   );
@@ -1601,7 +1667,7 @@ function MeetingCard({ onDuplicate, m, me, isAdmin, accounts, attendees, onEdit,
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={{ fontWeight: 600, fontSize: 15, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{m.title}{live && <span style={{ fontSize: 11, fontWeight: 700, color: "#7DB4FF", background: "#5B9EF522", borderRadius: 10, padding: "2px 8px" }}>EN COURS</span>}</div>
           <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 3, textTransform: "capitalize" }}>{fmtWhen(m)}</div>
-          <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 2 }}>Organisée par {org ? org.display_name : "un ancien membre"}</div>
+          <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 2 }}>Organisée par {org ? org.display_name : "un ancien membre"}{m.series_id && <span data-series-badge title={`Série : ${RECUR[m.recurrence] || ""}, jusqu'au ${String(m.recurrence_until || "").split("-").reverse().join("/")}`}> · 🔁 {RECUR[m.recurrence] || "série"}</span>}</div>
         </div>
         {!past && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1700,9 +1766,12 @@ function MeetingsView({ me, session, isAdmin, myPerms = {}, accounts, meetings, 
   const now = Date.now();
   const upcoming = meetings.filter(m => Date.parse(m.ends_at) > now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const past = meetings.filter(m => Date.parse(m.ends_at) <= now).sort((a, b) => b.starts_at.localeCompare(a.starts_at)).slice(0, 15);
-  const cancel = async (m) => {
-    if (!window.confirm(`Annuler la réunion « ${m.title} » ? Les invités seront prévenus par email.`)) return;
-    try { const r = await callApi("/api/notify-meeting", { action: "cancel", meetingId: m.id }, session); notify("Réunion annulée" + (r.sent ? ` · ${r.sent} email(s) envoyé(s).` : ".")); }
+  const [cancelAsk, setCancelAsk] = useState(null);   // réunion d'une série dont on demande la portée de l'annulation
+  const cancel = async (m, scope = "one") => {
+    if (m.series_id && scope === "ask") { setCancelAsk(m); return; }
+    if (!m.series_id && !window.confirm(`Annuler la réunion « ${m.title} » ? Les invités seront prévenus par email.`)) return;
+    setCancelAsk(null);
+    try { const r = await callApi("/api/notify-meeting", { action: "cancel", meetingId: m.id, scope: m.series_id ? scope : "one" }, session); notify("Réunion annulée" + (r.sent ? ` · ${r.sent} email(s) envoyé(s).` : ".")); }
     catch (e) { notify(e.message, "err"); }
   };
   const instant = async () => {
@@ -1723,13 +1792,25 @@ function MeetingsView({ me, session, isAdmin, myPerms = {}, accounts, meetings, 
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {upcoming.length === 0 && <EmptyState text="Aucune réunion à venir. Créez-en une avec « Nouvelle réunion »." />}
-        {upcoming.map(m => <MeetingCard key={m.id} onDuplicate={canCreate ? (x) => setForm({ __dup: x }) : undefined} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={cancel} notify={notify} session={session} canMakeTasks={isAdmin || !!myPerms.createTasks} files={meetingFiles.filter(f => f.meeting_id === m.id)} onFilesChanged={onFilesChanged} />)}
+        {upcoming.map(m => <MeetingCard key={m.id} onDuplicate={canCreate ? (x) => setForm({ __dup: x }) : undefined} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={(x) => cancel(x, "ask")} notify={notify} session={session} canMakeTasks={isAdmin || !!myPerms.createTasks} files={meetingFiles.filter(f => f.meeting_id === m.id)} onFilesChanged={onFilesChanged} />)}
       </div>
       {past.length > 0 && (<>
         <button type="button" onClick={() => setShowPast(v => !v)} style={{ ...chipBtn, marginTop: 20 }}>{showPast ? "Masquer" : "Voir"} les réunions passées ({past.length})</button>
-        {showPast && <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>{past.map(m => <MeetingCard key={m.id} onDuplicate={canCreate ? (x) => setForm({ __dup: x }) : undefined} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={cancel} notify={notify} session={session} canMakeTasks={isAdmin || !!myPerms.createTasks} files={meetingFiles.filter(f => f.meeting_id === m.id)} onFilesChanged={onFilesChanged} />)}</div>}
+        {showPast && <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>{past.map(m => <MeetingCard key={m.id} onDuplicate={canCreate ? (x) => setForm({ __dup: x }) : undefined} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={(x) => cancel(x, "ask")} notify={notify} session={session} canMakeTasks={isAdmin || !!myPerms.createTasks} files={meetingFiles.filter(f => f.meeting_id === m.id)} onFilesChanged={onFilesChanged} />)}</div>}
       </>)}
-      {form && <MeetingForm template={form && form.__dup ? form.__dup : null} fileCount={form === "new" || form.__dup ? 0 : meetingFiles.filter(a => a.meeting_id === form.id).length} initial={form === "new" || form.__dup ? null : form} me={me} accounts={accounts} attendees={attendees} leaves={leaves} tasks={tasks} session={session} notify={notify} onCancel={() => setForm(null)} onSaved={() => setForm(null)} />}
+      {cancelAsk && (() => { const n = meetings.filter(x => x.series_id === cancelAsk.series_id).length; return (
+        <div data-cancel-ask style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) setCancelAsk(null); }}>
+          <div className="modal-card" style={{ ...modalStyle, width: 440 }}>
+            <h2 style={{ fontFamily: "Fraunces, serif", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>Annuler une réunion récurrente</h2>
+            <p style={{ fontSize: 13.5, color: "var(--text-dim)", margin: "0 0 16px" }}>« {cancelAsk.title} » fait partie d'une série de {n} réunion{n > 1 ? "s" : ""}. Les invités seront prévenus par e-mail.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button type="button" data-cancel-one onClick={() => cancel(cancelAsk, "one")} style={secondaryBtn}>Cette réunion seulement</button>
+              <button type="button" data-cancel-series onClick={() => cancel(cancelAsk, "series")} style={{ ...secondaryBtn, color: "#FF9A8F" }}>Toute la série ({n} réunions)</button>
+              <button type="button" onClick={() => setCancelAsk(null)} style={{ ...chipBtn, justifyContent: "center" }}>Retour</button>
+            </div>
+          </div>
+        </div>); })()}
+      {form && <MeetingForm meetings={meetings} template={form && form.__dup ? form.__dup : null} fileCount={form === "new" || form.__dup ? 0 : meetingFiles.filter(a => a.meeting_id === form.id).length} initial={form === "new" || form.__dup ? null : form} me={me} accounts={accounts} attendees={attendees} leaves={leaves} tasks={tasks} session={session} notify={notify} onCancel={() => setForm(null)} onSaved={() => setForm(null)} />}
     </div>
   );
 }
@@ -2236,6 +2317,67 @@ function BrowserNotifCard({ card }) {
 }
 
 /* ---------------- Tâches : vue Semaine (glisser-déposer pour replanifier) ---------------- */
+/* ---------------- Chronologie (Gantt) ---------------- */
+const GANTT_SPANS = [[14, "2 semaines"], [28, "4 semaines"], [84, "12 semaines"]];
+function GanttBoard({ tasks, accounts, onOpen }) {
+  const [span, setSpan] = useState(28);
+  const [offset, setOffset] = useState(0);                       // décalage en jours depuis le lundi de la semaine courante
+  const today = parisDay();
+  const first = shiftDay(today, -(isoWd(today) - 1) + offset);
+  const last = shiftDay(first, span - 1);
+  const days = Array.from({ length: span }, (_, i) => shiftDay(first, i));
+  const dated = tasks.filter(t => t.due);
+  const rows = dated.map(t => ({ t, a: t.start_date && t.start_date <= t.due ? t.start_date : t.due, b: t.due }))
+    .filter(r => r.b >= first && r.a <= last)
+    .sort((x, y) => x.a.localeCompare(y.a) || x.b.localeCompare(y.b) || y.t.priority - x.t.priority);
+  const undated = tasks.filter(t => !t.due && !t.done).length;
+  const pct = (d) => (daysBetween(first, d) / span) * 100;
+  const todayPct = today >= first && today <= last ? pct(today) + 50 / span : null;
+  const nav = (n) => setOffset(o => o + n);
+  const headDay = (d) => span <= 28 ? fmtDay(d, { day: "numeric" }) : (d.slice(8) === "01" || isoWd(d) === 1 ? fmtDay(d, { day: "numeric", month: "short" }) : "");
+  return (
+    <div data-gantt>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+        <button type="button" data-gantt-prev onClick={() => nav(-Math.max(7, span / 2))} style={chipBtn} aria-label="Période précédente">◀</button>
+        <button type="button" data-gantt-today onClick={() => setOffset(0)} style={chipBtn}>Aujourd'hui</button>
+        <button type="button" data-gantt-next onClick={() => nav(Math.max(7, span / 2))} style={chipBtn} aria-label="Période suivante">▶</button>
+        <span style={{ fontSize: 13, color: "var(--text-dim)", textTransform: "capitalize" }}>{fmtDay(first, { day: "numeric", month: "long" })} → {fmtDay(last, { day: "numeric", month: "long", year: "numeric" })}</span>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>{GANTT_SPANS.map(([n, l]) => <button key={n} type="button" data-gantt-span={n} aria-pressed={span === n} onClick={() => setSpan(n)} style={{ ...chipBtn, borderColor: span === n ? "var(--accent)" : "var(--border-soft)", color: span === n ? "var(--text)" : "var(--text-dim)" }}>{l}</button>)}</div>
+      </div>
+      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, overflowX: "auto" }}>
+        <div style={{ minWidth: 720 }}>
+          <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ width: 200, flexShrink: 0, padding: "8px 12px", fontSize: 12, color: "var(--text-dimmer)", fontWeight: 600 }}>Tâche</div>
+            <div style={{ flex: 1, position: "relative", display: "flex" }}>
+              {days.map(d => <div key={d} style={{ flex: 1, textAlign: "center", fontSize: 10.5, padding: "8px 0", color: d === today ? "var(--accent)" : "var(--text-dimmer)", fontWeight: d === today ? 700 : 500, background: isoWd(d) >= 6 ? "var(--bg)" : "transparent", overflow: "hidden" }}>{headDay(d)}</div>)}
+            </div>
+          </div>
+          {rows.length === 0 && <div style={{ padding: "26px 16px", fontSize: 13.5, color: "var(--text-dimmer)", textAlign: "center" }}>Aucune tâche avec une échéance sur cette période.</div>}
+          {rows.map(({ t, a, b }) => {
+            const label = LABELS.find(l => l.id === t.label) || LABELS[0];
+            const left = Math.max(0, pct(a)), right = Math.min(100, pct(b) + 100 / span);
+            const late = !t.done && t.due < today;
+            const who = assigneeIds(t).map(id => accounts.find(x => x.id === id)).filter(Boolean);
+            return (
+              <div key={t.id} data-gantt-row={t.title} style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border-soft)", minHeight: 38 }}>
+                <div onClick={() => onOpen(t.id)} title={t.title} style={{ width: 200, flexShrink: 0, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: t.done ? "line-through" : "none", opacity: t.done ? 0.6 : 1 }}>{t.title}</div>
+                <div style={{ flex: 1, position: "relative", height: 38 }}>
+                  {todayPct !== null && <div style={{ position: "absolute", left: todayPct + "%", top: 0, bottom: 0, width: 2, background: "var(--accent)", opacity: 0.45 }} />}
+                  <button type="button" data-gantt-bar={t.id} onClick={() => onOpen(t.id)} title={`${t.title} · ${a === b ? fmtDay(b, { day: "numeric", month: "short" }) : fmtDay(a, { day: "numeric", month: "short" }) + " → " + fmtDay(b, { day: "numeric", month: "short" })}`}
+                    style={{ position: "absolute", top: 7, height: 24, left: left + "%", width: Math.max(right - left, 1.2) + "%", background: label.hex, opacity: t.done ? 0.35 : 0.9, border: late ? "2px solid #FF6B5E" : "none", borderRadius: 6, cursor: "pointer", padding: "0 6px", color: "#fff", fontSize: 11, fontWeight: 600, textAlign: "left", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 4 }}>
+                    {who.length > 0 && <AvatarStack users={who} size={14} max={2} />}{right - left > 14 ? t.title : ""}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 10, lineHeight: 1.6 }}>Une barre va du début à l'échéance de la tâche (une tâche sans début n'occupe que son jour d'échéance). Renseignez le début dans la fiche de la tâche. Contour rouge : en retard.{undated > 0 ? ` ${undated} tâche${undated > 1 ? "s" : ""} sans échéance ne figure${undated > 1 ? "nt" : ""} pas ici.` : ""}</div>
+    </div>
+  );
+}
+
 function WeekBoard({ tasks, accounts, canEditTask, onOpen, onMoveDue }) {
   const [wk, setWk] = useState(0);
   const [over, setOver] = useState(null);
@@ -2526,7 +2668,9 @@ function MyStats({ me, tasks, projects }) {
    Les nouveautés visibles de tous sont dans /patchnotes.json (affichées sur la page d'accueil du site).
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const PATCH_TECH = {
-  "2026-10-29": ["Filtre d'échéance et duplication de réunion : uniquement côté interface, sans migration ni nouvelle fonction serveur."],
+  "2026-10-29": [
+    "Réunions récurrentes : colonnes series_id / recurrence / recurrence_until (migration 15), une réunion réelle par occurrence, un seul e-mail avec .ics multi-événements (notify-meeting, scope series).",
+    "Chronologie : GanttBoard, tasks.start_date (migration 16) avec contrainte start_date <= due ; duePatch() garde le début cohérent lors des reports.","Filtre d'échéance et duplication de réunion : uniquement côté interface, sans migration ni nouvelle fonction serveur."],
   "2026-10-28": ["Fermeture immédiate des fenêtres : e-mails et fichiers partent en arrière-plan ; callApi() abandonne après 30 s ; bouton de création désactivé pendant l'enregistrement.", "Messages non lus : état « lu » mémorisé par appareil (localStorage carnet-read-<id>), sans table ni migration. Sélection multiple : mises à jour tâche par tâche, soumises aux politiques RLS existantes.", "Expéditeur des e-mails : toujours « Le Carnet » (api/_mail.js, via() et fromLabel()) ; le Reply-To reste l\'adresse de la personne concernée. Variable facultative MAIL_FROM_NAME pour changer le nom affiché.", "Vouvoiement : textes de public/, de l'appli et des e-mails (api/*.js). Les tests ont été mis à jour en conséquence."],
   "2026-10-27": ["Export .docx : ZIP minimal écrit à la main (aucune bibliothèque ajoutée, aucun fichier dans api/), vérifié avec python-docx et LibreOffice.", "Dupliquer / Reporter : simples insert / update sur tasks, soumis aux politiques RLS existantes (aucune migration)."],
   "2026-10-26": [
@@ -2978,7 +3122,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
   const [filterDue, setFilterDue] = useState("");
   const [showProjects, setShowProjects] = useState(false);
   const canCreateProject = isAdmin || me.role === "moderator";
-  const [view, setView] = useState(() => { try { const v = localStorage.getItem("carnet-view"); return v === "kanban" || v === "week" ? v : "list"; } catch (_) { return "list"; } });
+  const [view, setView] = useState(() => { try { const v = localStorage.getItem("carnet-view"); return v === "kanban" || v === "week" || v === "gantt" ? v : "list"; } catch (_) { return "list"; } });
   useEffect(() => {
     const f = () => { window.__carnetNewTask = false; if (isAdmin || myPerms.createTasks) { setEditing(null); setShowForm(true); } };
     if (window.__carnetNewTask) f();
@@ -2987,7 +3131,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
   }, [isAdmin, myPerms.createTasks]);
   const changeView = (v) => { setView(v); if (v === "week") setFilterMine(true); try { localStorage.setItem("carnet-view", v); } catch (_) {} };
   const moveDue = async (t, day) => {
-    const patch = day ? { due: day } : { due: null, due_time: null };
+    const patch = day ? duePatch(t, day) : { due: null, due_time: null, start_date: null };
     const { error } = await supabase.from("tasks").update(patch).eq("id", t.id);
     notify(error ? "Vous n'avez pas le droit de modifier cette tâche." : (day ? `« ${t.title} » déplacée au ${fmtDay(day, { weekday: "long", day: "numeric", month: "long" })}.` : `« ${t.title} » n'a plus de date.`), error ? "err" : "ok");
   };
@@ -3096,7 +3240,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
     const next = nextOccurrence(t.due, t.recurrence);
     const ids = assigneeIds(t);
     const { error } = await supabase.from('tasks').insert({
-      title: t.title, notes: t.notes, label: t.label, priority: t.priority, due: next, due_time: t.due_time || null, assignee: ids[0] || null, assignees: ids,
+      title: t.title, notes: t.notes, label: t.label, priority: t.priority, due: next, start_date: t.start_date && t.due ? shiftDay(next, -daysBetween(t.start_date, t.due)) : null, due_time: t.due_time || null, assignee: ids[0] || null, assignees: ids,
       tags: t.tags || [], subtasks: (t.subtasks || []).map(x => ({ ...x, done: false })), recurrence: t.recurrence,
       done: false, created_by: t.created_by, server_id: me.server_id, project_id: t.project_id || null,
     });
@@ -3132,7 +3276,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
     for (const t of allowed) {
       let error = null;
       if (kind === "done") { await setStatus(t, "done"); ok++; continue; }
-      if (kind === "tomorrow") ({ error } = await supabase.from('tasks').update({ due: tomorrow }).eq('id', t.id));
+      if (kind === "tomorrow") ({ error } = await supabase.from('tasks').update(duePatch(t, tomorrow)).eq('id', t.id));
       else ({ error } = await supabase.rpc('trash_task', { p_id: t.id }));
       if (!error) ok++;
     }
@@ -3160,7 +3304,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
         </div>
       </div>
       <div className="task-toolbar" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 20 }}>
-        <div style={{ display: "flex", gap: 6 }}>{viewBtn("list", I.List, "Liste")}{viewBtn("kanban", I.Columns, "Kanban")}{viewBtn("week", I.Calendar, "Semaine")}</div>
+        <div style={{ display: "flex", gap: 6 }}>{viewBtn("list", I.List, "Liste")}{viewBtn("kanban", I.Columns, "Kanban")}{viewBtn("week", I.Calendar, "Semaine")}{viewBtn("gantt", I.Calendar, "Chronologie")}</div>
         <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}><I.Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)" }} /><input data-search value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher (titre, notes, #étiquette)…" style={{ ...inputStyle, paddingLeft: 32, background: "var(--bg-2)" }} /></div>
         <SelectPill icon={I.Sort} value={sortBy} onChange={setSortBy} options={[{ value: "priority", label: "Trier : priorité" }, { value: "due", label: "Trier : échéance" }, { value: "title", label: "Trier : titre" }]} />
         {view === "list" && <button type="button" data-select-toggle onClick={() => (selectMode ? exitSelect() : setSelectMode(true))} style={{ ...chipBtn, borderColor: selectMode ? "var(--accent)" : "var(--border-soft)", color: selectMode ? "var(--text)" : "var(--text-dim)" }}>{selectMode ? "✕ Quitter la sélection" : "☑ Sélectionner"}</button>}
@@ -3190,6 +3334,8 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
             </div>
           )}
         </div>
+      ) : view === "gantt" ? (
+        <GanttBoard tasks={visible} accounts={accounts} onOpen={onOpen} />
       ) : view === "week" ? (
         <WeekBoard tasks={visible} accounts={accounts} canEditTask={canEditTask} onOpen={onOpen} onMoveDue={moveDue} />
       ) : (
@@ -3518,6 +3664,7 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
   const [label, setLabel] = useState(initial?.label || LABELS[0].id);
   const [priority, setPriority] = useState(initial?.priority || 2);
   const [due, setDue] = useState(initial?.due || "");
+  const [startDate, setStartDate] = useState(initial?.start_date || "");
   const [timed, setTimed] = useState(Boolean(initial?.due_time));
   const [dueTime, setDueTime] = useState(initial?.due_time ? hhmm(initial.due_time) : "");
   const [assignees, setAssignees] = useState(() => initial ? assigneeIds(initial) : (accounts.some(a => a.id === meId) ? [meId] : []));
@@ -3553,7 +3700,7 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
     setSaving(true);
     try { await onSave({
       ...(initial?.id ? { id: initial.id } : {}),
-      title: title.trim(), notes: notes.trim(), label, priority: Number(priority), due: due || null, due_time: due && timed && dueTime ? dueTime : null,
+      title: title.trim(), notes: notes.trim(), label, priority: Number(priority), due: due || null, start_date: due && startDate && startDate <= due ? startDate : null, due_time: due && timed && dueTime ? dueTime : null,
       assignees, assignee: assignees[0] || null, project_id: projectId || null,
       tags: parseTags(tagsText), subtasks: pendingSub, recurrence: recurrence || null,
       saveAsTemplate: asTemplate ? (tplName.trim() || title.trim()) : null,
@@ -3595,6 +3742,11 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
         </div>
         {due && (
           <div style={{ marginBottom: 14, marginTop: -4 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+              <label style={{ fontSize: 12.5, color: "var(--text-dim)", fontWeight: 500 }} htmlFor="task-start">Début (facultatif, pour la vue Chronologie)</label>
+              <input id="task-start" data-start-date type="date" value={startDate} max={due} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 10px" }} />
+              {startDate && <button type="button" onClick={() => setStartDate("")} style={{ ...chipBtn, fontSize: 12 }}>Effacer</button>}
+            </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {[[false, "Toute la journée"], [true, "À une heure précise"]].map(([val, lab]) => (
                 <button key={lab} type="button" onClick={() => { setTimed(val); if (val && !dueTime) setDueTime("18:00"); }} style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, border: `1.5px solid ${timed === val ? "var(--accent)" : "var(--border-soft)"}`, background: timed === val ? "#5B6EF51A" : "transparent", color: timed === val ? "var(--accent-2)" : "var(--text-dim)" }}>{lab}</button>
@@ -3757,13 +3909,13 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
   const canAttach = me.role !== "guest";
   const canCreate = isAdmin || myPerms.createTasks;
   const postpone = async (newDue) => {
-    const { error } = await supabase.from('tasks').update({ due: newDue }).eq('id', task.id);
+    const { error } = await supabase.from('tasks').update(duePatch(task, newDue)).eq('id', task.id);
     notify(error ? "Vous n'avez pas le droit de modifier cette tâche." : "Échéance reportée au " + formatDue(newDue, daysUntil(newDue)).toLowerCase() + ".", error ? "err" : "ok");
   };
   const duplicate = async () => {
     const { data, error } = await supabase.from('tasks').insert({
       server_id: me.server_id, created_by: me.id, title: (task.title + " (copie)").slice(0, 200), notes: task.notes || "", label: task.label, priority: task.priority,
-      due: task.due || null, due_time: task.due_time || null, assignees: task.assignees || [], assignee: (task.assignees || [])[0] || task.assignee || null, project_id: task.project_id || null,
+      due: task.due || null, start_date: task.start_date || null, due_time: task.due_time || null, assignees: task.assignees || [], assignee: (task.assignees || [])[0] || task.assignee || null, project_id: task.project_id || null,
       tags: task.tags || [], subtasks: (task.subtasks || []).map(x => ({ ...x, done: false })), recurrence: task.recurrence || null, done: false,
     }).select().single();
     if (error || !data) { notify(error ? error.message : "Duplication refusée.", "err"); return; }
