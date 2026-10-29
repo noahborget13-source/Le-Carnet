@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-10-29",
+    "items": [
+      "Tâches : un nouveau filtre d'échéance dans la vue Liste (en retard, aujourd'hui, 7 prochains jours, sans échéance).",
+      "Réunions : le bouton « Dupliquer » crée une nouvelle réunion à partir d'une existante (titre, notes, lien d'appel et invités repris, date une semaine plus tard), y compris depuis une réunion passée."
+    ]
+  },
+  {
     "date": "2026-10-28",
     "items": [
       "Le site s'adresse désormais à vous (vouvoiement) partout : page d'accueil, application et e-mails.",
