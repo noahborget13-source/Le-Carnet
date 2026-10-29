@@ -1472,17 +1472,19 @@ function CalendarFeedCard({ session, notify, card }) {
 
 /* ---------------- Réunions ---------------- */
 const RESP = { accepted: ["✓", "#5FBF8B", "a accepté"], declined: ["✗", "#FF6B5E", "a refusé"], invited: ["?", "#9098A8", "n'a pas répondu"] };
-function MeetingForm({ fileCount = 0, initial, me, accounts, attendees, leaves, tasks, onCancel, onSaved, session, notify }) {
-  const startInit = initial ? Date.parse(initial.starts_at) : null;
-  const [title, setTitle] = useState(initial?.title || "");
-  const [notes, setNotes] = useState(initial?.notes || "");
-  const [day, setDay] = useState(initial ? parisDay(startInit) : shiftDay(parisDay(), 1));
-  const [from, setFrom] = useState(initial ? parisHM(startInit) : "10:00");
-  const [to, setTo] = useState(initial ? parisHM(Date.parse(initial.ends_at)) : "11:00");
-  const [people, setPeople] = useState(() => initial ? attendees.filter(a => a.meeting_id === initial.id && a.user_id !== me.id).map(a => a.user_id) : []);
+function MeetingForm({ template = null, fileCount = 0, initial, me, accounts, attendees, leaves, tasks, onCancel, onSaved, session, notify }) {
+  const src = initial || template;   // « Dupliquer » : on part d'une réunion existante, comme nouvelle réunion (une semaine plus tard)
+  const startInit = src ? Date.parse(src.starts_at) : null;
+  const dupDay = () => { const d = shiftDay(parisDay(startInit), 7), t = shiftDay(parisDay(), 1); return d < t ? t : d; };
+  const [title, setTitle] = useState(src?.title || "");
+  const [notes, setNotes] = useState(src?.notes || "");
+  const [day, setDay] = useState(initial ? parisDay(startInit) : template ? dupDay() : shiftDay(parisDay(), 1));
+  const [from, setFrom] = useState(src ? parisHM(startInit) : "10:00");
+  const [to, setTo] = useState(src ? parisHM(Date.parse(src.ends_at)) : "11:00");
+  const [people, setPeople] = useState(() => src ? attendees.filter(a => a.meeting_id === src.id && a.user_id !== me.id).map(a => a.user_id) : []);
   const [busy, setBusy] = useState(false);
   const [pendingFiles, setPendingFiles] = useState([]);
-  const [callUrlText, setCallUrlText] = useState(initial?.call_url || "");
+  const [callUrlText, setCallUrlText] = useState(src?.call_url || "");
   const callUrlOk = !callUrlText.trim() || /^https:\/\/\S+$/.test(callUrlText.trim());
   const others = accounts.filter(a => a.id !== me.id);
   const s = day && from ? parisInstant(day, from) : 0, e = day && to ? parisInstant(day, to) : 0;
@@ -1582,7 +1584,7 @@ function MeetingForm({ fileCount = 0, initial, me, accounts, attendees, leaves, 
   );
 }
 
-function MeetingCard({ m, me, isAdmin, accounts, attendees, onEdit, onCancel, notify, session, canMakeTasks, files = [], onFilesChanged }) {
+function MeetingCard({ onDuplicate, m, me, isAdmin, accounts, attendees, onEdit, onCancel, notify, session, canMakeTasks, files = [], onFilesChanged }) {
   const [showMin, setShowMin] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const list = attendees.filter(a => a.meeting_id === m.id);
@@ -1628,6 +1630,7 @@ function MeetingCard({ m, me, isAdmin, accounts, attendees, onEdit, onCancel, no
       )}
       <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" data-minutes-toggle onClick={() => setShowMin(v => !v)} style={{ ...chipBtn, fontSize: 12.5 }}>📝 Compte-rendu{m.minutes ? " ✓" : ""} {showMin ? "▲" : "▼"}</button>
+        {onDuplicate && <button type="button" data-meeting-dup onClick={() => onDuplicate(m)} style={{ ...chipBtn, fontSize: 12.5 }}>⧉ Dupliquer</button>}
         <button type="button" data-files-toggle onClick={() => setShowFiles(v => !v)} style={{ ...chipBtn, fontSize: 12.5 }}>📎 Pièces jointes{files.length ? ` (${files.length})` : ""} {showFiles ? "▲" : "▼"}</button>
       </div>
       {showFiles && <MeetingFiles m={m} me={me} canManage={canManage} items={files} notify={notify} onChanged={onFilesChanged} />}
@@ -1720,13 +1723,13 @@ function MeetingsView({ me, session, isAdmin, myPerms = {}, accounts, meetings, 
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {upcoming.length === 0 && <EmptyState text="Aucune réunion à venir. Créez-en une avec « Nouvelle réunion »." />}
-        {upcoming.map(m => <MeetingCard key={m.id} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={cancel} notify={notify} session={session} canMakeTasks={isAdmin || !!myPerms.createTasks} files={meetingFiles.filter(f => f.meeting_id === m.id)} onFilesChanged={onFilesChanged} />)}
+        {upcoming.map(m => <MeetingCard key={m.id} onDuplicate={canCreate ? (x) => setForm({ __dup: x }) : undefined} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={cancel} notify={notify} session={session} canMakeTasks={isAdmin || !!myPerms.createTasks} files={meetingFiles.filter(f => f.meeting_id === m.id)} onFilesChanged={onFilesChanged} />)}
       </div>
       {past.length > 0 && (<>
         <button type="button" onClick={() => setShowPast(v => !v)} style={{ ...chipBtn, marginTop: 20 }}>{showPast ? "Masquer" : "Voir"} les réunions passées ({past.length})</button>
-        {showPast && <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>{past.map(m => <MeetingCard key={m.id} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={cancel} notify={notify} session={session} canMakeTasks={isAdmin || !!myPerms.createTasks} files={meetingFiles.filter(f => f.meeting_id === m.id)} onFilesChanged={onFilesChanged} />)}</div>}
+        {showPast && <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>{past.map(m => <MeetingCard key={m.id} onDuplicate={canCreate ? (x) => setForm({ __dup: x }) : undefined} m={m} me={me} isAdmin={isAdmin} accounts={accounts} attendees={attendees} onEdit={setForm} onCancel={cancel} notify={notify} session={session} canMakeTasks={isAdmin || !!myPerms.createTasks} files={meetingFiles.filter(f => f.meeting_id === m.id)} onFilesChanged={onFilesChanged} />)}</div>}
       </>)}
-      {form && <MeetingForm fileCount={form === "new" ? 0 : meetingFiles.filter(a => a.meeting_id === form.id).length} initial={form === "new" ? null : form} me={me} accounts={accounts} attendees={attendees} leaves={leaves} tasks={tasks} session={session} notify={notify} onCancel={() => setForm(null)} onSaved={() => setForm(null)} />}
+      {form && <MeetingForm template={form && form.__dup ? form.__dup : null} fileCount={form === "new" || form.__dup ? 0 : meetingFiles.filter(a => a.meeting_id === form.id).length} initial={form === "new" || form.__dup ? null : form} me={me} accounts={accounts} attendees={attendees} leaves={leaves} tasks={tasks} session={session} notify={notify} onCancel={() => setForm(null)} onSaved={() => setForm(null)} />}
     </div>
   );
 }
@@ -2523,6 +2526,7 @@ function MyStats({ me, tasks, projects }) {
    Les nouveautés visibles de tous sont dans /patchnotes.json (affichées sur la page d'accueil du site).
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const PATCH_TECH = {
+  "2026-10-29": ["Filtre d'échéance et duplication de réunion : uniquement côté interface, sans migration ni nouvelle fonction serveur."],
   "2026-10-28": ["Fermeture immédiate des fenêtres : e-mails et fichiers partent en arrière-plan ; callApi() abandonne après 30 s ; bouton de création désactivé pendant l'enregistrement.", "Messages non lus : état « lu » mémorisé par appareil (localStorage carnet-read-<id>), sans table ni migration. Sélection multiple : mises à jour tâche par tâche, soumises aux politiques RLS existantes.", "Expéditeur des e-mails : toujours « Le Carnet » (api/_mail.js, via() et fromLabel()) ; le Reply-To reste l\'adresse de la personne concernée. Variable facultative MAIL_FROM_NAME pour changer le nom affiché.", "Vouvoiement : textes de public/, de l'appli et des e-mails (api/*.js). Les tests ont été mis à jour en conséquence."],
   "2026-10-27": ["Export .docx : ZIP minimal écrit à la main (aucune bibliothèque ajoutée, aucun fichier dans api/), vérifié avec python-docx et LibreOffice.", "Dupliquer / Reporter : simples insert / update sur tasks, soumis aux politiques RLS existantes (aucune migration)."],
   "2026-10-26": [
@@ -2971,6 +2975,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
   const [filterDone, setFilterDone] = useState("open");
   const [filterMine, setFilterMine] = useState(false);
   const [filterProject, setFilterProject] = useState("");
+  const [filterDue, setFilterDue] = useState("");
   const [showProjects, setShowProjects] = useState(false);
   const canCreateProject = isAdmin || me.role === "moderator";
   const [view, setView] = useState(() => { try { const v = localStorage.getItem("carnet-view"); return v === "kanban" || v === "week" ? v : "list"; } catch (_) { return "list"; } });
@@ -2992,6 +2997,14 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
       if (view === "list") {
         if (filterDone === "open" && t.done) return false;
         if (filterDone === "done" && !t.done) return false;
+        if (filterDue === "none" && t.due) return false;
+        if (filterDue && filterDue !== "none") {
+          if (!t.due) return false;
+          const d = daysUntil(t.due);
+          if (filterDue === "late" && !(!t.done && dueInfo(t).late)) return false;
+          if (filterDue === "today" && d !== 0) return false;
+          if (filterDue === "week" && !(d >= 0 && d <= 7)) return false;
+        }
       }
       if (filterLabel && t.label !== filterLabel) return false;
       if (filterMine && !assigneeIds(t).includes(me.id)) return false;
@@ -3006,7 +3019,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
       return 0;
     });
     return list;
-  }, [tasks, query, sortBy, filterLabel, filterDone, filterMine, filterProject, view, me.id]);
+  }, [tasks, query, sortBy, filterLabel, filterDone, filterMine, filterProject, filterDue, view, me.id]);
 
   const canEditTask = (t) => isAdmin || myPerms.editAnyTask || (t.created_by === me.id && myPerms.editOwnTask);
   const tellAssignees = async (taskId, userIds) => {
@@ -3151,6 +3164,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
         <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}><I.Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)" }} /><input data-search value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher (titre, notes, #étiquette)…" style={{ ...inputStyle, paddingLeft: 32, background: "var(--bg-2)" }} /></div>
         <SelectPill icon={I.Sort} value={sortBy} onChange={setSortBy} options={[{ value: "priority", label: "Trier : priorité" }, { value: "due", label: "Trier : échéance" }, { value: "title", label: "Trier : titre" }]} />
         {view === "list" && <button type="button" data-select-toggle onClick={() => (selectMode ? exitSelect() : setSelectMode(true))} style={{ ...chipBtn, borderColor: selectMode ? "var(--accent)" : "var(--border-soft)", color: selectMode ? "var(--text)" : "var(--text-dim)" }}>{selectMode ? "✕ Quitter la sélection" : "☑ Sélectionner"}</button>}
+        {view === "list" && <SelectPill icon={I.Calendar} value={filterDue} onChange={setFilterDue} options={[{ value: "", label: "Toutes les échéances" }, { value: "late", label: "En retard" }, { value: "today", label: "Aujourd'hui" }, { value: "week", label: "7 prochains jours" }, { value: "none", label: "Sans échéance" }]} />}
         {view === "list" && <SelectPill icon={I.Filter} value={filterDone} onChange={setFilterDone} options={[{ value: "open", label: "À faire" }, { value: "done", label: "Terminées" }, { value: "all", label: "Toutes" }]} />}
         {projects.length > 0 && <SelectPill icon={I.Filter} value={filterProject} onChange={setFilterProject} options={[{ value: "", label: "Tous les projets" }, { value: "none", label: "Sans projet" }, ...projects.map(p => ({ value: p.id, label: (p.is_private ? "🔒 " : "") + p.name }))]} />}
         <button onClick={() => setFilterMine(m => !m)} style={{ ...chipBtn, background: filterMine ? "var(--panel-2)" : "var(--bg-2)", color: filterMine ? "var(--text)" : "var(--text-dim)", borderColor: filterMine ? "var(--accent)" : "var(--border-soft)" }}>Assignées à moi</button>
