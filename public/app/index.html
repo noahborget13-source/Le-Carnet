@@ -422,6 +422,29 @@ function SiteFooter({ floating }) {
   );
 }
 /* ---------------- Annonce programmée (table system_alerts : message + display_at) ---------------- */
+/** Annonces de l'équipe (publiées depuis l'Espace Administrateur) : bandeau masquable sur cet appareil. */
+const ANN_COLORS = { info: "#5B9EF5", important: "#FFB648", success: "#5FBF8B" };
+function AnnouncementBanner({ items = [] }) {
+  const KEY = "carnet-ann-hidden";
+  const [hidden, setHidden] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (_) { return []; } });
+  const now = Date.now();
+  const shown = items.filter(a => a.active && !hidden.includes(a.id) && (!a.expires_at || Date.parse(a.expires_at) > now)).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 3);
+  const hide = (id) => { const next = [...hidden, id].slice(-100); setHidden(next); try { localStorage.setItem(KEY, JSON.stringify(next)); } catch (_) {} };
+  if (!shown.length) return null;
+  return (
+    <div data-announcements style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+      {shown.map(a => { const c = ANN_COLORS[a.level] || ANN_COLORS.info; return (
+        <div key={a.id} data-announcement={a.title} role="status" style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "var(--panel)", border: "1px solid var(--border)", borderLeft: `5px solid ${c}`, borderRadius: 10, padding: "10px 14px" }}>
+          <span aria-hidden="true" style={{ fontSize: 18 }}>📣</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{a.title}</div>
+            {a.body && <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 3, whiteSpace: "pre-wrap" }}>{a.body}</div>}
+          </div>
+          <button type="button" data-announcement-hide onClick={() => hide(a.id)} aria-label="Masquer l'annonce" style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: 16, padding: 2 }}>✕</button>
+        </div>); })}
+    </div>
+  );
+}
 function AlertBanner({ inline }) {
   const [alert, setAlert] = useState(null);
   const [hidden, setHidden] = useState(false);
@@ -1067,6 +1090,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [projectMembers, setProjectMembers] = useState([]);
   const [meetingFiles, setMeetingFiles] = useState([]);
   const [messageFiles, setMessageFiles] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [showHelp, setShowHelp] = useState(false);
   const [inviteFromUrl] = useState(() => { try { const t = new URLSearchParams(window.location.search).get("invite"); return t && t.length >= 20 ? t : ""; } catch (_) { return ""; } });
   const [taskFromUrl] = useState(() => { try { return new URLSearchParams(window.location.search).get("task") || ""; } catch (_) { return ""; } });
@@ -1102,6 +1126,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   useLiveTable('project_members', setProjectMembers);
   const reloadMeetingFiles = useLiveTable('meeting_attachments', setMeetingFiles);
   useLiveTable('message_attachments', setMessageFiles);
+  useLiveTable('announcements', setAnnouncements);
   useEffect(() => { const id = setInterval(() => setClock(c => c + 1), 60000); return () => clearInterval(id); }, []);
 
   useEffect(() => { if (tab === "admin" && !isAdmin) setTab("home"); }, [tab, isAdmin]);
@@ -1196,6 +1221,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onLogout(); }} style={{ color: "var(--text-dim)" }}><I.LogOut size={19} /> Déconnexion · {me.display_name}</button>
       </div>}
       <main className="app-main" style={{ flex: 1, minWidth: 0, padding: "26px 34px", overflowY: "auto" }}>
+        <AnnouncementBanner items={announcements} />
         <AlertBanner inline />
         {tab === "home" && <HomeView projects={projects} me={me} accounts={people} tasks={tasks} comments={comments} leaves={leaves} meetings={meetings} attendees={attendees} events={teamEvents} onOpen={openFromAnywhere} goTo={setTab} />}
         {tab === "tasks" && <TasksView projects={projects} projectMembers={projectMembers} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
@@ -1929,66 +1955,6 @@ function EventForm({ me, day, onCancel, onSaved, notify }) {
 }
 
 /* ---------------- Admin : charge de travail ---------------- */
-function AdminWorkload({ accounts, tasks, meetings, attendees, leaves }) {
-  const [wk, setWk] = useState(0);
-  const today = parisDay();
-  const monday = shiftDay(today, -(isoWd(today) - 1) + wk * 7), sunday = shiftDay(monday, 6);
-  const w0 = parisInstant(monday), w1 = parisInstant(shiftDay(sunday, 1));
-  const rows = accounts.filter(a => a.status === "approved" && a.role !== "guest").map(u => {
-    const mine = tasks.filter(t => !t.done && assigneeIds(t).includes(u.id));
-    const dueWeek = mine.filter(t => t.due && t.due >= monday && t.due <= sunday).length;
-    const overdue = wk === 0 ? mine.filter(t => t.due && t.due < today).length : 0;
-    const noDate = mine.filter(t => !t.due).length;
-    const mine_m = meetings.filter(m => attendees.some(a => a.meeting_id === m.id && a.user_id === u.id && a.response !== "declined") && Date.parse(m.starts_at) < w1 && Date.parse(m.ends_at) > w0);
-    const mins = mine_m.reduce((n, m) => n + (Math.min(Date.parse(m.ends_at), w1) - Math.max(Date.parse(m.starts_at), w0)) / 60000, 0);
-    let leaveDays = 0;
-    for (let d = monday; d <= sunday; d = shiftDay(d, 1)) if (leaves.some(l => l.user_id === u.id && l.status === "approved" && l.start_date <= d && l.end_date >= d) && isoWd(d) <= 5) leaveDays++;
-    const score = dueWeek + overdue * 1.5 + (mins / 60) * 0.5 + noDate * 0.2;
-    return { u, dueWeek, overdue, noDate, meetings: mine_m.length, hours: Math.round(mins / 6) / 10, leaveDays, score };
-  }).sort((a, b) => b.score - a.score);
-  const avg = rows.length ? rows.reduce((n, r) => n + r.score, 0) / rows.length : 0;
-  const max = Math.max(1, ...rows.map(r => r.score));
-  const level = (r) => {
-    if (r.leaveDays >= 5) return ["En congé", "#8FD6AE"];
-    if (r.score === 0) return ["Libre", "#7DB4FF"];
-    if (rows.length > 1 && r.score >= avg * 1.5 && r.score >= 4) return ["Chargé", "#FF9A8F"];
-    if (rows.length > 1 && r.score <= avg * 0.5) return ["Disponible", "#7DB4FF"];
-    return ["Normal", "#9098A8"];
-  };
-  const fmt = (d) => fmtDay(d, { day: "numeric", month: "short" });
-  return (
-    <div data-testid="workload">
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <button type="button" onClick={() => setWk(w => w - 1)} style={chipBtn} aria-label="Semaine précédente">←</button>
-        <div style={{ fontWeight: 600, fontSize: 14.5 }}>Semaine du {fmt(monday)} au {fmt(sunday)}{wk === 0 ? " (cette semaine)" : ""}</div>
-        <button type="button" onClick={() => setWk(w => w + 1)} style={chipBtn} aria-label="Semaine suivante">→</button>
-        {wk !== 0 && <button type="button" onClick={() => setWk(0)} style={chipBtn}>Cette semaine</button>}
-      </div>
-      <div style={{ fontSize: 12.5, color: "var(--text-dimmer)", marginBottom: 14, lineHeight: 1.5 }}>La charge compte les tâches à finir cette semaine, les tâches en retard (plus lourdes), les réunions et un peu les tâches sans date. C'est un repère pour répartir le travail, pas une mesure exacte.</div>
-      {rows.length === 0 && <EmptyState text="Aucun membre à afficher." />}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rows.map(r => { const [lab, col] = level(r); return (
-          <div key={r.u.id} data-person={r.u.display_name} style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <Avatar user={r.u} size={28} />
-              <div style={{ fontWeight: 600, fontSize: 14.5, minWidth: 110 }}>{r.u.display_name}</div>
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: col, border: `1px solid ${col}`, borderRadius: 6, padding: "1px 7px" }}>{lab}</span>
-              <div style={{ flex: 1, minWidth: 140, height: 8, background: "var(--bg-2)", borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${Math.round((r.score / max) * 100)}%`, height: "100%", background: col }} /></div>
-            </div>
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "var(--text-dim)", marginTop: 8 }}>
-              <span>📋 {r.dueWeek} à finir cette semaine</span>
-              {r.overdue > 0 && <span style={{ color: "#FF9A8F" }}>⏰ {r.overdue} en retard</span>}
-              {r.noDate > 0 && <span>🗂️ {r.noDate} sans date</span>}
-              <span>📹 {r.meetings} réunion(s){r.hours ? ` · ${r.hours} h` : ""}</span>
-              {r.leaveDays > 0 && <span>🌴 {r.leaveDays} jour(s) de congé</span>}
-            </div>
-          </div>
-        ); })}
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- Réunions : trouver un créneau commun ---------------- */
 function SlotFinder({ ids, accounts, tasks, durationMin, ignoreMeetingId, onPick }) {
   const [state, setState] = useState(null); // null | "loading" | {slots}
@@ -2177,67 +2143,6 @@ const agoText = (iso) => {
   if (m < 1440) return `il y a ${Math.floor(m / 60)} h`;
   return `il y a ${Math.floor(m / 1440)} j`;
 };
-function AdminStatus({ session, notify, go }) {
-  const [d, setD] = useState(null);
-  const [err, setErr] = useState("");
-  const [busyTest, setBusyTest] = useState(false);
-  const load = async () => { try { setD(await callApi("/api/admin-tools", { action: "diagnostics" }, session)); setErr(""); } catch (e) { setErr(e.message); } };
-  useEffect(() => { load(); }, []);
-  const test = async () => { setBusyTest(true); try { const r = await callApi("/api/admin-tools", { action: "test-mail" }, session); notify("Email de test envoyé à " + r.to + "."); } catch (e) { notify(e.message, "err"); } setBusyTest(false); load(); };
-  const card = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 14 };
-  const dot = (c) => <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: c, marginRight: 8, flexShrink: 0 }} />;
-  const OK = "#5FBF8B", WARN = "#FFB648", BAD = "#FF6B5E";
-  if (err) return <div style={{ ...card, color: "#FF9A8F" }}>{err}</div>;
-  if (!d) return <div style={{ color: "var(--text-dim)" }}>Chargement…</div>;
-  const m = d.mail, c = d.cron;
-  const cronAge = c.lastRun ? (Date.now() - Date.parse(c.lastRun.ran_at)) / 60000 : null;
-  const cronCol = !c.secretSet ? BAD : cronAge === null ? BAD : cronAge <= 25 ? OK : cronAge <= 180 ? WARN : BAD;
-  const cronMsg = !c.secretSet ? "CRON_SECRET manque sur Vercel." : cronAge === null ? "Le planificateur n'a jamais tourné : lancez planifier-rappels.sql dans Supabase." : cronAge <= 25 ? `Il tourne normalement (dernier passage ${agoText(c.lastRun.ran_at)}).` : `Dernier passage ${agoText(c.lastRun.ran_at)} : il devrait passer toutes les 10 minutes.`;
-  const mailCol = !m.configured ? BAD : m.failed24h > 0 ? (m.sent24h > 0 ? WARN : BAD) : OK;
-  const mailMsg = !m.configured ? "Les emails ne sont pas configurés (GMAIL_USER / GMAIL_APP_PASSWORD manquants sur Vercel)." : !m.logAvailable ? "Les emails sont configurés. Lancez la migration 10 pour voir le détail des envois." : m.failed24h > 0 ? `${m.failed24h} échec(s) sur les dernières 24 h (${m.sent24h} envoyés).` : `Tout va bien : ${m.sent24h} email(s) envoyé(s) sur les dernières 24 h.`;
-  const feedErr = d.feeds.filter(f => f.last_error).length;
-  return (
-    <div data-testid="admin-status" style={{ maxWidth: 720 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <div style={{ fontSize: 13, color: "var(--text-dim)", flex: 1 }}>L'état de ce qui fait tourner votre espace. Les rouges demandent une action.</div>
-        <button type="button" onClick={load} style={chipBtn}>↻ Actualiser</button>
-      </div>
-      <div style={card} data-status="mail">
-        <div style={{ display: "flex", alignItems: "center", fontWeight: 600, fontSize: 15 }}>{dot(mailCol)} Emails</div>
-        <div style={{ fontSize: 13.5, color: "var(--text-dim)", margin: "6px 0 0 18px" }}>{mailMsg}</div>
-        {m.sender && <div style={{ fontSize: 12.5, color: "var(--text-dimmer)", margin: "4px 0 0 18px" }}>Expéditeur : {m.sender}{m.logAvailable && ` · 7 jours : ${m.sent7d} envoyés, ${m.failed7d} échecs`}{m.lastOk && ` · dernier envoi réussi ${agoText(m.lastOk)}`}</div>}
-        {m.errors.length > 0 && (
-          <div style={{ margin: "10px 0 0 18px", display: "flex", flexDirection: "column", gap: 5 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dimmer)", textTransform: "uppercase", letterSpacing: .5 }}>Dernières erreurs</div>
-            {m.errors.map((e, i) => <div key={i} style={{ fontSize: 12.5, background: "var(--bg)", borderRadius: 8, padding: "6px 10px" }}><span style={{ color: "var(--text-dimmer)" }}>{agoText(e.at)}</span> · {e.subject ? <em>{e.subject} — </em> : null}{e.error || "erreur inconnue"}</div>)}
-          </div>
-        )}
-        <div style={{ margin: "12px 0 0 18px" }}><button type="button" onClick={test} disabled={busyTest || !m.configured} style={{ ...chipBtn, opacity: m.configured ? 1 : 0.5 }}>{busyTest ? "Envoi…" : "Envoyer un email de test"}</button></div>
-      </div>
-      <div style={card} data-status="cron">
-        <div style={{ display: "flex", alignItems: "center", fontWeight: 600, fontSize: 15 }}>{dot(cronCol)} Planificateur (rappels, résumé du lundi, agendas)</div>
-        <div style={{ fontSize: 13.5, color: "var(--text-dim)", margin: "6px 0 0 18px" }}>{cronMsg}</div>
-        <div style={{ fontSize: 12.5, color: "var(--text-dimmer)", margin: "4px 0 0 18px" }}>{c.runs24h} passage(s) sur les dernières 24 h (attendu : environ 144).</div>
-      </div>
-      <div style={card} data-status="feeds">
-        <div style={{ display: "flex", alignItems: "center", fontWeight: 600, fontSize: 15 }}>{dot(feedErr ? WARN : OK)} Agendas Google des membres</div>
-        {d.feeds.length === 0 && <div style={{ fontSize: 13.5, color: "var(--text-dim)", margin: "6px 0 0 18px" }}>Personne n'a encore connecté son agenda.</div>}
-        <div style={{ margin: "8px 0 0 18px", display: "flex", flexDirection: "column", gap: 5 }}>
-          {d.feeds.map((f, i) => <div key={i} style={{ fontSize: 13, background: "var(--bg)", borderRadius: 8, padding: "6px 10px", display: "flex", gap: 8, flexWrap: "wrap" }}><strong>{f.name}</strong><span style={{ color: f.last_error ? "#FF9A8F" : "var(--text-dim)" }}>{f.last_error ? "⚠️ " + f.last_error : `${f.slots} créneau(x) · synchronisé ${agoText(f.last_sync)}`}</span></div>)}
-        </div>
-      </div>
-      <div style={card} data-status="todo">
-        <div style={{ display: "flex", alignItems: "center", fontWeight: 600, fontSize: 15 }}>{dot(d.pending.leaves + d.pending.members ? WARN : OK)} À traiter</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0 0 18px" }}>
-          {d.pending.members > 0 && <button type="button" onClick={() => go("members")} style={chipBtn}>{d.pending.members} compte(s) à valider →</button>}
-          {d.pending.leaves > 0 && <button type="button" onClick={() => go("leaves")} style={chipBtn}>{d.pending.leaves} demande(s) de congé →</button>}
-          {d.pending.members + d.pending.leaves === 0 && <span style={{ fontSize: 13.5, color: "var(--text-dim)" }}>Rien en attente.</span>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- Notifications du navigateur ---------------- */
 const BN_KEY = "carnet-bn";
 const bnSupported = () => typeof window !== "undefined" && "Notification" in window;
@@ -2551,84 +2456,6 @@ function WeekBoard({ tasks, accounts, canEditTask, onOpen, onMoveDue }) {
 }
 
 /* ---------------- Admin : congés ---------------- */
-function AdminLeaves({ me, session, accounts, leaves, notify }) {
-  const today = parisDay();
-  const [notes, setNotes] = useState({});
-  const [who, setWho] = useState(""); const [start, setStart] = useState(""); const [end, setEnd] = useState(""); const [reason, setReason] = useState(""); const [busy, setBusy] = useState(false);
-  const name = (id) => (accounts.find(a => a.id === id) || {}).display_name || "Ancien membre";
-  const pending = leaves.filter(l => l.status === "pending").sort((a, b) => a.start_date.localeCompare(b.start_date));
-  const coming = leaves.filter(l => l.status === "approved" && l.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date));
-  const decide = async (l, status) => {
-    const { error } = await supabase.rpc("decide_leave", { p_id: l.id, p_status: status, p_note: (notes[l.id] || "").trim() });
-    if (error) { notify(error.message, "err"); return; }
-    callApi("/api/notify-leave", { action: "decision", id: l.id }, session).catch(() => {});
-    notify(status === "approved" ? "Congé accepté · la personne est prévenue." : "Demande refusée · la personne est prévenue.");
-  };
-  const add = async () => {
-    if (busy) return;
-    if (!who || !start) { notify("Choisissez la personne et le premier jour.", "err"); return; }
-    const last = end || start; if (last < start) { notify("La date de fin est avant le début.", "err"); return; }
-    setBusy(true);
-    const { data, error } = await supabase.from("leave_requests").insert({ server_id: me.server_id, user_id: who, start_date: start, end_date: last, reason: reason.trim().slice(0, 300), status: "approved" }).select().single();
-    setBusy(false);
-    if (error) { notify(error.message, "err"); return; }
-    if (data && who !== me.id) callApi("/api/notify-leave", { action: "decision", id: data.id }, session).catch(() => {});
-    setWho(""); setStart(""); setEnd(""); setReason("");
-    notify("Congé posé.");
-  };
-  const remove = async (l) => { if (!window.confirm(`Supprimer ce congé de ${name(l.user_id)} ?`)) return; const { error } = await supabase.from("leave_requests").delete().eq("id", l.id); notify(error ? error.message : "Congé supprimé.", error ? "err" : "ok"); };
-  const card = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "18px 20px", marginBottom: 18 };
-  return (
-    <div style={{ maxWidth: 680 }}>
-      <div style={card}>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Demandes à traiter {pending.length > 0 && <span style={{ background: "#FFB648", color: "#1a1405", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px", marginLeft: 6 }}>{pending.length}</span>}</div>
-        {pending.length === 0 && <div style={{ fontSize: 13.5, color: "var(--text-dimmer)" }}>Aucune demande en attente.</div>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {pending.map(l => (
-            <div key={l.id} data-leave={l.id} style={{ background: "var(--bg)", borderRadius: 10, padding: "12px 14px" }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{name(l.user_id)} <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>· {fmtLeave(l)}</span></div>
-              {l.reason && <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2 }}>« {l.reason} »</div>}
-              {(() => {
-                const ov = leaves.filter(x => x.status === "approved" && x.user_id !== l.user_id && x.start_date <= l.end_date && x.end_date >= l.start_date);
-                if (!ov.length) return null;
-                const total = accounts.filter(a => a.status === "approved" && a.role !== "guest").length;
-                const people = [...new Set(ov.map(x => x.user_id))];
-                const heavy = people.length >= 2 || (total > 0 && (people.length + 1) / total >= 0.5);
-                return <div data-overlap style={{ marginTop: 8, fontSize: 12.5, borderRadius: 8, padding: "6px 10px", background: heavy ? "#2A1B14" : "#2A2111", border: `1px solid ${heavy ? "#6A3A1C" : "#6A4A1C"}`, color: heavy ? "#FFB08F" : "#FFC97A" }}>⚠️ {heavy ? "Beaucoup d'absences en même temps" : "Déjà absent(e) sur cette période"} : {people.map(name).join(", ")}{total > 0 ? ` (avec ${name(l.user_id)} : ${people.length + 1} sur ${total})` : ""}.</div>;
-              })()}
-              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                <input value={notes[l.id] || ""} onChange={e => setNotes(n => ({ ...n, [l.id]: e.target.value }))} placeholder="Message (optionnel)" maxLength={300} aria-label="Message pour la personne" style={{ ...inputStyle, flex: "1 1 160px", padding: "8px 10px" }} />
-                <button type="button" onClick={() => decide(l, "approved")} style={{ ...primaryBtn, padding: "8px 16px", background: "#2F9E6B", boxShadow: "none" }}>Accepter</button>
-                <button type="button" onClick={() => decide(l, "refused")} style={{ ...secondaryBtn, width: "auto", padding: "8px 16px", color: "#FF9A8F", borderColor: "#6A3532" }}>Refuser</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div style={card}>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Poser un congé</div>
-        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 12px" }}>Accepté tout de suite. La personne est prévenue par email (sauf si c'est vous).</p>
-        <Field label="Pour"><select value={who} onChange={e => setWho(e.target.value)} style={inputStyle} aria-label="Personne"><option value="">Choisir…</option>{accounts.filter(a => a.status === "approved").map(a => <option key={a.id} value={a.id} style={{ background: "var(--bg-2)" }}>{a.display_name}{a.id === me.id ? " (moi)" : ""}</option>)}</select></Field>
-        {dateInputs(start, setStart, end, setEnd, undefined)}
-        <Field label="Motif (optionnel)"><input value={reason} onChange={e => setReason(e.target.value)} maxLength={300} style={inputStyle} /></Field>
-        <button type="button" onClick={add} disabled={busy} style={{ ...primaryBtn, padding: "10px 22px", opacity: busy ? 0.6 : 1 }}>{busy ? "…" : "Poser le congé"}</button>
-      </div>
-      <div style={card}>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Congés à venir</div>
-        {coming.length === 0 && <div style={{ fontSize: 13.5, color: "var(--text-dimmer)" }}>Aucun congé prévu.</div>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {coming.map(l => (
-            <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "var(--bg)", borderRadius: 10, padding: "9px 12px", fontSize: 13.5 }}>
-              <div style={{ flex: 1, minWidth: 160 }}><strong>{name(l.user_id)}</strong> · {fmtLeave(l)}{l.start_date <= today && <span style={{ marginLeft: 8, fontSize: 11, color: "#7DB4FF", fontWeight: 700 }}>EN COURS</span>}</div>
-              <button type="button" onClick={() => remove(l)} aria-label={"Supprimer le congé de " + name(l.user_id)} style={{ ...iconBtn, border: "none", color: "var(--text-dimmer)" }}><I.Trash size={14} /></button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- Accueil : ma journée ---------------- */
 function MyDay({ me, accounts, tasks, meetings, attendees, leaves, events = [], onOpen, goTo }) {
   const now = Date.now(), today = parisDay(now);
@@ -2782,57 +2609,8 @@ function MyStats({ me, tasks, projects }) {
 /* ---------------- Patch notes ----------------
    Les nouveautés visibles de tous sont dans /patchnotes.json (affichées sur la page d'accueil du site).
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
-const PATCH_TECH = {
-  "2026-10-29": [
-    "Onglet Rapports : ReportsView + computeReport() (fonction pure), graphique SVG, export CSV ; raccourci G puis S ; utilise tasks.done_at (migration 05), aucune nouvelle migration.",
-    "Réunions récurrentes : colonnes series_id / recurrence / recurrence_until (migration 15), une réunion réelle par occurrence, un seul e-mail avec .ics multi-événements (notify-meeting, scope series).",
-    "Chronologie : GanttBoard, tasks.start_date (migration 16) avec contrainte start_date <= due ; duePatch() garde le début cohérent lors des reports.","Filtre d'échéance et duplication de réunion : uniquement côté interface, sans migration ni nouvelle fonction serveur."],
-  "2026-10-28": ["Fermeture immédiate des fenêtres : e-mails et fichiers partent en arrière-plan ; callApi() abandonne après 30 s ; bouton de création désactivé pendant l'enregistrement.", "Messages non lus : état « lu » mémorisé par appareil (localStorage carnet-read-<id>), sans table ni migration. Sélection multiple : mises à jour tâche par tâche, soumises aux politiques RLS existantes.", "Expéditeur des e-mails : toujours « Le Carnet » (api/_mail.js, via() et fromLabel()) ; le Reply-To reste l\'adresse de la personne concernée. Variable facultative MAIL_FROM_NAME pour changer le nom affiché.", "Vouvoiement : textes de public/, de l'appli et des e-mails (api/*.js). Les tests ont été mis à jour en conséquence."],
-  "2026-10-27": ["Export .docx : ZIP minimal écrit à la main (aucune bibliothèque ajoutée, aucun fichier dans api/), vérifié avec python-docx et LibreOffice.", "Dupliquer / Reporter : simples insert / update sur tasks, soumis aux politiques RLS existantes (aucune migration)."],
-  "2026-10-26": [
-    "migration-13-lien-appel.sql : colonne meetings.call_url (https uniquement, 300 caractères max).",
-    "migration-14-pj-messages-taches.sql : table message_attachments (RLS : lecture selon les règles des messages, ajout seulement sur ses propres messages) ; politique d'ajout des pièces jointes de tâche élargie à tout membre non invité qui voit la tâche. Les fichiers partagent le seau task-files (chemin serveur/messages/…).",
-    "migration-12-comptes-multi-serveurs.sql : table account_links ; changement de serveur via lien magique + verifyOtp (à tester une fois sur le vrai Supabase).",
-    "api/_meeting.js : meetingLink() utilisé par notify-meeting et cron-reminders.",
-    "Toujours 12 fonctions serverless (limite Vercel Hobby) : ne pas ajouter de fichier dans api/ sans en fusionner un autre."],
-  "2026-10-24": ["migration-09-notes-evenements.sql (comptes-rendus, anniversaires, événements d'équipe) et migration-10-reactions-historique-statut.sql (réactions, historique, résumé du lundi, journal des e-mails)."],
-  "2026-10-22": ["migration-08-conges-reunions.sql : horaires, congés, réunions, invités, flux d'agenda (lien secret côté serveur), fonction de créneaux occupés."],
-  "2026-10-21": ["migration-07-maintenance-programmee.sql : réparation de system_alerts.id, maintenance_active ; PWA : manifest.webmanifest + sw.js."],
-  "2026-10-20": ["api/cron-reminders.js + api/admin-tools.js ; planification pg_cron (planifier-rappels.sql) avec CRON_SECRET."],
-  "2026-10-19": ["migration-06-emails-sondages.sql : heure d'échéance, préférences e-mail, suivi des envois, sondages, administrateur du site."],
-  "2026-10-17": ["migration-05-plus.sql : salon, assignés multiples, pièces jointes (seau task-files), modèles, corbeille, journal d'activité."],
-  "2026-10-14": ["migration-02-servers.sql, migration-03-invites.sql, migration-04-tasks-plus.sql."],
-  "2026-10-25": [
-    "migration-11-projets-pj-reunions.sql : projects, project_members, meeting_attachments, fonctions can_see_project / can_manage_project, trigger tasks_project_guard.",
-    "Fusion de create-account dans manage-account (limite des 12 fonctions)."],
-};
 const frDate = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 /** Onglet réservé à l'administrateur du site : historique complet, avec les détails techniques. */
-function AdminPatchNotes() {
-  const [days, setDays] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    fetch("/patchnotes.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : [])).then(d => { if (alive) setDays(d || []); }).catch(() => { if (alive) setDays([]); });
-    return () => { alive = false; };
-  }, []);
-  return (
-    <div data-admin-patchnotes>
-      <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "0 0 16px" }}>Historique complet, jour par jour. Le texte « vu par les membres » est celui de la page d'accueil du site (fichier <code>public/patchnotes.json</code>) ; les détails techniques ne sont visibles que par vous.</p>
-      {!days && <div style={{ display: "grid", placeItems: "center", padding: 20 }}><Spinner /></div>}
-      {days && days.length === 0 && <EmptyState text="Impossible de charger les nouveautés." />}
-      {(days || []).map(n => (
-        <div key={n.date} style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 14 }}>
-          <div style={{ fontFamily: "Fraunces, serif", fontSize: 17, fontWeight: 600, textTransform: "capitalize", marginBottom: 8 }}>{frDate(n.date)}</div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dimmer)", marginBottom: 4 }}>Vu par les membres (page d'accueil)</div>
-          <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin)", marginBottom: 4 }}>Détails techniques (admin)</div>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>{(PATCH_TECH[n.date] || ["Aucun détail technique."]).map((x, i) => <li key={i}>{x}</li>)}</ul>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], attendees = [], events = [], onOpen, goTo, projects = [] }) {
   const mine = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id));
   const late = mine.filter(t => t.due && dueInfo(t).late);
@@ -4555,85 +4333,6 @@ function MessagesView({ unread = {}, markRead = () => {}, messageFiles = [], me,
    Admin
    ============================================================ */
 /* ---------------- Réglages du serveur : nom, code, transfert d'administration ---------------- */
-function ServerSettings({ server, setServer, me, session, approved, notify, onChanged }) {
-  const [name, setName] = useState(server.name || "");
-  const [savingName, setSavingName] = useState(false);
-  const [confirmCode, setConfirmCode] = useState(false);
-  const [transferTo, setTransferTo] = useState("");
-  const [confirmTransfer, setConfirmTransfer] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const candidates = approved.filter(a => a.id !== me.id);
-
-  const saveName = async () => {
-    const v = name.trim();
-    if (!v || v === server.name || savingName) return;
-    if (v.length > 60) { notify("Le nom du serveur doit faire 60 caractères maximum.", "err"); return; }
-    setSavingName(true);
-    const { data, error } = await supabase.from('servers').update({ name: v }).eq('id', server.id).select().single();
-    setSavingName(false);
-    if (error || !data) { notify(error ? error.message : "Modification refusée.", "err"); return; }
-    setServer(data);
-    notify("Serveur renommé.");
-  };
-  const newCode = async () => {
-    const code = Array.from(crypto.getRandomValues(new Uint8Array(4))).map(b => b.toString(16).padStart(2, "0")).join("");
-    const { data, error } = await supabase.from('servers').update({ join_code: code }).eq('id', server.id).select().single();
-    setConfirmCode(false);
-    if (error || !data) { notify(error ? error.message : "Modification refusée.", "err"); return; }
-    setServer(data);
-    notify("Nouveau code généré. L'ancien ne fonctionne plus.");
-  };
-  const transfer = async () => {
-    if (!transferTo || busy) return;
-    setBusy(true);
-    try {
-      await callApi('/api/manage-account', { action: 'transfer-admin', id: transferTo }, session);
-      notify("Administration transférée. Vous êtes maintenant modérateur.");
-      onChanged();
-    } catch (e) { notify(e.message, "err"); }
-    setBusy(false); setConfirmTransfer(false);
-  };
-  const box = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 };
-  const target = candidates.find(c => c.id === transferTo);
-
-  return (
-    <div style={box}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Réglages du serveur</div>
-      <Field label="Nom du serveur">
-        <div style={{ display: "flex", gap: 8 }}>
-          <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") saveName(); }} style={inputStyle} />
-          <button type="button" onClick={saveName} disabled={savingName || !name.trim() || name.trim() === server.name} style={{ ...primaryBtn, width: "auto", padding: "0 16px", opacity: name.trim() && name.trim() !== server.name ? 1 : 0.5 }}>Renommer</button>
-        </div>
-      </Field>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-        <div style={{ flex: 1, minWidth: 180 }}>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 4 }}>Code d'invitation</div>
-          <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: "var(--accent-2)", letterSpacing: 1 }}>{server.join_code}</div>
-        </div>
-        <button type="button" onClick={() => { navigator.clipboard?.writeText(server.join_code); notify("Code copié."); }} style={{ ...secondaryBtn, display: "flex", alignItems: "center", gap: 6, padding: "8px 12px" }}><I.Copy size={13} /> Copier</button>
-        {confirmCode ? (<>
-          <button type="button" onClick={newCode} style={{ ...secondaryBtn, padding: "8px 12px", color: "#FF9A8F" }}>Confirmer : l'ancien code sera invalide</button>
-          <button type="button" onClick={() => setConfirmCode(false)} style={{ ...secondaryBtn, padding: "8px 12px" }}>Annuler</button>
-        </>) : <button type="button" onClick={() => setConfirmCode(true)} style={{ ...secondaryBtn, padding: "8px 12px" }}>Nouveau code</button>}
-      </div>
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-        <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8 }}>Transférer l'administration à un autre membre (vous deviendrez modérateur)</div>
-        {candidates.length === 0 ? <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucun autre membre pour l'instant.</div> : (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <select value={transferTo} onChange={e => { setTransferTo(e.target.value); setConfirmTransfer(false); }} style={{ ...inputStyle, flex: 1, minWidth: 180, width: "auto" }}>
-              <option value="">Choisir une personne…</option>
-              {candidates.map(c => <option key={c.id} value={c.id}>{c.display_name} (@{c.username})</option>)}
-            </select>
-            {!confirmTransfer
-              ? <button type="button" disabled={!transferTo} onClick={() => setConfirmTransfer(true)} style={{ ...secondaryBtn, padding: "0 16px", opacity: transferTo ? 1 : 0.5 }}>Transférer</button>
-              : <button type="button" disabled={busy} onClick={transfer} style={{ ...secondaryBtn, padding: "0 16px", color: "#FF9A8F" }}>{busy ? "…" : `Confirmer : ${target ? target.display_name : ""} devient admin`}</button>}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- Journal d'activité ---------------- */
 const ACTIVITY_TEXT = {
   "task.create": "a créé la tâche", "task.update": "a modifié la tâche", "task.done": "a terminé la tâche", "task.reopen": "a rouvert la tâche",
@@ -4641,43 +4340,6 @@ const ACTIVITY_TEXT = {
   "member.join": "a rejoint le serveur", "member.request": "a demandé à rejoindre le serveur", "member.approve": "a approuvé", "member.reject": "a refusé la demande de",
   "member.remove": "a retiré du serveur", "member.role": "a changé le rôle :", "mail.sent": "a envoyé un email", "leave.request": "a demandé un congé", "leave.approve": "a accepté un congé :", "leave.refuse": "a refusé un congé :", "server.rename": "a renommé le serveur en", "server.code": "a renouvelé le code d'invitation",
 };
-function ActivityLog({ accounts, bare }) {
-  const [rows, setRows] = useState(null);
-  const [open, setOpen] = useState(Boolean(bare));
-  const load = () => supabase.from('activity').select('*').order('created_at', { ascending: false }).limit(100).then(({ data }) => setRows(data || []));
-  useEffect(() => { if (open) load(); }, [open]);
-  const standalone = (a) => a === "member.join" || a === "member.request";
-  return (
-    <div style={{ marginTop: bare ? 0 : 24 }}>
-      {!bare && <button type="button" onClick={() => setOpen(o => !o)} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
-        <I.Chevron size={14} style={{ transform: open ? "none" : "rotate(-90deg)" }} /> Journal d'activité
-      </button>}
-      {open && (
-        <div style={{ marginTop: bare ? 0 : 12, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "6px 14px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
-            <span style={{ fontSize: 12, color: "var(--text-dimmer)" }}>100 dernières actions · conservées 90 jours</span>
-            <button type="button" onClick={load} style={{ ...secondaryBtn, width: "auto", padding: "4px 10px", fontSize: 12 }}>Actualiser</button>
-          </div>
-          {rows === null && <div style={{ padding: 16, display: "grid", placeItems: "center" }}><Spinner /></div>}
-          {rows && rows.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)", padding: "10px 0 14px" }}>Rien à signaler pour l'instant.</div>}
-          {rows && rows.map(r => {
-            const actor = accounts.find(a => a.id === r.actor_id);
-            const text = ACTIVITY_TEXT[r.action] || r.action;
-            return (
-              <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "7px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
-                <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>
-                  {standalone(r.action) ? <><strong>{r.label}</strong> {text}</> : <><strong>{actor ? actor.display_name : "Quelqu'un"}</strong> {text}{r.label ? <> « {r.label} »</> : null}</>}
-                </span>
-                <span style={{ fontSize: 11.5, color: "var(--text-dimmer)", whiteSpace: "nowrap" }}>{new Date(r.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 const ago = (iso) => {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (m < 1) return "à l'instant";
@@ -4686,580 +4348,24 @@ const ago = (iso) => {
   return h < 48 ? `il y a ${h} h` : `il y a ${Math.round(h / 24)} j`;
 };
 const adminBox = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 };
-function AdminHeading({ children, right }) {
-  return (<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{children}</div>{right}</div>);
-}
-
 /* ---------------- Aperçu : chiffres clés, activité, points à surveiller ---------------- */
-function AdminOverview({ approved, pending, tasks, mailStatus, go }) {
-  const now = Date.now(), weekAgo = now - 7 * 86400000, monthAgo = now - 30 * 86400000;
-  const open = tasks.filter(t => !t.done);
-  const late = open.filter(t => t.due && dueInfo(t).late);
-  const noOwner = open.filter(t => assigneeIds(t).length === 0);
-  const doneWeek = tasks.filter(t => t.done && t.done_at && new Date(t.done_at).getTime() >= weekAgo);
-  const createdWeek = tasks.filter(t => t.created_at && new Date(t.created_at).getTime() >= weekAgo);
-  const days = Array.from({ length: 14 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (13 - i)); return isoLocal(d); });
-  const doneByDay = days.map(day => tasks.filter(t => t.done && t.done_at && isoLocal(new Date(t.done_at)) === day).length);
-  const createdByDay = days.map(day => tasks.filter(t => t.created_at && isoLocal(new Date(t.created_at)) === day).length);
-  const maxBar = Math.max(1, ...doneByDay, ...createdByDay);
-  const load = approved.map(a => {
-    const mine = open.filter(t => assigneeIds(t).includes(a.id));
-    return { a, open: mine.length, late: mine.filter(t => t.due && dueInfo(t).late).length, done30: tasks.filter(t => t.done && t.done_at && new Date(t.done_at).getTime() >= monthAgo && assigneeIds(t).includes(a.id)).length };
-  }).sort((x, y) => y.open - x.open);
-  const maxLoad = Math.max(1, ...load.map(l => l.open));
-
-  const alerts = [];
-  if (pending.length) alerts.push({ key: "p", text: `${pending.length} demande${pending.length > 1 ? "s" : ""} d'accès en attente`, action: "Examiner", to: "members", color: "#FFC97A" });
-  if (late.length) alerts.push({ key: "l", text: `${late.length} tâche${late.length > 1 ? "s" : ""} en retard`, color: "#FF9A8F" });
-  if (noOwner.length) alerts.push({ key: "n", text: `${noOwner.length} tâche${noOwner.length > 1 ? "s" : ""} sans responsable`, color: "#FFC97A" });
-  if (mailStatus && !mailStatus.error) {
-    if (!mailStatus.mailConfigured) alerts.push({ key: "m", text: "L'envoi d'emails n'est pas configuré", action: "Régler", to: "settings", color: "#FF9A8F" });
-    else if (!mailStatus.lastRun || Date.now() - new Date(mailStatus.lastRun.ran_at).getTime() > 30 * 60000) alerts.push({ key: "c", text: "Les rappels automatiques ne tournent pas régulièrement", action: "Voir", to: "settings", color: "#FFC97A" });
-  }
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-        <StatCard value={approved.length} label="Membres" hex="#9B7EF5" onClick={() => go("members")} />
-        <StatCard value={open.length} label="Tâches en cours" hex="#5B9EF5" />
-        <StatCard value={late.length} label="En retard" hex="#FF6B5E" />
-        <StatCard value={doneWeek.length} label="Terminées (7 jours)" hex="#5FBF8B" />
-        <StatCard value={createdWeek.length} label="Créées (7 jours)" hex="#FFB648" />
-      </div>
-
-      <div style={adminBox}>
-        <AdminHeading>À surveiller</AdminHeading>
-        {alerts.length === 0 ? <div style={{ fontSize: 13.5, color: "#5FBF8B" }}>✓ Tout est en ordre.</div> : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {alerts.map(al => (
-              <div key={al.key} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5 }}>
-                <I.Alert size={15} style={{ color: al.color, flexShrink: 0 }} />
-                <span style={{ flex: 1 }}>{al.text}</span>
-                {al.action && <button type="button" onClick={() => go(al.to)} style={{ ...secondaryBtn, width: "auto", padding: "5px 12px", fontSize: 12.5 }}>{al.action}</button>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={adminBox}>
-        <AdminHeading right={<span style={{ fontSize: 11.5, color: "var(--text-dimmer)", display: "flex", gap: 12 }}><span><span style={{ display: "inline-block", width: 9, height: 9, background: "#5FBF8B", borderRadius: 2, marginRight: 4 }} />terminées</span><span><span style={{ display: "inline-block", width: 9, height: 9, background: "#5B6EF5", borderRadius: 2, marginRight: 4 }} />créées</span></span>}>Activité des 14 derniers jours</AdminHeading>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 96 }} role="img" aria-label="Tâches créées et terminées par jour sur 14 jours">
-          {days.map((day, i) => (
-            <div key={day} title={`${new Date(day + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} : ${doneByDay[i]} terminée(s), ${createdByDay[i]} créée(s)`} style={{ flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 2, height: "100%" }}>
-              <div style={{ width: "42%", maxWidth: 12, height: Math.max(doneByDay[i] ? 4 : 1, (doneByDay[i] / maxBar) * 100) + "%", background: "#5FBF8B", borderRadius: "3px 3px 0 0", opacity: doneByDay[i] ? 1 : 0.25 }} />
-              <div style={{ width: "42%", maxWidth: 12, height: Math.max(createdByDay[i] ? 4 : 1, (createdByDay[i] / maxBar) * 100) + "%", background: "#5B6EF5", borderRadius: "3px 3px 0 0", opacity: createdByDay[i] ? 1 : 0.25 }} />
-            </div>
-          ))}
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-dimmer)", marginTop: 6 }}><span>{new Date(days[0] + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span><span>Aujourd'hui</span></div>
-      </div>
-
-      <div style={adminBox}>
-        <AdminHeading>Charge par membre</AdminHeading>
-        {load.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucun membre.</div>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-          {load.map(({ a, open: o, late: l, done30 }) => (
-            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, width: 150, minWidth: 130 }}><Avatar user={a} size={24} /><span style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.display_name}</span></div>
-              <div style={{ flex: 1, minWidth: 140, height: 10, background: "var(--bg-2)", borderRadius: 6, overflow: "hidden", display: "flex" }} role="img" aria-label={`${o} en cours dont ${l} en retard`}>
-                <div style={{ width: ((o - l) / maxLoad) * 100 + "%", background: "#5B9EF5" }} />
-                <div style={{ width: (l / maxLoad) * 100 + "%", background: "#FF6B5E" }} />
-              </div>
-              <div style={{ fontSize: 12.5, color: "var(--text-dim)", minWidth: 190 }}>{o} en cours{l > 0 && <span style={{ color: "#FF9A8F" }}> ({l} en retard)</span>} · {done30} terminée(s) en 30 j</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- Membres : demandes, invitations, comptes ---------------- */
-function AdminMembers({ me, session, approved, pending, tasks, notify }) {
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [invites, setInvites] = useState([]);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("member");
-  const [inviting, setInviting] = useState(false);
-  const [q, setQ] = useState("");
-
-  const loadInvites = async () => {
-    const { data } = await supabase.from('invites').select('*').is('used_at', null).order('created_at', { ascending: false });
-    setInvites(data || []);
-  };
-  useEffect(() => {
-    loadInvites();
-    const ch = supabase.channel('invites-' + me.server_id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'invites' }, loadInvites)
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [me.server_id]);
-
-  const sendInvite = async () => {
-    if (inviting || !inviteEmail.trim()) return;
-    setInviting(true);
-    try {
-      const r = await callApi('/api/invite', { action: 'send', email: inviteEmail.trim(), role: inviteRole }, session);
-      if (r.emailSent) notify("Invitation envoyée à " + inviteEmail.trim() + ".");
-      else { navigator.clipboard?.writeText(r.link); notify(r.warning || "Email non envoyé : lien copié.", "err"); }
-      setInviteEmail("");
-      loadInvites();
-    } catch (e) { notify(e.message, "err"); }
-    setInviting(false);
-  };
-  const resendInvite = async (inv) => {
-    try {
-      const r = await callApi('/api/invite', { action: 'resend', id: inv.id }, session);
-      notify(r.emailSent ? "Invitation renvoyée." : (r.warning || "Email non envoyé."), r.emailSent ? "ok" : "err");
-      loadInvites();
-    } catch (e) { notify(e.message, "err"); }
-  };
-  const revokeInvite = async (inv) => {
-    const { error } = await supabase.from('invites').delete().eq('id', inv.id);
-    if (error) { notify(error.message, "err"); return; }
-    notify("Invitation annulée.");
-    loadInvites();
-  };
-  const approve = async (a) => {
-    const defaults = ROLE_DEFAULT_PERMS.member;
-    const { error } = await supabase.from('profiles').update({ status: "approved", role: "member", permissions: defaults }).eq('id', a.id);
-    if (error) { notify(error.message, "err"); return; }
-    notify(`${a.display_name} a rejoint le serveur.`);
-  };
-  const reject = async (a) => {
-    const { error } = await supabase.from('profiles').delete().eq('id', a.id);
-    if (error) { notify(error.message, "err"); return; }
-    notify("Demande refusée.");
-  };
-  const createOrUpdate = async (draft) => {
-    try {
-      if (draft.id) {
-        await callApi('/api/manage-account', { action: 'update', id: draft.id, newPassword: draft.password || null, patch: { username: draft.username, display_name: draft.displayName, color: draft.color, role: draft.role, permissions: draft.permissions } }, session);
-        notify("Compte mis à jour.");
-      } else {
-        await callApi('/api/manage-account', { action: 'create', username: draft.username, email: draft.email, password: draft.password, displayName: draft.displayName, color: draft.color, role: draft.role, permissions: draft.permissions }, session);
-        notify(`Compte « ${draft.displayName} » créé.`);
-      }
-      setShowForm(false); setEditing(null);
-    } catch (e) { notify(e.message, "err"); }
-  };
-  const removeUser = async (a) => {
-    if (a.role === "admin") { notify("Impossible de supprimer l'administrateur.", "err"); return; }
-    try { await callApi('/api/manage-account', { action: 'delete', id: a.id }, session); notify(`Compte « ${a.display_name} » supprimé.`); }
-    catch (e) { notify(e.message, "err"); }
-  };
-  const shown = approved.filter(a => !q.trim() || [a.display_name, a.username, a.email].join(" ").toLowerCase().includes(q.trim().toLowerCase()));
-
-  return (
-    <div>
-      {pending.length > 0 && (
-        <div style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}><I.Alert size={14} color="#FFC97A" /> {pending.length} demande(s) en attente</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pending.map(a => (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "#2A2410", border: "1px solid #4A3F1A", borderRadius: 12, padding: "12px 16px", flexWrap: "wrap" }}>
-                <Avatar user={a} size={32} />
-                <div style={{ flex: 1, minWidth: 140 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</div><div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username} · {a.email}</div></div>
-                <button onClick={() => approve(a)} style={{ ...primaryBtn, width: "auto", padding: "7px 14px", fontSize: 13 }}>Approuver</button>
-                <button onClick={() => reject(a)} style={{ ...secondaryBtn, width: "auto", padding: "7px 14px", fontSize: 13, color: "#FF9A8F" }}>Refuser</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={adminBox}>
-        <AdminHeading>Inviter par email</AdminHeading>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input type="email" placeholder="adresse@exemple.com" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} onKeyDown={e => { if (e.key === "Enter") sendInvite(); }} style={{ ...inputStyle, flex: 1, minWidth: 180, width: "auto" }} />
-          <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ ...inputStyle, width: "auto" }}>{ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select>
-          <button type="button" onClick={sendInvite} disabled={inviting} style={{ ...primaryBtn, width: "auto", padding: "10px 18px", opacity: inviting ? 0.6 : 1 }}>{inviting ? "Envoi…" : "Envoyer"}</button>
-        </div>
-        {invites.length > 0 && (
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>Invitations en attente</div>
-            {invites.map(inv => {
-              const expired = new Date(inv.expires_at) < new Date();
-              return (
-                <div key={inv.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13 }}>
-                  <span style={{ flex: 1, minWidth: 160, wordBreak: "break-all" }}>{inv.email} <span style={{ color: "var(--text-dimmer)" }}>· {(ROLES.find(r => r.id === inv.role) || ROLES[1]).label}{expired ? " · expirée" : ""}</span></span>
-                  <button type="button" onClick={() => resendInvite(inv)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12 }}>Renvoyer</button>
-                  <button type="button" onClick={() => revokeInvite(inv)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12, color: "#FF9A8F" }}>Annuler</button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: "1 1 200px" }}><I.Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)" }} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher un membre…" style={{ ...inputStyle, paddingLeft: 32, background: "var(--bg-2)" }} /></div>
-        <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(135deg,var(--admin),#B08CFA)", border: "none", color: "#fff", fontWeight: 600, fontSize: 13.5, padding: "10px 16px", borderRadius: 9, cursor: "pointer", boxShadow: "0 8px 20px rgba(155,126,245,.3)" }}><I.UserPlus size={16} /> Créer un compte</button>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {shown.length === 0 && <EmptyState text="Aucun membre ne correspond." />}
-        {shown.map(a => {
-          const mine = tasks.filter(t => assigneeIds(t).includes(a.id) && !t.done);
-          const lateN = mine.filter(t => t.due && dueInfo(t).late).length;
-          return (
-            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", flexWrap: "wrap" }}>
-              <Avatar user={a} size={34} />
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</span>
-                  {a.role === "admin" ? <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--admin)", background: "#9B7EF51A", padding: "2px 7px", borderRadius: 6 }}>ADMIN</span> : <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent-2)", background: "#5B6EF51A", padding: "2px 7px", borderRadius: 6 }}>{(ROLES.find(r => r.id === a.role) || ROLES[1]).label.toUpperCase()}</span>}
-                </div>
-                <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username} · {a.email}</div>
-              </div>
-              <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{mine.length} tâche(s) en cours{lateN > 0 && <span style={{ color: "#FF9A8F" }}> · {lateN} en retard</span>}</div>
-              <button onClick={() => { setEditing(a); setShowForm(true); }} style={iconBtn} title="Modifier" aria-label="Modifier"><I.Settings size={14} /></button>
-              {a.role !== "admin" && <button onClick={() => removeUser(a)} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer" aria-label="Supprimer"><I.Trash size={15} /></button>}
-            </div>
-          );
-        })}
-      </div>
-      {showForm && <UserForm initial={editing} onCancel={() => { setShowForm(false); setEditing(null); }} onSave={createOrUpdate} />}
-    </div>
-  );
-}
-
 /* ---------------- Réglages : serveur + état des emails ---------------- */
-function EmailsCard({ status, reload, session, notify }) {
-  const [busy, setBusy] = useState(false);
-  const test = async () => {
-    setBusy(true);
-    try { const r = await callApi('/api/admin-tools', { action: 'test-mail' }, session); notify("Email de test envoyé à " + r.to + "."); }
-    catch (e) { notify(e.message, "err"); }
-    setBusy(false);
-  };
-  const Line = ({ ok, children, hint }) => (
-    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", fontSize: 13.5 }}>
-      <span style={{ width: 16, flexShrink: 0, fontWeight: 700, color: ok === true ? "#5FBF8B" : ok === false ? "#FF9A8F" : "var(--text-dimmer)" }}>{ok === true ? "✓" : ok === false ? "✗" : "•"}</span>
-      <div><div>{children}</div>{hint && <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2, lineHeight: 1.5 }}>{hint}</div>}</div>
-    </div>
-  );
-  const fresh = status && status.lastRun && (Date.now() - new Date(status.lastRun.ran_at).getTime() <= 30 * 60000);
-  return (
-    <div style={adminBox}>
-      <AdminHeading right={<button type="button" onClick={reload} style={{ ...secondaryBtn, width: "auto", padding: "4px 10px", fontSize: 12 }}>Actualiser</button>}><span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><I.Mail size={15} /> Emails et rappels</span></AdminHeading>
-      {!status && <div style={{ padding: 10, display: "grid", placeItems: "center" }}><Spinner /></div>}
-      {status && status.error && <Line ok={false} hint="La fonction « admin-tools » n'est probablement pas encore déployée : ajoutez le dossier api/ à jour sur GitHub.">Impossible de lire l'état : {status.error}</Line>}
-      {status && !status.error && (<>
-        <Line ok={status.mailConfigured} hint={status.mailConfigured ? null : "Ajoutez GMAIL_USER et GMAIL_APP_PASSWORD dans Vercel → Settings → Environment Variables, puis redéployez."}>{status.mailConfigured ? <>Envoi d'emails configuré{status.sender ? <> (expéditeur : {status.sender})</> : null}</> : "Envoi d'emails non configuré"}</Line>
-        <Line ok={status.cronSecretSet} hint={status.cronSecretSet ? null : "Ajoutez CRON_SECRET dans Vercel (une longue phrase secrète) et redéployez : sans elle, aucun rappel ne part."}>{status.cronSecretSet ? "Clé des rappels (CRON_SECRET) présente" : "Clé des rappels (CRON_SECRET) absente"}</Line>
-        <Line ok={Boolean(fresh)} hint={fresh ? `${status.runs24h} passage(s) sur les dernières 24 h (environ 144 attendus avec un passage toutes les 10 min).` : "Les rappels « il reste peu de temps » demandent un passage toutes les 10 minutes. Lancez planifier-rappels.sql dans Supabase (SQL Editor) pour l'activer."}>{status.lastRun ? <>Dernier passage du planificateur : {ago(status.lastRun.ran_at)}</> : "Le planificateur n'a encore jamais tourné"}</Line>
-        <Line ok={null}>{status.mails7d} rappel(s) envoyé(s) sur ce serveur ces 7 derniers jours</Line>
-        <div style={{ marginTop: 10 }}><button type="button" onClick={test} disabled={busy || !status.mailConfigured} style={{ ...secondaryBtn, width: "auto", padding: "8px 14px", fontSize: 13, opacity: busy || !status.mailConfigured ? 0.5 : 1 }}>{busy ? "Envoi…" : "M'envoyer un email de test"}</button></div>
-      </>)}
-    </div>
-  );
-}
-
 /* ---------------- Écrire aux membres (administrateur du serveur) ---------------- */
-function AdminMail({ me, session, approved, status, notify }) {
-  const [mode, setMode] = useState("all");            // "all" | "pick"
-  const [picked, setPicked] = useState([]);
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [copy, setCopy] = useState(false);
-  const [confirm, setConfirm] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const others = approved.filter(a => a.id !== me.id && a.email);
-  const recipients = mode === "all" ? others : others.filter(a => picked.includes(a.id));
-  const count = recipients.length + (copy ? 1 : 0);
-  const configured = !status || status.error ? true : status.mailConfigured;
-  const valid = subject.trim().length > 0 && message.trim().length > 0 && count > 0;
-  const toggle = (id) => { setConfirm(false); setPicked(l => l.includes(id) ? l.filter(x => x !== id) : [...l, id]); };
-  const send = async () => {
-    if (!valid || busy) return;
-    if (!confirm) { setConfirm(true); return; }
-    setBusy(true);
-    try {
-      const r = await callApi('/api/admin-tools', { action: 'send-mail', subject: subject.trim(), message: message.trim(), all: mode === "all", userIds: mode === "all" ? [] : picked, copyToMe: copy }, session);
-      notify(r.failed ? `${r.sent} email(s) envoyé(s), ${r.failed} échec(s).` : `Email envoyé à ${r.sent} personne${r.sent > 1 ? "s" : ""}.`);
-      setSubject(""); setMessage(""); setConfirm(false);
-    } catch (e) { notify(e.message, "err"); setConfirm(false); }
-    setBusy(false);
-  };
-  const chip = (on) => ({ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 11px", borderRadius: 18, cursor: "pointer", fontSize: 13, background: on ? "var(--accent)" : "var(--panel-2)", color: on ? "#fff" : "var(--text)", border: `1.5px solid ${on ? "var(--accent)" : "var(--border)"}` });
-  return (
-    <div style={adminBox}>
-      <AdminHeading><span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><I.Mail size={15} /> Écrire aux membres</span></AdminHeading>
-      <p style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 16px", lineHeight: 1.5 }}>Le message part par email depuis l'adresse du site. Les membres peuvent vous répondre directement : leur réponse arrive dans votre boîte mail ({me.email}). Seuls les membres de ce serveur peuvent être destinataires.</p>
-      {!configured && <div style={{ background: "#FF9A8F22", border: "1px solid #FF9A8F66", borderRadius: 8, padding: "9px 12px", fontSize: 13, marginBottom: 14 }}>Les emails ne sont pas configurés sur Vercel (GMAIL_USER et GMAIL_APP_PASSWORD). Voir Réglages.</div>}
-      <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 6, fontWeight: 500 }}>Destinataires</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-        {[["all", `Tous les membres (${others.length})`], ["pick", "Choisir"]].map(([v, lab]) => (
-          <button key={v} type="button" aria-pressed={mode === v} onClick={() => { setMode(v); setConfirm(false); }} style={chip(mode === v)}>{lab}</button>
-        ))}
-      </div>
-      {mode === "pick" && (
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 12 }}>
-          {others.length === 0 && <span style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucun autre membre pour l'instant.</span>}
-          {others.map(a => { const on = picked.includes(a.id); return (
-            <button key={a.id} type="button" aria-pressed={on} onClick={() => toggle(a.id)} style={chip(on)}><Avatar user={a} size={18} />{a.display_name}</button>
-          ); })}
-        </div>
-      )}
-      <Field label="Objet"><input value={subject} maxLength={120} onChange={e => { setSubject(e.target.value); setConfirm(false); }} placeholder="Réunion de famille dimanche" style={inputStyle} /></Field>
-      <Field label={`Message (${message.length} / 5000)`}><textarea value={message} maxLength={5000} rows={7} onChange={e => { setMessage(e.target.value); setConfirm(false); }} placeholder="Bonjour à tous, …" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} /></Field>
-      <label style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, cursor: "pointer", marginBottom: 16 }}><input type="checkbox" checked={copy} onChange={e => { setCopy(e.target.checked); setConfirm(false); }} style={{ width: 15, height: 15 }} /> M'envoyer aussi une copie</label>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <button type="button" onClick={send} disabled={!valid || busy || !configured} style={{ ...primaryBtn, width: "auto", padding: "10px 20px", opacity: valid && !busy && configured ? 1 : 0.5, ...(confirm ? { background: "#E2574C", boxShadow: "none" } : {}) }}>
-          {busy ? "Envoi…" : confirm ? `Confirmer l'envoi à ${count} personne${count > 1 ? "s" : ""}` : "Envoyer"}
-        </button>
-        {confirm && !busy && <button type="button" onClick={() => setConfirm(false)} style={{ ...secondaryBtn, width: "auto", padding: "9px 14px" }}>Annuler</button>}
-        {!valid && count === 0 && mode === "pick" && <span style={{ fontSize: 12.5, color: "var(--text-dimmer)" }}>Choisissez au moins un destinataire.</span>}
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- Site : annonces (réservé à l'administrateur du site) ---------------- */
-function AdminSite({ notify }) {
-  const [rows, setRows] = useState(null);
-  const [msg, setMsg] = useState("");
-  const [when, setWhen] = useState("");
-  const [busy, setBusy] = useState(false);
-  // Maintenance programmée
-  const [mStart, setMStart] = useState("");
-  const [mEnd, setMEnd] = useState("");
-  const [mMsg, setMMsg] = useState("");
-  const [mMsgEdited, setMMsgEdited] = useState(false);
-  const [mConfirm, setMConfirm] = useState(false);
-  const [mBusy, setMBusy] = useState(false);
-  const load = async () => {
-    const q = (cols) => supabase.from('system_alerts').select(cols).order('display_at', { ascending: false }).limit(40);
-    let { data, error } = await q('id,message,display_at,is_maintenance,maint_start,maint_end');
-    if (error) ({ data, error } = await q('id,message,display_at,is_maintenance'));      // migration 07 pas encore lancée
-    if (error) notify(error.message, "err");
-    setRows(data || []);
-  };
-  useEffect(() => { load(); }, []);
-  const fmtDate = (iso) => new Date(iso).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
-  const fmtHour = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
-  const sameDay = (a, b) => new Date(a).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) === new Date(b).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" });
-  const publish = async () => {
-    const text = msg.trim();
-    if (!text || busy) return;
-    setBusy(true);
-    const at = when ? new Date(when).toISOString() : new Date().toISOString();
-    const { error } = await supabase.from('system_alerts').insert({ message: text.slice(0, 300), display_at: at, is_maintenance: false });
-    setBusy(false);
-    if (error) { notify(error.message, "err"); return; }
-    setMsg(""); setWhen("");
-    notify(when ? "Annonce programmée." : "Annonce publiée.");
-    load();
-  };
-  const remove = async (id, label) => {
-    const { error } = await supabase.from('system_alerts').delete().eq('id', id);
-    if (error) { notify(error.message, "err"); return; }
-    notify(label || "Annonce supprimée.");
-    load();
-  };
-
-  // ---- maintenance : validation + message proposé
-  const startD = mStart ? new Date(mStart) : null, endD = mEnd ? new Date(mEnd) : null;
-  const mError = !startD || !endD ? null
-    : startD.getTime() < Date.now() + 60000 ? "Le début doit être dans le futur (au moins une minute)."
-    : endD <= startD ? "La fin doit être après le début."
-    : endD.getTime() - startD.getTime() > 48 * 3600000 ? "Une maintenance programmée dure 48 h au maximum."
-    : null;
-  const mValid = Boolean(startD && endD && !mError);
-  const suggested = mValid ? `Maintenance prévue ${sameDay(startD, endD) ? `le ${startD.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Paris" })} de ${fmtHour(startD)} à ${fmtHour(endD)}` : `du ${fmtDate(startD)} au ${fmtDate(endD)}`}. Le site sera indisponible pendant ce temps.` : "";
-  const shownMsg = mMsgEdited ? mMsg : suggested;
-  const scheduleMaintenance = async () => {
-    if (!mValid || mBusy) return;
-    if (!mConfirm) { setMConfirm(true); return; }
-    setMBusy(true);
-    const text = shownMsg.trim().slice(0, 300);
-    const { error } = await supabase.from('system_alerts').insert({
-      is_maintenance: true, maint_start: startD.toISOString(), maint_end: endD.toISOString(),
-      message: text || null, display_at: new Date().toISOString(),
-    });
-    setMBusy(false); setMConfirm(false);
-    if (error) { notify(/maint_start|maint_end/.test(error.message) ? "Lancez d'abord migration-07-maintenance-programmee.sql dans Supabase." : error.message, "err"); return; }
-    setMStart(""); setMEnd(""); setMMsg(""); setMMsgEdited(false);
-    notify("Maintenance programmée.");
-    load();
-  };
-
-  const ann = (rows || []).filter(r => !r.is_maintenance && r.message && r.message.trim());
-  const maint = (rows || []).filter(r => r.is_maintenance).sort((a, b) => new Date(b.maint_start || b.display_at) - new Date(a.maint_start || a.display_at));
-  const live = ann.find(r => new Date(r.display_at) <= new Date());
-  const status = (r) => new Date(r.display_at) > new Date() ? ["Programmée", "#5B9EF5"] : (live && r.id === live.id) ? ["Affichée", "#5FBF8B"] : ["Remplacée", "var(--text-dimmer)"];
-  const mStatus = (r) => {
-    const now = Date.now(), s = r.maint_start ? new Date(r.maint_start).getTime() : null, e = r.maint_end ? new Date(r.maint_end).getTime() : null;
-    if (s && s > now) return ["Programmée", "#5B9EF5"];
-    if (e && e <= now) return ["Terminée", "var(--text-dimmer)"];
-    return [s || e ? "En cours" : "En cours (manuelle)", "#FFB648"];
-  };
-  const dtInput = (v, set, label) => <div style={{ flex: "1 1 200px" }}><Field label={label}><input type="datetime-local" value={v} onChange={e => { set(e.target.value); setMConfirm(false); }} style={inputStyle} /></Field></div>;
-  return (
-    <div>
-      <div style={adminBox}>
-        <AdminHeading>Programmer une maintenance</AdminHeading>
-        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 10px", lineHeight: 1.5 }}>À l'heure de début, tous les visiteurs (vous compris) sont envoyés sur la page « Maintenance en cours ». À l'heure de fin, le site revient tout seul, sans rien à faire. Un bandeau peut prévenir à l'avance.</p>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {dtInput(mStart, setMStart, "Début (heure de votre appareil)")}
-          {dtInput(mEnd, setMEnd, "Fin (obligatoire)")}
-        </div>
-        <Field label="Bandeau d'avertissement (300 caractères maximum, laissez vide pour ne rien afficher)"><textarea value={shownMsg} maxLength={300} rows={2} onChange={e => { setMMsg(e.target.value); setMMsgEdited(true); setMConfirm(false); }} placeholder="Choisissez un début et une fin : le message est proposé automatiquement" style={{ ...inputStyle, resize: "vertical" }} /></Field>
-        {mError && <div style={{ fontSize: 12.5, color: "#FF9A8F", marginBottom: 10 }}>{mError}</div>}
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <button type="button" onClick={scheduleMaintenance} disabled={!mValid || mBusy} style={{ ...primaryBtn, width: "auto", padding: "10px 20px", opacity: mValid && !mBusy ? 1 : 0.5, ...(mConfirm ? { background: "#E2574C", boxShadow: "none" } : {}) }}>
-            {mBusy ? "…" : mConfirm ? "Confirmer la programmation" : "Programmer la maintenance"}
-          </button>
-          {mConfirm && !mBusy && <button type="button" onClick={() => setMConfirm(false)} style={{ ...secondaryBtn, width: "auto", padding: "9px 14px" }}>Annuler</button>}
-        </div>
-        {maint.length > 0 && (
-          <div style={{ marginTop: 18 }}>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)", fontWeight: 600, marginBottom: 4 }}>Maintenances</div>
-            {maint.slice(0, 8).map(r => { const [lab, col] = mStatus(r); return (
-              <div key={r.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 0", borderTop: "1px solid var(--border)" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5 }}>{r.maint_start ? <>{fmtDate(r.maint_start)} → {r.maint_end ? fmtDate(r.maint_end) : "sans fin"}</> : "Maintenance manuelle (is_maintenance dans Supabase)"}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 3 }}>heure de Paris{r.message ? " · " + r.message : ""}</div>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: col, border: `1px solid ${col}`, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap" }}>{lab}</span>
-                <button type="button" onClick={() => remove(r.id, lab === "Programmée" ? "Maintenance annulée." : "Maintenance supprimée.")} style={{ ...iconBtn, color: "#FF9A8F" }} title={lab === "Programmée" ? "Annuler la maintenance" : "Supprimer"} aria-label={lab === "Programmée" ? "Annuler la maintenance" : "Supprimer la maintenance"}><I.Trash size={14} /></button>
-              </div>
-            ); })}
-          </div>
-        )}
-      </div>
-      <div style={adminBox}>
-        <AdminHeading>Nouvelle annonce</AdminHeading>
-        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 10px", lineHeight: 1.5 }}>Un bandeau visible par tous les visiteurs, sur l'accueil et dans l'application. Il apparaît à l'heure choisie ; la plus récente remplace la précédente.</p>
-        <Field label="Message (300 caractères maximum)"><textarea value={msg} maxLength={300} onChange={e => setMsg(e.target.value)} rows={2} placeholder="Nouvelle fonction : les sondages dans la messagerie" style={{ ...inputStyle, resize: "vertical" }} /></Field>
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 220px" }}><Field label="Afficher à partir de (heure de votre appareil)"><input type="datetime-local" value={when} onChange={e => setWhen(e.target.value)} style={inputStyle} /></Field></div>
-          <button type="button" onClick={publish} disabled={!msg.trim() || busy} style={{ ...primaryBtn, width: "auto", padding: "10px 20px", marginBottom: 14, opacity: msg.trim() && !busy ? 1 : 0.5 }}>{busy ? "…" : when ? "Programmer" : "Publier maintenant"}</button>
-        </div>
-      </div>
-      <div style={adminBox}>
-        <AdminHeading>Annonces</AdminHeading>
-        {rows === null && <div style={{ padding: 10, display: "grid", placeItems: "center" }}><Spinner /></div>}
-        {rows && ann.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucune annonce.</div>}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          {ann.map(r => { const [lab, col] = status(r); return (
-            <div key={r.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 0", borderTop: "1px solid var(--border)" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, wordBreak: "break-word" }}>{r.message}</div>
-                <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 3 }}>{fmtDate(r.display_at)} (heure de Paris)</div>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: col, border: `1px solid ${col}`, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap" }}>{lab}</span>
-              <button type="button" onClick={() => remove(r.id)} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer" aria-label="Supprimer l'annonce"><I.Trash size={14} /></button>
-            </div>
-          ); })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- Administration : onglets ---------------- */
-function AdminView({ me, session, accounts, tasks, leaves = [], meetings = [], attendees = [], notify, onChanged }) {
-  const [sub, setSub] = useState(() => { try { return localStorage.getItem("carnet-admin-tab") || "overview"; } catch (_) { return "overview"; } });
-  const [server, setServer] = useState(null);
-  const [siteAdmin, setSiteAdmin] = useState(false);
-  const [mailStatus, setMailStatus] = useState(null);
-  const pending = accounts.filter(a => a.status === "pending");
-  const approved = accounts.filter(a => a.status !== "pending");
-  const go = (t) => { setSub(t); try { localStorage.setItem("carnet-admin-tab", t); } catch (_) {} };
-  const loadMail = async () => {
-    try { setMailStatus(await callApi('/api/admin-tools', { action: 'status' }, session)); }
-    catch (e) { setMailStatus({ error: e.message }); }
-  };
-  useEffect(() => { supabase.from('servers').select('*').eq('id', me.server_id).single().then(({ data }) => setServer(data)); }, [me.server_id]);
-  useEffect(() => { supabase.rpc('is_platform_admin').then(({ data, error }) => setSiteAdmin(!error && data === true)); loadMail(); }, []);
-  const cur = (sub === "site" || sub === "patch") && !siteAdmin ? "overview" : sub;
-  const tabs = [
-    { id: "overview", label: "Aperçu" },
-    { id: "members", label: "Membres", badge: pending.length },
-    { id: "leaves", label: "Congés", badge: leaves.filter(l => l.status === "pending").length },
-    { id: "workload", label: "Charge" },
-    { id: "mail", label: "Écrire" },
-    { id: "settings", label: "Réglages" },
-    { id: "status", label: "Statut" },
-    { id: "activity", label: "Activité" },
-    ...(siteAdmin ? [{ id: "patch", label: "Patch notes" }, { id: "site", label: "Site" }] : []),
-  ];
-
+function AdminView() {
+  // L'administration est un site à part : « Le Carnet — Espace Administrateur » (même connexion).
+  useEffect(() => { const id = setTimeout(() => { try { window.location.assign("/admin/"); } catch (_) {} }, 400); return () => clearTimeout(id); }, []);
   return (
-    <div className="admin-wrap">
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 10 }}><I.Shield size={24} color="var(--admin)" /> Administration</h1>
-        <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>{server ? server.name + " · " : ""}{approved.length} compte(s) · {tasks.length} tâche(s)</p>
-      </div>
-      <div role="tablist" className="admin-tabs" style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--border)", marginBottom: 20, overflowX: "auto" }}>
-        {tabs.map(t => (
-          <button key={t.id} role="tab" className="admin-tab" aria-selected={cur === t.id} type="button" onClick={() => go(t.id)} style={{ background: "none", border: "none", borderBottom: `2px solid ${cur === t.id ? "var(--admin)" : "transparent"}`, color: cur === t.id ? "var(--text)" : "var(--text-dim)", fontWeight: cur === t.id ? 600 : 500, fontSize: 14, padding: "9px 14px", cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 7, marginBottom: -1 }}>
-            {t.label}{t.badge > 0 && <span style={{ background: "#FFB648", color: "#1a1405", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px" }}>{t.badge}</span>}
-          </button>
-        ))}
-      </div>
-      {cur === "overview" && <AdminOverview approved={approved} pending={pending} tasks={tasks} mailStatus={mailStatus} go={go} />}
-      {cur === "members" && <AdminMembers me={me} session={session} approved={approved} pending={pending} tasks={tasks} notify={notify} />}
-      {cur === "leaves" && <AdminLeaves me={me} session={session} accounts={accounts} leaves={leaves} notify={notify} />}
-      {cur === "workload" && <AdminWorkload accounts={approved} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} />}
-      {cur === "mail" && <AdminMail me={me} session={session} approved={approved} status={mailStatus} notify={notify} />}
-      {cur === "settings" && (<>
-        {server && <ServerSettings server={server} setServer={setServer} me={me} session={session} approved={approved} notify={notify} onChanged={onChanged} />}
-        <EmailsCard status={mailStatus} reload={loadMail} session={session} notify={notify} />
-      </>)}
-      {cur === "status" && <AdminStatus session={session} notify={notify} go={go} />}
-      {cur === "activity" && <ActivityLog accounts={accounts} bare />}
-      {cur === "patch" && <AdminPatchNotes />}
-      {cur === "site" && <AdminSite notify={notify} />}
+    <div data-admin-redirect style={{ maxWidth: 520, margin: "40px auto", textAlign: "center", background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 16, padding: "32px 28px" }}>
+      <div style={{ fontSize: 34, marginBottom: 6 }}>🛡️</div>
+      <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 22, margin: "0 0 8px" }}>Espace Administrateur</h1>
+      <p style={{ color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6, margin: "0 0 20px" }}>L'administration se trouve désormais sur un site dédié, avec la même connexion. Vous y êtes redirigé…</p>
+      <a href="/admin/" data-admin-link style={{ ...primaryBtn, display: "inline-block", width: "auto", textDecoration: "none", padding: "10px 22px" }}>Ouvrir l'Espace Administrateur</a>
     </div>
   );
 }
-function UserForm({ initial, onCancel, onSave }) {
-  const [username, setUsername] = useState(initial?.username || "");
-  const [email, setEmail] = useState(initial?.email || "");
-  const [displayName, setDisplayName] = useState(initial?.display_name || "");
-  const [password, setPassword] = useState("");
-  const [color, setColor] = useState(initial?.color || LABELS[3].hex);
-  const [role, setRole] = useState(initial?.role || "member");
-  const [permissions, setPermissions] = useState(() => ({ ...ROLE_DEFAULT_PERMS[initial?.role || "member"], ...(initial?.permissions || {}) }));
-  const changeRole = (r) => { setRole(r); setPermissions({ ...ROLE_DEFAULT_PERMS[r] }); };
-  const togglePerm = (key) => setPermissions(p => ({ ...p, [key]: !p[key] }));
-  const submit = () => {
-    if (!displayName.trim() || !username.trim()) return;
-    if (!initial && (!password || !email.trim())) return;
-    onSave({ id: initial?.id, username: username.trim(), email: email.trim(), displayName: displayName.trim(), color, role, permissions, password });
-  };
-  return (
-    <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
-      <div className="modal-card" style={modalStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>{initial ? "Modifier le compte" : "Nouveau compte"}</h2><button type="button" onClick={onCancel} style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
-        <Field label="Nom affiché"><input autoFocus value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
-        <Field label="Identifiant"><input value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
-        {!initial && <Field label="Email (sert à se connecter)"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="personne@exemple.com" style={inputStyle} /></Field>}
-        <Field label={initial ? "Nouveau mot de passe (laisser vide pour ne pas changer)" : "Mot de passe"}><input type="text" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} /></Field>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Rôle</div>
-          <div style={{ display: "flex", gap: 8 }}>{ROLES.map(r => (<button key={r.id} type="button" onClick={() => changeRole(r.id)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, border: `1.5px solid ${role === r.id ? "var(--accent)" : "var(--border-soft)"}`, background: role === r.id ? "#5B6EF51A" : "transparent", color: role === r.id ? "var(--accent-2)" : "var(--text-dim)" }}>{r.label}</button>))}</div>
-        </div>
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Droits individuels</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--bg)", borderRadius: 10, padding: "10px 12px" }}>
-            {PERM_LABELS.map(p => (<label key={p.key} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13, cursor: "pointer" }}><input type="checkbox" checked={!!permissions[p.key]} onChange={() => togglePerm(p.key)} style={{ width: 15, height: 15, accentColor: "var(--accent)" }} />{p.label}</label>))}
-          </div>
-        </div>
-        <div style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Couleur du profil</div>
-          <div style={{ display: "flex", gap: 9 }}>{LABELS.map(l => (<button key={l.id} type="button" onClick={() => setColor(l.hex)} style={{ width: 28, height: 28, borderRadius: "50%", background: l.hex, cursor: "pointer", border: color === l.hex ? "2.5px solid var(--text)" : "2.5px solid transparent" }} />))}</div>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}><button type="button" onClick={onCancel} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" onClick={submit} style={{ ...primaryBtn, flex: 1 }}>{initial ? "Enregistrer" : "Créer le compte"}</button></div>
-      </div>
-    </div>
-  );
-}
-
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
 }

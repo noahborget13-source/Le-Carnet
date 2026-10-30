@@ -1,5 +1,16 @@
 [
   {
+    "date": "2026-10-30",
+    "items": [
+      "Nouveau site « Le Carnet — Espace Administrateur » : l'administration est séparée de l'application, avec la même connexion. L'onglet Admin de l'application y mène directement.",
+      "Tableau de bord administrateur : membres, tâches en cours et en retard, réunions de la semaine, congés à traiter et activité des 30 derniers jours.",
+      "Annonces : l'administrateur publie un message qui s'affiche en bandeau dans l'application pour toute l'équipe (niveau, date d'expiration, masquage possible par chacun).",
+      "Gestion des tâches pour l'administrateur : recherche et filtres sur tout le serveur, réassignation en masse (par exemple quand quelqu'un s'absente), corbeille globale avec restauration.",
+      "Vues Projets (avancement) et Réunions (organisateur, réponses, annulation d'une réunion ou d'une série) ; Rapports d'équipe avec export CSV.",
+      "Données : sauvegarde complète du serveur en un fichier, et exports CSV des membres, des tâches et des réunions."
+    ]
+  },
+  {
     "date": "2026-10-29",
     "items": [
       "Nouvel onglet « Rapports » : tâches terminées et créées, retards, ponctualité, délai moyen, activité par jour ou par semaine, répartition par personne, par projet et par étiquette, temps passé en réunion. Choix de la période (7, 30 ou 90 jours), filtre par projet et export CSV.",
