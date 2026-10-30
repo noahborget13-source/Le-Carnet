@@ -2,6 +2,10 @@
   {
     "date": "2026-10-30",
     "items": [
+      "Recherche globale (Ctrl + K, ou ⌘ K sur Mac) : tâches, notes, réunions, personnes et pages au même endroit, avec navigation au clavier. Un bouton de recherche est aussi disponible dans le menu.",
+      "Nouvel onglet « Notes » : pages partagées par toute l'équipe (comptes rendus, procédures, idées), avec titres, listes, cases à cocher cliquables, liens, épinglage, recherche et lien facultatif à un projet.",
+      "Suivi du temps : un chrono sur chaque tâche (une seule minuterie à la fois, visible en haut de n'importe quelle page), la saisie manuelle d'une durée (45, 1h30…) et le total par personne.",
+      "Rapports : nouvel indicateur « Temps suivi » et répartition du temps par personne.",
       "Nouveau site « Le Carnet — Espace Administrateur » : l'administration est séparée de l'application, avec la même connexion. L'onglet Admin de l'application y mène directement.",
       "Tableau de bord administrateur : membres, tâches en cours et en retard, réunions de la semaine, congés à traiter et activité des 30 derniers jours.",
       "Annonces : l'administrateur publie un message qui s'affiche en bandeau dans l'application pour toute l'équipe (niveau, date d'expiration, masquage possible par chacun).",

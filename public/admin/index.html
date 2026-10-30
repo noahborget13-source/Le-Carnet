@@ -1058,6 +1058,9 @@ function computeStats(tasks, meId, now = Date.now()) {
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const PATCH_TECH = {
   "2026-10-30": [
+    "migration-18-suivi-temps.sql : table time_entries (une seule minuterie en cours par personne, durée ≤ 24 h, lecture selon les droits sur la tâche) ; TimeTracker, RunningTimer, computeReport(timeEntries).",
+    "migration-19-notes.sql : table notes (lecture/modification par tous sauf invités, suppression par l'auteur ou l'admin, lien projet) ; NotesView.",
+    "CommandPalette (Ctrl/⌘ + K) : recherche locale sur les données déjà chargées.",
     "public/admin/index.html : nouveau site « Le Carnet — Espace Administrateur » (même connexion que /app/, accès réservé aux administrateurs, sans redirection de maintenance).",
     "Composants d'administration déplacés de public/app/index.html vers public/admin/index.html ; l'onglet Admin de l'application redirige vers /admin/.",
     "migration-17-annonces.sql : table announcements (RLS : lecture par le serveur, écriture par l'admin) ; AnnouncementBanner dans l'application.",
@@ -2070,6 +2073,8 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
   const [projectMembers, setProjectMembers] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [timeEntries, setTimeEntries] = useState([]);
   const [server, setServer] = useState(null);
   const [siteAdmin, setSiteAdmin] = useState(false);
   const [mailStatus, setMailStatus] = useState(null);
@@ -2083,6 +2088,8 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
   useLiveTable("project_members", setProjectMembers);
   useLiveTable("announcements", setAnnouncements);
   useLiveTable("task_attachments", setAttachments);
+  useLiveTable("notes", setNotes);
+  useLiveTable("time_entries", setTimeEntries);
   const loadMail = async () => { try { setMailStatus(await callApi("/api/admin-tools", { action: "status" }, session)); } catch (e) { setMailStatus({ error: e.message }); } };
   useEffect(() => { supabase.from("servers").select("*").eq("id", me.server_id).single().then(({ data }) => setServer(data)); }, [me.server_id]);
   useEffect(() => { supabase.rpc("is_platform_admin").then(({ data, error }) => setSiteAdmin(!error && data === true)); loadMail(); }, []);
@@ -2135,7 +2142,7 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
             {server && <ServerSettings server={server} setServer={setServer} me={me} session={session} approved={approved} notify={notify} onChanged={() => {}} />}
             <EmailsCard status={mailStatus} reload={loadMail} session={session} notify={notify} />
           </>)}
-          {cur === "data" && <AdminData tasksAll={tasksAll} accounts={accounts} projects={projects} projectMembers={projectMembers} meetings={meetings} attendees={attendees} leaves={leaves} announcements={announcements} server={server} notify={notify} />}
+          {cur === "data" && <AdminData tasksAll={tasksAll} accounts={accounts} projects={projects} projectMembers={projectMembers} meetings={meetings} attendees={attendees} leaves={leaves} announcements={announcements} notes={notes} timeEntries={timeEntries} server={server} notify={notify} />}
           {cur === "journal" && <ActivityLog accounts={accounts} bare />}
           {cur === "status" && <AdminStatus session={session} notify={notify} go={go} />}
           {cur === "patch" && <AdminPatchNotes />}
@@ -2460,14 +2467,14 @@ function AdminMeetings({ me, session, meetings, attendees, accounts, notify }) {
   </>);
 }
 
-function AdminData({ tasksAll, accounts, projects, projectMembers, meetings, attendees, leaves, announcements, server, notify }) {
+function AdminData({ tasksAll, accounts, projects, projectMembers, meetings, attendees, leaves, announcements, notes = [], timeEntries = [], server, notify }) {
   const today = parisDay();
   const [busy, setBusy] = useState(false);
   const safeProfile = (a) => ({ id: a.id, username: a.username, display_name: a.display_name, email: a.email, role: a.role, status: a.status, created_at: a.created_at });
   const backup = () => {
     if (busy) return; setBusy(true);
     try {
-      const data = { app: "Le Carnet", exported_at: new Date().toISOString(), server: server ? { id: server.id, name: server.name } : null, members: accounts.map(safeProfile), projects, project_members: projectMembers, tasks: tasksAll, meetings, meeting_attendees: attendees, leave_requests: leaves, announcements };
+      const data = { app: "Le Carnet", exported_at: new Date().toISOString(), server: server ? { id: server.id, name: server.name } : null, members: accounts.map(safeProfile), projects, project_members: projectMembers, tasks: tasksAll, meetings, meeting_attendees: attendees, leave_requests: leaves, announcements, notes, time_entries: timeEntries };
       downloadText(`sauvegarde-le-carnet-${today}.json`, "application/json", JSON.stringify(data, null, 2));
       notify("Sauvegarde téléchargée. Les fichiers joints ne sont pas inclus.");
     } finally { setBusy(false); }
@@ -2485,7 +2492,7 @@ function AdminData({ tasksAll, accounts, projects, projectMembers, meetings, att
   return (<>
     <Panel title="Sauvegarde et exports" id="data">
       <p style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 4px" }}>Conservez une copie des données de votre serveur. Les fichiers joints (pièces jointes) ne sont pas inclus dans la sauvegarde. Les mots de passe ne sont jamais exportés.</p>
-      <Item id="backup" primary title="Sauvegarde complète (JSON)" text={`${accounts.length} membre(s), ${tasksAll.length} tâche(s) corbeille comprise, ${projects.length} projet(s), ${meetings.length} réunion(s), congés et annonces.`} onClick={backup} />
+      <Item id="backup" primary title="Sauvegarde complète (JSON)" text={`${accounts.length} membre(s), ${tasksAll.length} tâche(s) corbeille comprise, ${projects.length} projet(s), ${meetings.length} réunion(s), congés, annonces, notes et temps passé.`} onClick={backup} />
       <Item id="members" title="Membres (CSV)" text="Nom, identifiant, e-mail, rôle et statut de chaque compte." onClick={exportMembers} />
       <Item id="tasks" title="Tâches (CSV)" text="Toutes les tâches hors corbeille, avec dates, responsables et projet." onClick={exportTasks} />
       <Item id="meetings" title="Réunions (CSV)" text="Toutes les réunions avec organisateur et nombre de participants." onClick={exportMeetings} />
