@@ -310,6 +310,7 @@ const I = {
   Check: p => <Icon {...p} path={<><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></>} />,
   Circle: p => <Icon {...p} path={<circle cx="12" cy="12" r="10"/>} />,
   Chevron: p => <Icon {...p} path={<polyline points="6 9 12 15 18 9"/>} />,
+  Note: p => <Icon {...p} path={<><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></>} />,
   Search: p => <Icon {...p} path={<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>} />,
   Filter: p => <Icon {...p} path={<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>} />,
   Sort: p => <Icon {...p} path={<><path d="M3 16l4 4 4-4"/><path d="M7 20V4"/><path d="M21 8l-4-4-4 4"/><path d="M17 4v16"/></>} />,
@@ -1091,6 +1092,10 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [meetingFiles, setMeetingFiles] = useState([]);
   const [messageFiles, setMessageFiles] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [timeEntries, setTimeEntries] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [showPalette, setShowPalette] = useState(false);
+  const [focusNote, setFocusNote] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [inviteFromUrl] = useState(() => { try { const t = new URLSearchParams(window.location.search).get("invite"); return t && t.length >= 20 ? t : ""; } catch (_) { return ""; } });
   const [taskFromUrl] = useState(() => { try { return new URLSearchParams(window.location.search).get("task") || ""; } catch (_) { return ""; } });
@@ -1127,6 +1132,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const reloadMeetingFiles = useLiveTable('meeting_attachments', setMeetingFiles);
   useLiveTable('message_attachments', setMessageFiles);
   useLiveTable('announcements', setAnnouncements);
+  useLiveTable('time_entries', setTimeEntries);
+  useLiveTable('notes', setNotes);
   useEffect(() => { const id = setInterval(() => setClock(c => c + 1), 60000); return () => clearInterval(id); }, []);
 
   useEffect(() => { if (tab === "admin" && !isAdmin) setTab("home"); }, [tab, isAdmin]);
@@ -1155,6 +1162,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
     { id: "calendar", label: "Calendrier", icon: I.Calendar },
     { id: "meetings", label: "Réunions", icon: I.Video, secondary: true },
     { id: "reports", label: "Rapports", icon: I.Chart, secondary: true },
+    { id: "notes", label: "Notes", icon: I.Note, secondary: true },
     { id: "messages", label: "Messages", icon: I.Message },
     { id: "profile", label: "Profil", icon: I.User, secondary: true },
     ...(isAdmin ? [{ id: "admin", label: "Admin", icon: I.Shield, secondary: true }] : []),
@@ -1163,6 +1171,12 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const goTab = (id) => { setMoreOpen(false); setTab(id); };
   const openFromAnywhere = (id) => setOpenId(id);
   useDesktopNotifications({ me, tasks, meetings, attendees, messages, channelMsgs, leaves, accounts: people });
+  // Recherche globale : Ctrl+K (ou ⌘K), même dans un champ de saisie
+  useEffect(() => {
+    const h = (ev) => { if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && ev.key && ev.key.toLowerCase() === "k") { ev.preventDefault(); setShowPalette(v => !v); } };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
   // Raccourcis clavier (ignorés quand on tape dans un champ ou qu'une fenêtre est ouverte)
   useEffect(() => {
     let gAt = 0;
@@ -1175,7 +1189,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       if (document.querySelector(".modal-card")) return;
       const k = ev.key.toLowerCase();
       if (Date.now() - gAt < 1500) {
-        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", m: "messages", p: "profile", a: "admin" };
+        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", n: "notes", m: "messages", p: "profile", a: "admin" };
         gAt = 0;
         if (map[k] && (k !== "a" || isAdmin)) { setTab(map[k]); ev.preventDefault(); }
         return;
@@ -1193,6 +1207,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       <aside className="paper app-sidebar" style={{ width: 236, flexShrink: 0, borderRight: "1px solid var(--border)", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 18 }}>
         <div className="app-sidebar-brand" style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 8px" }}><NotebookMark size={24} /><span style={{ fontFamily: "Fraunces, serif", fontSize: 18 }}>Le Carnet</span></div>
         <button type="button" className="app-sidebar-footer-label" data-servers-open onClick={() => setShowServers(true)} title="Changer de serveur, en créer ou en rejoindre un autre" style={{ display: "flex", alignItems: "center", gap: 8, margin: "-6px 0 0", padding: "8px 10px", background: "var(--bg-2)", border: "1px solid var(--border-soft)", borderRadius: 9, color: "var(--text)", fontSize: 13, cursor: "pointer", textAlign: "left" }}><span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>{serverName || "Mon serveur"}</span><span style={{ color: "var(--text-dimmer)" }}>⇄</span></button>
+        <button type="button" className="app-sidebar-footer-label" data-palette-open onClick={() => setShowPalette(true)} title="Rechercher partout (Ctrl K)" style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 -6px", padding: "8px 10px", borderRadius: 9, background: "var(--bg-2)", border: "1px solid var(--border-soft)", color: "var(--text-dim)", cursor: "pointer", fontSize: 13 }}><I.Search size={14} /> <span style={{ flex: 1, textAlign: "left" }}>Rechercher…</span><kbd style={{ fontSize: 10.5, opacity: 0.7 }}>Ctrl K</kbd></button>
         <nav style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
           {tabs.map(t => (<button key={t.id} className={t.secondary ? "tab-secondary" : undefined} onClick={() => goTab(t.id)} aria-current={tab === t.id ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: tab === t.id ? 600 : 500, cursor: "pointer", textAlign: "left" }}><t.icon size={17} /> {t.label}{t.id === "messages" && unreadTotal > 0 && <span data-unread-badge aria-label={unreadTotal + " message(s) non lu(s)"} style={{ background: "#FF6B5E", color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px", marginLeft: "auto" }}>{unreadTotal > 99 ? "99+" : unreadTotal}</span>}</button>))}
         
@@ -1222,20 +1237,23 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       </div>}
       <main className="app-main" style={{ flex: 1, minWidth: 0, padding: "26px 34px", overflowY: "auto" }}>
         <AnnouncementBanner items={announcements} />
+        <RunningTimer me={me} entries={timeEntries} tasks={tasks} onOpen={openFromAnywhere} notify={notify} />
         <AlertBanner inline />
         {tab === "home" && <HomeView projects={projects} me={me} accounts={people} tasks={tasks} comments={comments} leaves={leaves} meetings={meetings} attendees={attendees} events={teamEvents} onOpen={openFromAnywhere} goTo={setTab} />}
         {tab === "tasks" && <TasksView projects={projects} projectMembers={projectMembers} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} events={teamEvents} isAdmin={isAdmin} notify={notify} me={me} onOpen={openFromAnywhere} />}
         {tab === "meetings" && <MeetingsView meetingFiles={meetingFiles} onFilesChanged={reloadMeetingFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} tasks={tasks} notify={notify} />}
-        {tab === "reports" && <ReportsView me={me} accounts={people} tasks={tasks} projects={projects} meetings={meetings} attendees={attendees} onOpen={openFromAnywhere} notify={notify} />}
+        {tab === "reports" && <ReportsView me={me} accounts={people} tasks={tasks} projects={projects} meetings={meetings} attendees={attendees} timeEntries={timeEntries} onOpen={openFromAnywhere} notify={notify} />}
+        {tab === "notes" && <NotesView me={me} accounts={people} notes={notes} projects={projects} focusId={focusNote} onFocused={() => setFocusNote(null)} notify={notify} />}
         {tab === "messages" && <MessagesView unread={unread} markRead={markRead} messageFiles={messageFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} reactions={reactions} accounts={people} messages={messages} channelMsgs={channelMsgs} pollVotes={pollVotes} reloadVotes={reloadVotes} notify={notify} />}
         {tab === "profile" && <ProfileView accounts={accounts} projects={projects} meetings={meetings} attendees={attendees} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} tasks={tasks} leaves={leaves} notify={notify} onChanged={onProfileChanged} onLogout={onLogout} />}
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} leaves={leaves} meetings={meetings} attendees={attendees} notify={notify} onChanged={onProfileChanged} />}
         <SiteFooter />
       </main>
+      {showPalette && <CommandPalette tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} />}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} />}
       {showServers && <ServersModal initialCode={inviteFromUrl} me={me} session={session} notify={notify} onClose={() => setShowServers(false)} />}
-      {openTask && <TaskDetail reactions={reactions} task={openTask} accounts={people} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openTask.id)} attachments={attachments.filter(a => a.task_id === openTask.id)} onAttachmentsChanged={reloadAttachments} notify={notify} onClose={() => setOpenId(null)} />}
+      {openTask && <TaskDetail reactions={reactions} task={openTask} accounts={people} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openTask.id)} attachments={attachments.filter(a => a.task_id === openTask.id)} onAttachmentsChanged={reloadAttachments} timeEntries={timeEntries.filter(e => e.task_id === openTask.id)} notify={notify} onClose={() => setOpenId(null)} />}
     </div>
   );
 }
@@ -1864,7 +1882,7 @@ function dayExtras(iso, events = [], accounts = []) {
   };
 }
 
-const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
+const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
 function ShortcutsHelp({ onClose, isAdmin }) {
   return (
     <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
@@ -2225,10 +2243,292 @@ function BrowserNotifCard({ card }) {
 }
 
 /* ---------------- Tâches : vue Semaine (glisser-déposer pour replanifier) ---------------- */
+/* ============================================================
+   Suivi du temps, recherche globale, notes partagées
+   ============================================================ */
+/** Durée d'une entrée de temps en millisecondes (une minuterie en cours compte jusqu'à maintenant, 24 h au plus). */
+const entryMs = (e, now = Date.now()) => Math.max(0, Math.min((e.ended_at ? Date.parse(e.ended_at) : now) - Date.parse(e.started_at), 24 * 3600e3));
+const fmtDur = (ms) => {
+  const m = Math.round(ms / 60000);
+  if (m < 1) return ms >= 1000 ? "< 1 min" : "0 min";
+  if (m < 60) return m + " min";
+  const h = Math.floor(m / 60), r = m % 60;
+  return h + " h" + (r ? " " + String(r).padStart(2, "0") : "");
+};
+const fmtClock = (ms) => { const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), sec = t % 60; return [h, m, sec].map(x => String(x).padStart(2, "0")).join(":"); };
+/** « 45 », « 1h30 », « 1:30 », « 2 h », « 1,5 » (heures si virgule) → minutes, ou null. */
+function parseMinutes(txt) {
+  const t = String(txt || "").trim().toLowerCase().replace(",", ".");
+  let m;
+  if ((m = t.match(/^(\d+)\s*(?:h|:)\s*(\d{1,2})?\s*(?:min|m)?$/))) return Number(m[1]) * 60 + Number(m[2] || 0);
+  if ((m = t.match(/^(\d+(?:\.\d+)?)\s*h$/))) return Math.round(Number(m[1]) * 60);
+  if ((m = t.match(/^(\d+)\s*(?:min|m)?$/))) return Number(m[1]);
+  if ((m = t.match(/^(\d+\.\d+)$/))) return Math.round(Number(m[1]) * 60);
+  return null;
+}
+async function stopEntry(e) {
+  const end = new Date(Math.min(Math.max(Date.now(), Date.parse(e.started_at) + 1000), Date.parse(e.started_at) + 24 * 3600e3)).toISOString();
+  return supabase.from("time_entries").update({ ended_at: end }).eq("id", e.id);
+}
+
+function TimeTracker({ task, me, isAdmin, entries, accounts, notify }) {
+  const [, tick] = useState(0);
+  const [minutes, setMinutes] = useState("");
+  const [day, setDay] = useState(parisDay());
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const mine = entries.find(e => e.user_id === me.id && !e.ended_at);
+  const canTrack = me.role !== "guest";
+  useEffect(() => { if (!entries.some(e => !e.ended_at)) return; const id = setInterval(() => tick(n => n + 1), 1000); return () => clearInterval(id); }, [entries]);
+  const total = entries.reduce((n, e) => n + entryMs(e), 0);
+  const perPerson = accounts.map(a => ({ a, ms: entries.filter(e => e.user_id === a.id).reduce((n, e) => n + entryMs(e), 0) })).filter(x => x.ms > 0).sort((x, y) => y.ms - x.ms);
+  const start = async () => {
+    if (busy) return; setBusy(true);
+    // une seule minuterie à la fois : on arrête celle d'une autre tâche
+    const { data: running } = await supabase.from("time_entries").select("*").eq("user_id", me.id).is("ended_at", null);
+    for (const r of running || []) await stopEntry(r);
+    const { error } = await supabase.from("time_entries").insert({ server_id: me.server_id, task_id: task.id, user_id: me.id, started_at: new Date().toISOString() });
+    setBusy(false);
+    if (error) notify(error.message, "err"); else notify("Chrono démarré.");
+  };
+  const stop = async () => { if (!mine || busy) return; setBusy(true); const { error } = await stopEntry(mine); setBusy(false); notify(error ? error.message : "Chrono arrêté : " + fmtDur(entryMs({ ...mine, ended_at: new Date().toISOString() })) + " enregistrés."); };
+  const addManual = async () => {
+    const m = parseMinutes(minutes);
+    if (!m || m < 1 || m > 24 * 60) { notify("Indiquez une durée, par exemple 45, 1h30 ou 2 h (24 h au maximum).", "err"); return; }
+    if (busy) return; setBusy(true);
+    const startMs = parisInstant(day || parisDay(), "09:00");
+    const { error } = await supabase.from("time_entries").insert({ server_id: me.server_id, task_id: task.id, user_id: me.id, started_at: new Date(startMs).toISOString(), ended_at: new Date(startMs + m * 60000).toISOString(), note: note.trim().slice(0, 200) });
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    setMinutes(""); setNote(""); notify(fmtDur(m * 60000) + " ajoutés.");
+  };
+  const remove = async (e) => { const { error } = await supabase.from("time_entries").delete().eq("id", e.id); if (error) notify(error.message, "err"); };
+  const list = entries.filter(e => e.ended_at).sort((a, b) => b.started_at.localeCompare(a.started_at)).slice(0, 8);
+  return (
+    <div data-time-tracker style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+        <div style={{ fontSize: 12.5, color: "var(--text-dim)", fontWeight: 600 }}>⏱ Temps passé</div>
+        <strong data-time-total style={{ fontSize: 13 }}>{total ? fmtDur(total) : "—"}</strong>
+        {canTrack && (mine
+          ? <button key="stop" type="button" data-timer-stop onClick={stop} disabled={busy} style={{ ...chipBtn, marginLeft: "auto", color: "#FF9A8F", borderColor: "#FF6B5E" }}>■ Arrêter · <span data-timer-clock>{fmtClock(entryMs(mine))}</span></button>
+          : <button key="start" type="button" data-timer-start onClick={start} disabled={busy} style={{ ...chipBtn, marginLeft: "auto" }}>▶ Démarrer le chrono</button>)}
+      </div>
+      {perPerson.length > 1 && <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginBottom: 8 }}>{perPerson.map(x => `${x.a.display_name} : ${fmtDur(x.ms)}`).join(" · ")}</div>}
+      {canTrack && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+          <input data-time-minutes value={minutes} onChange={e => setMinutes(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addManual(); } }} placeholder="Durée : 45, 1h30…" aria-label="Durée à ajouter" style={{ ...inputStyle, width: 130, padding: "6px 10px" }} />
+          <input type="date" value={day} max={parisDay()} onChange={e => setDay(e.target.value)} aria-label="Jour" style={{ ...inputStyle, width: "auto", padding: "6px 10px" }} />
+          <input value={note} onChange={e => setNote(e.target.value)} maxLength={200} placeholder="Note (facultatif)" aria-label="Note" style={{ ...inputStyle, flex: "1 1 120px", width: "auto", padding: "6px 10px" }} />
+          <button type="button" data-time-add onClick={addManual} disabled={busy} style={chipBtn}>Ajouter</button>
+        </div>
+      )}
+      {list.map(e => { const u = accounts.find(a => a.id === e.user_id); return (
+        <div key={e.id} data-time-entry style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: "var(--text-dim)", padding: "3px 0" }}>
+          <span style={{ minWidth: 70 }}>{fmtDay(parisDay(Date.parse(e.started_at)), { day: "numeric", month: "short" })}</span>
+          <strong style={{ color: "var(--text)", minWidth: 56 }}>{fmtDur(entryMs(e))}</strong>
+          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u ? u.display_name : "?"}{e.note ? " · " + e.note : ""}</span>
+          {(e.user_id === me.id || isAdmin) && <button type="button" data-time-delete onClick={() => remove(e)} aria-label="Supprimer cette entrée" style={{ background: "none", border: "none", color: "var(--text-dimmer)", cursor: "pointer" }}>✕</button>}
+        </div>); })}
+    </div>
+  );
+}
+
+/** Minuterie en cours (visible partout, en haut de la page). */
+function RunningTimer({ me, entries, tasks, onOpen, notify }) {
+  const [, tick] = useState(0);
+  const run = entries.find(e => e.user_id === me.id && !e.ended_at);
+  useEffect(() => { if (!run) return; const id = setInterval(() => tick(n => n + 1), 1000); return () => clearInterval(id); }, [run && run.id]);
+  if (!run) return null;
+  const t = tasks.find(x => x.id === run.task_id);
+  const stop = async () => { const { error } = await stopEntry(run); notify(error ? error.message : "Chrono arrêté : " + fmtDur(entryMs({ ...run, ended_at: new Date().toISOString() })) + " enregistrés."); };
+  return (
+    <div data-running-timer style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--panel)", border: "1px solid #9B7EF5", borderRadius: 10, padding: "8px 14px", marginBottom: 14, flexWrap: "wrap" }}>
+      <span aria-hidden="true" style={{ color: "#9B7EF5" }}>⏱</span>
+      <button type="button" onClick={() => t && onOpen(t.id)} style={{ background: "none", border: "none", color: "var(--text)", cursor: "pointer", fontSize: 13.5, fontWeight: 600, padding: 0, textAlign: "left" }}>{t ? t.title : "Tâche"}</button>
+      <span data-running-clock style={{ fontVariantNumeric: "tabular-nums", color: "var(--text-dim)", fontSize: 13 }}>{fmtClock(entryMs(run))}</span>
+      <button type="button" data-running-stop onClick={stop} style={{ ...chipBtn, marginLeft: "auto", color: "#FF9A8F", borderColor: "#FF6B5E" }}>■ Arrêter</button>
+    </div>
+  );
+}
+
+/** Recherche globale (Ctrl K) : pages, tâches, réunions, notes. */
+const normSearch = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab, onTask, onNote, onNewTask, canCreate }) {
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState(0);
+  const inputRef = useRef(null);
+  useEffect(() => { if (inputRef.current) inputRef.current.focus(); }, []);
+  const needle = normSearch(q.trim());
+  const items = useMemo(() => {
+    const out = [];
+    const pages = tabs.map(t => ({ k: "tab-" + t.id, kind: "Page", label: t.label, hint: "Aller à cette page", run: () => onTab(t.id) }));
+    if (canCreate) pages.unshift({ k: "new-task", kind: "Action", label: "Nouvelle tâche", hint: "Créer une tâche", run: onNewTask });
+    const match = (txt) => !needle || normSearch(txt).includes(needle);
+    out.push(...pages.filter(p => match(p.label)).slice(0, needle ? 4 : 9));
+    if (needle) {
+      out.push(...tasks.filter(t => match(t.title) || match((t.tags || []).join(" "))).slice(0, 6).map(t => ({ k: "task-" + t.id, kind: t.done ? "Tâche terminée" : "Tâche", label: t.title, hint: t.due ? "Échéance " + formatDue(t.due, daysUntil(t.due)).toLowerCase() : "Sans échéance", run: () => onTask(t.id) })));
+      out.push(...notes.filter(n => match(n.title) || match(n.body)).slice(0, 4).map(n => ({ k: "note-" + n.id, kind: "Note", label: n.title, hint: "Ouvrir la note", run: () => onNote(n.id) })));
+      out.push(...meetings.filter(m => match(m.title) && Date.parse(m.ends_at) > Date.now() - 7 * 864e5).slice(0, 3).map(m => ({ k: "meet-" + m.id, kind: "Réunion", label: m.title, hint: fmtWhen(m), run: () => onTab("meetings") })));
+      out.push(...accounts.filter(a => match(a.display_name) || match(a.username)).slice(0, 3).map(a => ({ k: "user-" + a.id, kind: "Personne", label: a.display_name, hint: "Écrire un message", run: () => onTab("messages") })));
+    }
+    return out;
+  }, [needle, tasks, meetings, notes, accounts, tabs]);
+  useEffect(() => { setSel(0); }, [needle]);
+  const key = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); setSel(i => Math.min(items.length - 1, i + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setSel(i => Math.max(0, i - 1)); }
+    else if (e.key === "Enter") { e.preventDefault(); const it = items[sel]; if (it) it.run(); }
+  };
+  return (
+    <div style={{ ...overlayStyle, placeItems: "start center", paddingTop: "12vh" }} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" data-palette style={{ ...modalStyle, width: 560, padding: 0, overflow: "hidden" }}>
+        <input ref={inputRef} data-palette-input value={q} onChange={e => setQ(e.target.value)} onKeyDown={key} placeholder="Rechercher une tâche, une note, une réunion, une page…" aria-label="Recherche globale" style={{ ...inputStyle, border: "none", borderBottom: "1px solid var(--border)", borderRadius: 0, padding: "16px 18px", fontSize: 15 }} />
+        <div role="listbox" style={{ maxHeight: "50vh", overflowY: "auto", padding: 6 }}>
+          {items.length === 0 && <div style={{ padding: "18px 14px", fontSize: 13.5, color: "var(--text-dimmer)" }}>Aucun résultat pour « {q} ».</div>}
+          {items.map((it, i) => (
+            <button key={it.k} type="button" role="option" aria-selected={i === sel} data-palette-item={it.label} onMouseEnter={() => setSel(i)} onClick={() => it.run()} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", background: i === sel ? "var(--panel)" : "transparent", border: "none", color: "var(--text)", borderRadius: 8, padding: "9px 12px", cursor: "pointer", font: "inherit", fontSize: 13.5 }}>
+              <span style={{ fontSize: 11, color: "var(--text-dimmer)", width: 96, flexShrink: 0 }}>{it.kind}</span>
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.label}</span>
+              <span style={{ fontSize: 11.5, color: "var(--text-dimmer)", flexShrink: 0 }}>{it.hint}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ borderTop: "1px solid var(--border)", padding: "8px 14px", fontSize: 11.5, color: "var(--text-dimmer)", display: "flex", gap: 14 }}><span>↑↓ naviguer</span><span>↵ ouvrir</span><span>Échap fermer</span></div>
+      </div>
+    </div>
+  );
+}
+
+/** Mini mise en forme des notes : titres (#), listes (-), cases à cocher (- [ ]), **gras**, liens https. */
+function renderInline(text, key) {
+  const parts = []; const re = /(\*\*[^*]+\*\*|https:\/\/[^\s<]+)/g; let last = 0, m, i = 0;
+  while ((m = re.exec(text))) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    const tok = m[0];
+    parts.push(tok.startsWith("**") ? <strong key={key + "-" + i++}>{tok.slice(2, -2)}</strong> : <a key={key + "-" + i++} href={tok} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-2)" }}>{tok}</a>);
+    last = m.index + tok.length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+function NoteBody({ body, onToggle }) {
+  const lines = String(body || "").split("\n");
+  return (
+    <div data-note-body style={{ fontSize: 14, lineHeight: 1.65 }}>
+      {lines.map((l, i) => {
+        let m;
+        if ((m = l.match(/^(#{1,3})\s+(.*)$/))) return <div key={i} style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: m[1].length === 1 ? 22 : m[1].length === 2 ? 18 : 15.5, margin: "14px 0 4px" }}>{renderInline(m[2], i)}</div>;
+        if ((m = l.match(/^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/))) { const on = m[1] !== " "; return <label key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: onToggle ? "pointer" : "default" }}><input type="checkbox" data-note-check checked={on} disabled={!onToggle} onChange={() => onToggle && onToggle(i)} style={{ marginTop: 5 }} /><span style={{ textDecoration: on ? "line-through" : "none", opacity: on ? 0.6 : 1 }}>{renderInline(m[2], i)}</span></label>; }
+        if ((m = l.match(/^\s*[-*]\s+(.*)$/))) return <div key={i} style={{ display: "flex", gap: 8 }}><span aria-hidden="true">•</span><span>{renderInline(m[1], i)}</span></div>;
+        if (!l.trim()) return <div key={i} style={{ height: 8 }} />;
+        return <div key={i}>{renderInline(l, i)}</div>;
+      })}
+    </div>
+  );
+}
+
+function NotesView({ me, accounts, notes, projects, focusId, onFocused, notify }) {
+  const [selId, setSelId] = useState(null);
+  const [q, setQ] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ title: "", body: "", project_id: "" });
+  const [loadedAt, setLoadedAt] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const canWrite = me.role !== "guest";
+  const isAdmin = me.role === "admin";
+  useEffect(() => { if (focusId) { setSelId(focusId); setEditing(false); onFocused(); } }, [focusId]);
+  const needle = normSearch(q.trim());
+  const list = useMemo(() => notes.filter(n => !needle || normSearch(n.title).includes(needle) || normSearch(n.body).includes(needle)).sort((a, b) => (b.pinned - a.pinned) || b.updated_at.localeCompare(a.updated_at)), [notes, needle]);
+  const cur = notes.find(n => n.id === selId) || null;
+  const who = (id) => (accounts.find(a => a.id === id) || {}).display_name || "un ancien membre";
+  const startEdit = () => { setDraft({ title: cur.title, body: cur.body, project_id: cur.project_id || "" }); setLoadedAt(cur.updated_at); setEditing(true); };
+  const create = async () => {
+    if (busy) return; setBusy(true);
+    const { data, error } = await supabase.from("notes").insert({ server_id: me.server_id, created_by: me.id, title: "Nouvelle note", body: "" }).select().single();
+    setBusy(false);
+    if (error || !data) { notify(error ? error.message : "Création refusée.", "err"); return; }
+    setSelId(data.id); setDraft({ title: data.title, body: "", project_id: "" }); setLoadedAt(data.updated_at); setEditing(true);
+  };
+  const save = async () => {
+    if (!cur || busy) return;
+    if (!draft.title.trim()) { notify("Donnez un titre à la note.", "err"); return; }
+    setBusy(true);
+    let q2 = supabase.from("notes").update({ title: draft.title.trim().slice(0, 120), body: draft.body.slice(0, 20000), project_id: draft.project_id || null }).eq("id", cur.id);
+    if (loadedAt) q2 = q2.eq("updated_at", loadedAt);
+    const { data, error } = await q2.select();
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    if (!data || !data.length) { notify("Cette note a été modifiée par quelqu'un d'autre pendant votre édition. Copiez votre texte, fermez l'édition puis reprenez la dernière version.", "err"); return; }
+    setEditing(false); notify("Note enregistrée.");
+  };
+  const togglePin = async () => { const { error } = await supabase.from("notes").update({ pinned: !cur.pinned }).eq("id", cur.id); if (error) notify(error.message, "err"); };
+  const remove = async () => {
+    if (!window.confirm(`Supprimer la note « ${cur.title} » ? Cette action est définitive.`)) return;
+    const { error } = await supabase.from("notes").delete().eq("id", cur.id);
+    if (error) { notify(error.message, "err"); return; }
+    setSelId(null); setEditing(false); notify("Note supprimée.");
+  };
+  const toggleCheck = async (lineIdx) => {
+    const lines = cur.body.split("\n"); lines[lineIdx] = lines[lineIdx].replace(/\[( |x|X)\]/, (m, c) => (c === " " ? "[x]" : "[ ]"));
+    const { error } = await supabase.from("notes").update({ body: lines.join("\n") }).eq("id", cur.id);
+    if (error) notify(error.message, "err");
+  };
+  const proj = cur && projects.find(p => p.id === cur.project_id);
+  const dt = (iso) => fmtDay(parisDay(Date.parse(iso)), { day: "numeric", month: "long" }) + " à " + hhmm(new Date(iso).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }));
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div><h1 style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Notes</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>Pages partagées de l'équipe : comptes rendus, procédures, idées, listes à cocher.</p></div>
+        {canWrite && <button type="button" data-note-new onClick={create} disabled={busy} style={{ ...primaryBtn, padding: "10px 18px", display: "flex", alignItems: "center", gap: 7 }}><I.Plus size={15} /> Nouvelle note</button>}
+      </div>
+      <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 260px", maxWidth: 340, minWidth: 0 }}>
+          <input data-note-search value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher dans les notes…" aria-label="Rechercher dans les notes" style={{ ...inputStyle, marginBottom: 10 }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {list.length === 0 && <EmptyState text={notes.length ? "Aucune note ne correspond." : "Aucune note pour l'instant."} />}
+            {list.map(n => (
+              <button key={n.id} type="button" data-note={n.title} aria-current={n.id === selId ? "true" : undefined} onClick={() => { setSelId(n.id); setEditing(false); }} style={{ textAlign: "left", background: n.id === selId ? "var(--panel-2)" : "var(--panel)", border: `1px solid ${n.id === selId ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", color: "var(--text)", font: "inherit" }}>
+                <div style={{ fontWeight: 600, fontSize: 14, display: "flex", gap: 6 }}>{n.pinned && <span title="Épinglée">📌</span>}<span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.title}</span></div>
+                <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(n.body || "").replace(/[#*\-\[\]]/g, "").trim().slice(0, 70) || "Note vide"}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ flex: "3 1 380px", minWidth: 0 }}>
+          {!cur && <div style={{ background: "var(--panel)", border: "1px dashed var(--border)", borderRadius: 12, padding: "40px 20px", textAlign: "center", color: "var(--text-dimmer)", fontSize: 13.5 }}>Choisissez une note à gauche{canWrite ? " ou créez-en une" : ""}.</div>}
+          {cur && (
+            <div data-note-view style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 22px" }}>
+              {editing ? (<>
+                <input data-note-title value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} maxLength={120} aria-label="Titre de la note" style={{ ...inputStyle, fontFamily: "Fraunces, serif", fontSize: 20, fontWeight: 600, marginBottom: 10 }} />
+                <textarea data-note-text value={draft.body} onChange={e => setDraft(d => ({ ...d, body: e.target.value }))} rows={16} maxLength={20000} aria-label="Contenu de la note" placeholder={"# Titre\n- point\n- [ ] à faire\n**gras**, liens https://…"} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }} />
+                {projects.length > 0 && <select data-note-project value={draft.project_id} onChange={e => setDraft(d => ({ ...d, project_id: e.target.value }))} aria-label="Projet lié" style={{ ...inputStyle, width: "auto", marginTop: 10 }}><option value="">Aucun projet</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+                <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+                  <button type="button" onClick={() => setEditing(false)} style={{ ...secondaryBtn, width: "auto", padding: "9px 18px" }}>Annuler</button>
+                  <button type="button" data-note-save onClick={save} disabled={busy} style={{ ...primaryBtn, width: "auto", padding: "9px 22px", opacity: busy ? 0.6 : 1 }}>{busy ? "Enregistrement…" : "Enregistrer"}</button>
+                </div>
+              </>) : (<>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <h2 style={{ fontFamily: "Fraunces, serif", fontSize: 24, fontWeight: 600, margin: 0, flex: 1, minWidth: 180 }}>{cur.pinned ? "📌 " : ""}{cur.title}</h2>
+                  {canWrite && <button type="button" data-note-edit onClick={startEdit} style={chipBtn}>✎ Modifier</button>}
+                  {canWrite && <button type="button" data-note-pin onClick={togglePin} style={chipBtn}>{cur.pinned ? "Désépingler" : "📌 Épingler"}</button>}
+                  {(cur.created_by === me.id || isAdmin) && <button type="button" data-note-delete onClick={remove} style={{ ...chipBtn, color: "#FF9A8F" }}>Supprimer</button>}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-dimmer)", margin: "6px 0 14px" }}>Créée par {who(cur.created_by)} · modifiée le {dt(cur.updated_at)}{cur.updated_by && cur.updated_by !== cur.created_by ? " par " + who(cur.updated_by) : ""}{proj ? " · 📁 " + proj.name : ""}</div>
+                {cur.body.trim() ? <NoteBody body={cur.body} onToggle={canWrite ? toggleCheck : null} /> : <div style={{ color: "var(--text-dimmer)", fontSize: 13.5 }}>Cette note est vide.{canWrite ? " Cliquez sur « Modifier » pour écrire." : ""}</div>}
+              </>)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Rapports ---------------- */
 const REPORT_PERIODS = [[7, "7 jours"], [30, "30 jours"], [90, "90 jours"]];
 /** Calcule tous les indicateurs d'un rapport (fonction pure, testable). */
-function computeReport({ tasks, meetings, attendees, accounts, projects, days, projectId, today }) {
+function computeReport({ tasks, meetings, attendees, accounts, projects, days, projectId, today, timeEntries = [] }) {
   const from = shiftDay(today, -(days - 1));
   const dayOf = (iso) => (iso ? parisDay(Date.parse(iso)) : null);
   const inRange = (d) => d && d >= from && d <= today;
@@ -2259,7 +2559,12 @@ function computeReport({ tasks, meetings, attendees, accounts, projects, days, p
   const byLabel = LABELS.map(l => ({ ...l, done: done.filter(t => t.label === l.id).length, open: open.filter(t => t.label === l.id).length })).filter(r => r.done || r.open);
   const mts = meetings.filter(m => inRange(parisDay(Date.parse(m.starts_at))));
   const hours = mts.reduce((a, m) => a + (Date.parse(m.ends_at) - Date.parse(m.starts_at)) / 3600e3, 0);
-  return { from, created: created.length, done: done.length, open: open.length, late: late.length, lateTasks: late, dueCount: dueIn.length, onTimeRate: dueIn.length ? Math.round(onTime.length / dueIn.length * 100) : null, avgLead, series, people, byProject, byLabel, meetings: mts.length, meetingHours: hours };
+  // Temps suivi : entrées commencées pendant la période, sur les tâches du filtre
+  const listIds = new Set(list.map(t => t.id));
+  const tEntries = timeEntries.filter(e => listIds.has(e.task_id) && inRange(dayOf(e.started_at)));
+  const timeByPerson = accounts.map(a => ({ user: a, ms: tEntries.filter(e => e.user_id === a.id).reduce((n, e) => n + entryMs(e), 0) })).filter(x => x.ms > 0).sort((a, b) => b.ms - a.ms);
+  const timeMs = timeByPerson.reduce((n, x) => n + x.ms, 0);
+  return { timeMs, timeByPerson, from, created: created.length, done: done.length, open: open.length, late: late.length, lateTasks: late, dueCount: dueIn.length, onTimeRate: dueIn.length ? Math.round(onTime.length / dueIn.length * 100) : null, avgLead, series, people, byProject, byLabel, meetings: mts.length, meetingHours: hours };
 }
 function BarRow({ label, value, max, color, extra, avatar }) {
   return (
@@ -2270,11 +2575,11 @@ function BarRow({ label, value, max, color, extra, avatar }) {
     </div>
   );
 }
-function ReportsView({ me, accounts, tasks, projects, meetings, attendees, onOpen, notify }) {
+function ReportsView({ me, accounts, tasks, projects, meetings, attendees, timeEntries = [], onOpen, notify }) {
   const [days, setDays] = useState(30);
   const [projectId, setProjectId] = useState("");
   const today = parisDay();
-  const r = useMemo(() => computeReport({ tasks, meetings, attendees, accounts, projects, days, projectId, today }), [tasks, meetings, attendees, accounts, projects, days, projectId, today]);
+  const r = useMemo(() => computeReport({ tasks, meetings, attendees, accounts, projects, days, projectId, today, timeEntries }), [tasks, meetings, attendees, accounts, projects, days, projectId, today, timeEntries]);
   const maxSeries = Math.max(1, ...r.series.map(x => Math.max(x.created, x.done)));
   const kpi = (id, value, label, hint, color) => (
     <div data-kpi={id} style={{ flex: "1 1 150px", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
@@ -2309,6 +2614,7 @@ function ReportsView({ me, accounts, tasks, projects, meetings, attendees, onOpe
         {kpi("late", r.late, "En retard", "à ce jour", r.late ? "#FF6B5E" : undefined)}
         {kpi("ontime", r.onTimeRate === null ? "—" : r.onTimeRate + " %", "Ponctualité", r.dueCount ? `${r.dueCount} échéance(s) dans la période` : "aucune échéance dans la période")}
         {kpi("lead", r.avgLead === null ? "—" : (r.avgLead < 1 ? "< 1 j" : Math.round(r.avgLead * 10) / 10 + " j"), "Délai moyen", "de la création à la fin")}
+        {kpi("time", r.timeMs ? fmtDur(r.timeMs) : "—", "Temps suivi", r.timeMs ? "chronos et saisies sur la période" : "aucun temps saisi")}
       </div>
       {card(days > 31 ? "Activité par semaine" : "Activité par jour", (<>
         <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}><span><span style={{ display: "inline-block", width: 10, height: 10, background: "#5FBF8B", borderRadius: 2, marginRight: 5 }} />Terminées</span><span><span style={{ display: "inline-block", width: 10, height: 10, background: "var(--text-dimmer)", borderRadius: 2, marginRight: 5 }} />Créées</span></div>
@@ -2329,6 +2635,7 @@ function ReportsView({ me, accounts, tasks, projects, meetings, attendees, onOpe
           {card("Par étiquette", r.byLabel.length === 0 ? <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucune tâche.</div> : r.byLabel.map(x => <BarRow key={x.id} label={x.name} value={x.done} max={maxL} color={x.hex} extra={` terminée${x.done > 1 ? "s" : ""} · ${x.open} en cours`} />), "labels")}
         </div>
       </div>
+      {r.timeByPerson.length > 0 && card("Temps suivi par personne", r.timeByPerson.map(x => <BarRow key={x.user.id} avatar={<Avatar user={x.user} size={18} />} label={x.user.display_name} value={Math.round(x.ms / 60000)} max={Math.max(1, ...r.timeByPerson.map(y => Math.round(y.ms / 60000)))} color="#9B7EF5" extra={" min · " + fmtDur(x.ms)} />), "time")}
       {card("Réunions", <div data-report-meetings style={{ fontSize: 13.5 }}><strong>{r.meetings}</strong> réunion{r.meetings > 1 ? "s" : ""} sur la période, soit <strong>{Math.round(r.meetingHours * 10) / 10} h</strong> au total.</div>, "meetings")}
       {r.lateTasks.length > 0 && card(`Tâches en retard (${r.lateTasks.length})`, (<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {r.lateTasks.slice().sort((a, b) => a.due.localeCompare(b.due)).slice(0, 10).map(t => <button key={t.id} type="button" data-late-task={t.id} onClick={() => onOpen(t.id)} style={{ ...chipBtn, justifyContent: "flex-start", textAlign: "left" }}>{t.title} <span style={{ color: "#FF9A8F", marginLeft: "auto" }}>{formatDue(t.due, daysUntil(t.due))}</span></button>)}
@@ -3789,7 +4096,7 @@ function AttachmentRow({ att, canDelete, onDelete, notify }) {
     </div>
   );
 }
-function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, attachments, onAttachmentsChanged, notify, onClose, reactions = [] }) {
+function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, attachments, onAttachmentsChanged, notify, onClose, reactions = [], timeEntries = [] }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -3927,6 +4234,8 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
             )}
           </div>
         )}
+
+        <TimeTracker task={task} me={me} isAdmin={isAdmin} entries={timeEntries} accounts={accounts} notify={notify} />
 
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
