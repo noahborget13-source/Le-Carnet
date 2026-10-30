@@ -1,7 +1,19 @@
 [
   {
+    "date": "2026-10-30",
+    "items": [
+      "Nouveau site « Le Carnet — Espace Administrateur » : l'administration est séparée de l'application, avec la même connexion. L'onglet Admin de l'application y mène directement.",
+      "Tableau de bord administrateur : membres, tâches en cours et en retard, réunions de la semaine, congés à traiter et activité des 30 derniers jours.",
+      "Annonces : l'administrateur publie un message qui s'affiche en bandeau dans l'application pour toute l'équipe (niveau, date d'expiration, masquage possible par chacun).",
+      "Gestion des tâches pour l'administrateur : recherche et filtres sur tout le serveur, réassignation en masse (par exemple quand quelqu'un s'absente), corbeille globale avec restauration.",
+      "Vues Projets (avancement) et Réunions (organisateur, réponses, annulation d'une réunion ou d'une série) ; Rapports d'équipe avec export CSV.",
+      "Données : sauvegarde complète du serveur en un fichier, et exports CSV des membres, des tâches et des réunions."
+    ]
+  },
+  {
     "date": "2026-10-29",
     "items": [
+      "Nouvel onglet « Rapports » : tâches terminées et créées, retards, ponctualité, délai moyen, activité par jour ou par semaine, répartition par personne, par projet et par étiquette, temps passé en réunion. Choix de la période (7, 30 ou 90 jours), filtre par projet et export CSV.",
       "Réunions récurrentes : créez une réunion qui se répète chaque jour, chaque semaine, toutes les deux semaines ou chaque mois, jusqu'à la date de votre choix (52 occurrences au maximum). Les invités ne reçoivent qu'un seul e-mail, avec toutes les dates dans leur agenda.",
       "Modification d'une série : vous choisissez de modifier « cette réunion seulement » ou « celle-ci et les suivantes ». À l'annulation, vous annulez une seule réunion ou toute la série.",
       "Nouvelle vue « Chronologie » dans les Tâches : chaque tâche apparaît sous forme de barre allant de sa date de début à son échéance, sur 2, 4 ou 12 semaines.",

@@ -103,6 +103,13 @@ droits individuels).
 
 ---
 
+## L'Espace Administrateur
+
+L'administration est un site à part : `https://VOTRE-SITE/admin/` (« Le Carnet — Espace Administrateur »).
+Il partage la connexion de l'application (même navigateur, même domaine) et n'est accessible qu'aux comptes administrateurs.
+L'onglet « Admin » de l'application y mène directement. Le fichier `public/admin/index.html` est autonome : les composants
+d'administration n'existent plus dans `public/app/index.html`. Les annonces nécessitent `migration-17-annonces.sql`.
+
 ## Notes de sécurité
 
 - Les mots de passe sont gérés par Supabase Auth (hachage sécurisé standard de
