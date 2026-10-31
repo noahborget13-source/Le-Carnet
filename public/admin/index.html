@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#14171C" />
+<meta name="theme-color" content="#0E1420" />
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
@@ -21,45 +21,49 @@
 <meta name="description" content="Le Carnet — Espace Administrateur : membres, tâches, réunions, annonces, rapports et sauvegardes." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600;7..72,700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.28.4/babel.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>try{var m=localStorage.getItem("carnet-theme");var t=(m==="light"||m==="dark")?m:((window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark");document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <style>
+  /* Identité visuelle « papier quadrillé » : papier pâle, encre bleue, marge rouge ; thème sombre « ardoise ». */
   :root {
-    --bg: #14171C; --bg-2: #1B1F26; --panel: #1D2128; --panel-2: #20242C;
-    --border: #262B34; --border-soft: #2B303A; --text: #EDEBE3;
-    --text-dim: #9098A8; --text-dimmer: #6C7484;
-    --accent: #5B6EF5; --accent-2: #6E7BF8; --admin: #9B7EF5;
+    --bg: #0E1420; --bg-2: #131B2A; --panel: #161F30; --panel-2: #1B2638;
+    --border: #242F45; --border-soft: #2E3B55; --text: #E9EEF7;
+    --text-dim: #97A5BE; --text-dimmer: #6F7D97;
+    --accent: #5B79F0; --accent-2: #7490F5; --admin: #4FC3A8;
+    --late: #FF9A8F; --margin-line: rgba(240,100,95,.38); --grid: rgba(124,150,255,.055);
+    --warn-bg: #2A2410; --warn-border: #6B5A1E; --warn-text: #FFE3A0; --ring: #9DB1FF; --shadow: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.28); --accent-glow: rgba(91,121,240,.32);
     color-scheme: dark;
   }
   :root[data-theme="light"] {
-    --bg: #F6F4EE; --bg-2: #EEEBE3; --panel: #FFFFFF; --panel-2: #F8F6F1;
-    --border: #E3DFD4; --border-soft: #D6D1C4; --text: #23262D;
-    --text-dim: #5A6171; --text-dimmer: #868C9B;
-    --accent: #4A5CE0; --accent-2: #4455D6; --admin: #7B5BDB;
+    --bg: #F1F4F8; --bg-2: #E7ECF3; --panel: #FFFFFF; --panel-2: #F7F9FC;
+    --border: #D8DFE9; --border-soft: #C5CEDB; --text: #12203A;
+    --text-dim: #475670; --text-dimmer: #66748E;
+    --accent: #1E40AF; --accent-2: #2B52C9; --admin: #0F766E;
+    --late: #B42318; --margin-line: rgba(214,69,69,.5); --grid: rgba(30,64,175,.07);
+    --warn-bg: #FFF4D6; --warn-border: #E3C566; --warn-text: #5C4200; --ring: #1E40AF; --shadow: 0 1px 2px rgba(18,32,58,.06), 0 6px 18px rgba(18,32,58,.07); --accent-glow: rgba(30,64,175,.22);
     color-scheme: light;
   }
-  :root[data-theme="light"] body {
-    background: radial-gradient(1200px 800px at 12% -12%, #ECE9FB 0%, transparent 55%),
-      radial-gradient(900px 700px at 100% 0%, #E3EEF7 0%, transparent 45%), var(--bg);
-  }
-  :root[data-theme="light"] ::-webkit-scrollbar-thumb { background: #CFCABB; }
-  :root[data-theme="light"] .paper { background-image: radial-gradient(circle at 1px 1px, rgba(0,0,0,0.04) 1px, transparent 0); }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
-    background: radial-gradient(1200px 800px at 12% -12%, #232838 0%, transparent 55%),
-      radial-gradient(900px 700px at 100% 0%, #1c2836 0%, transparent 45%), var(--bg);
-    color: var(--text); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+    background-color: var(--bg);
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px; background-attachment: fixed;
+    color: var(--text); font-family: 'Figtree', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
   }
+  h1, h2, h3 { text-wrap: balance; }
+  :focus-visible { outline: 2px solid var(--ring) !important; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
   #root { min-height: 100%; }
   input, select, textarea, button { font-family: inherit; }
   ::-webkit-scrollbar { width: 9px; height: 9px; }
-  ::-webkit-scrollbar-thumb { background: #2C313B; border-radius: 6px; }
-  .paper { background-color: var(--panel); background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.028) 1px, transparent 0); background-size: 14px 14px; }
+  ::-webkit-scrollbar-thumb { background: var(--border-soft); border-radius: 6px; }
+  .paper { background-color: var(--panel); box-shadow: var(--shadow); }
+  .app-sidebar { border-right-color: var(--margin-line) !important; }
   .fade-in { animation: fadeIn .35s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
   @keyframes riseIn { from { opacity: 0; transform: translate(-50%, 10px);} to { opacity: 1; transform: translate(-50%, 0);} }
@@ -334,16 +338,17 @@ const I = {
 };
 function NotebookMark({ size = 22 }) {
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <rect x="3" y="2" width="18" height="20" rx="2.5" fill="#5B6EF5" opacity="0.15" />
-    <rect x="3" y="2" width="18" height="20" rx="2.5" stroke="#5B6EF5" strokeWidth="1.5" />
-    <line x1="7" y1="7" x2="15" y2="7" stroke="#9B7EF5" strokeWidth="1.5" strokeLinecap="round" />
-    <line x1="7" y1="11" x2="17" y2="11" stroke="#5B9EF5" strokeWidth="1.5" strokeLinecap="round" />
-    <line x1="7" y1="15" x2="13" y2="15" stroke="#5FBF8B" strokeWidth="1.5" strokeLinecap="round" />
+    <rect x="3" y="2" width="18" height="20" rx="2.5" fill="var(--accent)" opacity="0.14" />
+    <rect x="3" y="2" width="18" height="20" rx="2.5" stroke="var(--accent)" strokeWidth="1.5" />
+    <line x1="9.5" y1="2.5" x2="9.5" y2="21.5" stroke="#E5484D" strokeWidth="1.2" />
+    <line x1="12" y1="7" x2="18" y2="7" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" />
+    <line x1="12" y1="11" x2="18" y2="11" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" />
+    <line x1="12" y1="15" x2="16" y2="15" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" />
   </svg>);
 }
 
 const inputStyle = { width: "100%", background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 9, padding: "10px 12px", color: "var(--text)", fontSize: 14, outline: "none", boxSizing: "border-box" };
-const primaryBtn = { background: "linear-gradient(135deg,var(--accent),var(--accent-2))", border: "none", color: "#fff", fontWeight: 600, fontSize: 14, padding: "10px 0", borderRadius: 9, cursor: "pointer", boxShadow: "0 10px 24px rgba(91,110,245,.3)" };
+const primaryBtn = { background: "var(--accent)", border: "none", color: "#fff", fontWeight: 600, fontSize: 14, padding: "10px 0", borderRadius: 9, cursor: "pointer", boxShadow: "0 6px 16px var(--accent-glow)" };
 const secondaryBtn = { background: "transparent", border: "1px solid var(--border-soft)", color: "var(--text-dim)", fontWeight: 600, fontSize: 14, padding: "10px 0", borderRadius: 9, cursor: "pointer" };
 const iconBtn = { background: "transparent", border: "1px solid var(--border-soft)", color: "var(--text-dim)", borderRadius: 7, padding: 6, cursor: "pointer", display: "grid", placeItems: "center" };
 const chipBtn = { background: "var(--bg-2)", border: "1px solid var(--border-soft)", color: "var(--text-dim)", fontSize: 13, padding: "8px 12px", borderRadius: 8, cursor: "pointer", position: "relative" };
@@ -356,11 +361,11 @@ function EmptyState({ text }) { return (<div style={{ border: "1px dashed var(--
 function GrainOverlay() { return (<svg style={{ position: "fixed", inset: 0, width: "100%", height: "100%", opacity: 0.03, pointerEvents: "none", zIndex: 0 }}><filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" /></filter><rect width="100%" height="100%" filter="url(#grain)" /></svg>); }
 function Avatar({ user, size = 28 }) {
   const initials = ((user && (user.display_name || user.username)) || "?").slice(0, 2).toUpperCase();
-  return (<div style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: (user && user.color) || "#5B6EF5", display: "grid", placeItems: "center", fontSize: size * 0.38, fontWeight: 700, color: "#14171C" }}>{initials}</div>);
+  return (<div style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: (user && user.color) || "#3B5BDB", display: "grid", placeItems: "center", fontSize: size * 0.38, fontWeight: 700, color: "#14171C" }}>{initials}</div>);
 }
 function RichText({ text, accounts }) {
   const segs = String(text).split(/(https:\/\/meet\.jit\.si\/LeCarnet-[A-Za-z0-9-]+)/);
-  if (segs.length > 1) return <>{segs.map((sg, i) => i % 2 ? <a key={i} href={sg} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", background: "linear-gradient(135deg,var(--accent),var(--accent-2))", color: "#fff", fontWeight: 600, borderRadius: 8, padding: "5px 12px", textDecoration: "none", margin: "2px 0" }}>📹 Rejoindre l'appel</a> : <RichText key={i} text={sg} accounts={accounts} />)}</>;
+  if (segs.length > 1) return <>{segs.map((sg, i) => i % 2 ? <a key={i} href={sg} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", background: "var(--accent)", color: "#fff", fontWeight: 600, borderRadius: 8, padding: "5px 12px", textDecoration: "none", margin: "2px 0" }}>📹 Rejoindre l'appel</a> : <RichText key={i} text={sg} accounts={accounts} />)}</>;
   const parts = [];
   const re = /(^|[^A-Za-z0-9._-])@([A-Za-z0-9._-]{3,30})/g;
   let last = 0, m;
@@ -369,7 +374,7 @@ function RichText({ text, accounts }) {
     if (!accounts.some(a => a.username && a.username.toLowerCase() === name.toLowerCase())) continue;
     const start = m.index + m[1].length;
     parts.push(text.slice(last, start));
-    parts.push(<span key={start} style={{ color: "var(--accent-2)", fontWeight: 600, background: "#5B6EF51F", borderRadius: 4, padding: "0 3px" }}>@{name}</span>);
+    parts.push(<span key={start} style={{ color: "var(--accent-2)", fontWeight: 600, background: "color-mix(in srgb, var(--accent) 12%, transparent)", borderRadius: 4, padding: "0 3px" }}>@{name}</span>);
     last = start + 1 + name.length;
   }
   parts.push(text.slice(last));
@@ -449,10 +454,10 @@ function AlertBanner({ inline }) {
   if (!alert || hidden) return null;
   const close = () => { try { localStorage.setItem("carnet-alert-dismissed", keyOf(alert)); } catch (_) {} setHidden(true); };
   return (
-    <div className="alert-banner" role="status" style={{ ...(inline ? { marginBottom: 18 } : { position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 45, width: "min(560px, 92vw)", boxShadow: "0 12px 30px rgba(0,0,0,.45)" }), display: "flex", alignItems: "flex-start", gap: 10, background: "#2A2410", border: "1px solid #6B5A1E", color: "#FFE3A0", borderRadius: 12, padding: "11px 14px", fontSize: 13.5, lineHeight: 1.45 }}>
+    <div className="alert-banner" role="status" style={{ ...(inline ? { marginBottom: 18 } : { position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 45, width: "min(560px, 92vw)", boxShadow: "0 12px 30px rgba(0,0,0,.45)" }), display: "flex", alignItems: "flex-start", gap: 10, background: "var(--warn-bg)", border: "1px solid var(--warn-border)", color: "var(--warn-text)", borderRadius: 12, padding: "11px 14px", fontSize: 13.5, lineHeight: 1.45 }}>
       <I.Alert size={17} style={{ flexShrink: 0, marginTop: 1, color: "#FFC97A" }} />
       <div style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{alert.message}</div>
-      <button type="button" onClick={close} aria-label="Fermer l'annonce" style={{ background: "none", border: "none", color: "#FFE3A0", cursor: "pointer", padding: 2, flexShrink: 0 }}><I.X size={16} /></button>
+      <button type="button" onClick={close} aria-label="Fermer l'annonce" style={{ background: "none", border: "none", color: "var(--warn-text)", cursor: "pointer", padding: 2, flexShrink: 0 }}><I.X size={16} /></button>
     </div>
   );
 }
@@ -651,7 +656,7 @@ function ShortcutsHelp({ onClose, isAdmin }) {
   return (
     <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
       <div className="modal-card" data-testid="shortcuts-help" style={{ ...modalStyle, width: 400 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>Raccourcis clavier</h2><button type="button" onClick={onClose} aria-label="Fermer" style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}><h2 style={{ fontFamily: "Literata, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>Raccourcis clavier</h2><button type="button" onClick={onClose} aria-label="Fermer" style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
         {SHORTCUTS.filter(([k]) => isAdmin || k !== "G puis A").map(([k, l]) => (
           <div key={k} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", fontSize: 13.5 }}>
             <span>{l}</span><kbd style={{ background: "var(--bg-2)", border: "1px solid var(--border-soft)", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontFamily: "inherit", color: "var(--text-dim)" }}>{k}</kbd>
@@ -690,7 +695,7 @@ function AdminWorkload({ accounts, tasks, meetings, attendees, leaves }) {
   const level = (r) => {
     if (r.leaveDays >= 5) return ["En congé", "#8FD6AE"];
     if (r.score === 0) return ["Libre", "#7DB4FF"];
-    if (rows.length > 1 && r.score >= avg * 1.5 && r.score >= 4) return ["Chargé", "#FF9A8F"];
+    if (rows.length > 1 && r.score >= avg * 1.5 && r.score >= 4) return ["Chargé", "var(--late)"];
     if (rows.length > 1 && r.score <= avg * 0.5) return ["Disponible", "#7DB4FF"];
     return ["Normal", "#9098A8"];
   };
@@ -716,7 +721,7 @@ function AdminWorkload({ accounts, tasks, meetings, attendees, leaves }) {
             </div>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "var(--text-dim)", marginTop: 8 }}>
               <span>📋 {r.dueWeek} à finir cette semaine</span>
-              {r.overdue > 0 && <span style={{ color: "#FF9A8F" }}>⏰ {r.overdue} en retard</span>}
+              {r.overdue > 0 && <span style={{ color: "var(--late)" }}>⏰ {r.overdue} en retard</span>}
               {r.noDate > 0 && <span>🗂️ {r.noDate} sans date</span>}
               <span>📹 {r.meetings} réunion(s){r.hours ? ` · ${r.hours} h` : ""}</span>
               {r.leaveDays > 0 && <span>🌴 {r.leaveDays} jour(s) de congé</span>}
@@ -772,7 +777,7 @@ function AdminStatus({ session, notify, go }) {
   const card = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 14 };
   const dot = (c) => <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: c, marginRight: 8, flexShrink: 0 }} />;
   const OK = "#5FBF8B", WARN = "#FFB648", BAD = "#FF6B5E";
-  if (err) return <div style={{ ...card, color: "#FF9A8F" }}>{err}</div>;
+  if (err) return <div style={{ ...card, color: "var(--late)" }}>{err}</div>;
   if (!d) return <div style={{ color: "var(--text-dim)" }}>Chargement…</div>;
   const m = d.mail, c = d.cron;
   const cronAge = c.lastRun ? (Date.now() - Date.parse(c.lastRun.ran_at)) / 60000 : null;
@@ -808,7 +813,7 @@ function AdminStatus({ session, notify, go }) {
         <div style={{ display: "flex", alignItems: "center", fontWeight: 600, fontSize: 15 }}>{dot(feedErr ? WARN : OK)} Agendas Google des membres</div>
         {d.feeds.length === 0 && <div style={{ fontSize: 13.5, color: "var(--text-dim)", margin: "6px 0 0 18px" }}>Personne n'a encore connecté son agenda.</div>}
         <div style={{ margin: "8px 0 0 18px", display: "flex", flexDirection: "column", gap: 5 }}>
-          {d.feeds.map((f, i) => <div key={i} style={{ fontSize: 13, background: "var(--bg)", borderRadius: 8, padding: "6px 10px", display: "flex", gap: 8, flexWrap: "wrap" }}><strong>{f.name}</strong><span style={{ color: f.last_error ? "#FF9A8F" : "var(--text-dim)" }}>{f.last_error ? "⚠️ " + f.last_error : `${f.slots} créneau(x) · synchronisé ${agoText(f.last_sync)}`}</span></div>)}
+          {d.feeds.map((f, i) => <div key={i} style={{ fontSize: 13, background: "var(--bg)", borderRadius: 8, padding: "6px 10px", display: "flex", gap: 8, flexWrap: "wrap" }}><strong>{f.name}</strong><span style={{ color: f.last_error ? "var(--late)" : "var(--text-dim)" }}>{f.last_error ? "⚠️ " + f.last_error : `${f.slots} créneau(x) · synchronisé ${agoText(f.last_sync)}`}</span></div>)}
         </div>
       </div>
       <div style={card} data-status="todo">
@@ -970,7 +975,7 @@ function AdminLeaves({ me, session, accounts, leaves, notify }) {
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                 <input value={notes[l.id] || ""} onChange={e => setNotes(n => ({ ...n, [l.id]: e.target.value }))} placeholder="Message (optionnel)" maxLength={300} aria-label="Message pour la personne" style={{ ...inputStyle, flex: "1 1 160px", padding: "8px 10px" }} />
                 <button type="button" onClick={() => decide(l, "approved")} style={{ ...primaryBtn, padding: "8px 16px", background: "#2F9E6B", boxShadow: "none" }}>Accepter</button>
-                <button type="button" onClick={() => decide(l, "refused")} style={{ ...secondaryBtn, width: "auto", padding: "8px 16px", color: "#FF9A8F", borderColor: "#6A3532" }}>Refuser</button>
+                <button type="button" onClick={() => decide(l, "refused")} style={{ ...secondaryBtn, width: "auto", padding: "8px 16px", color: "var(--late)", borderColor: "#6A3532" }}>Refuser</button>
               </div>
             </div>
           ))}
@@ -1025,7 +1030,7 @@ async function shrinkImage(file, maxSide = 1600) {
 function StatCard({ value, label, hex, onClick }) {
   return (
     <button type="button" onClick={onClick} style={{ flex: "1 1 140px", textAlign: "left", background: "var(--panel)", border: "1px solid var(--border)", borderTop: `3px solid ${hex}`, borderRadius: 12, padding: "14px 16px", cursor: onClick ? "pointer" : "default", color: "var(--text)" }}>
-      <div style={{ fontFamily: "Fraunces, serif", fontSize: 30, fontWeight: 600, lineHeight: 1.1, color: hex }}>{value}</div>
+      <div style={{ fontFamily: "Literata, serif", fontSize: 30, fontWeight: 600, lineHeight: 1.1, color: hex }}>{value}</div>
       <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 4 }}>{label}</div>
     </button>
   );
@@ -1057,6 +1062,13 @@ function computeStats(tasks, meId, now = Date.now()) {
    Les nouveautés visibles de tous sont dans /patchnotes.json (affichées sur la page d'accueil du site).
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const PATCH_TECH = {
+  "2026-10-31": [
+    "migration-20-notifications.sql : table notifications (lecture/lecture seule de read_at par la personne concernée, aucune insertion côté client) alimentée par des triggers security definer (assignation, commentaires, mentions @, messages, réunions, congés, annonces) ; NotificationBell.",
+    "migration-21-objectifs.sql : tables objectives et key_results (résultats « valeur » ou « tâches liées », politiques de lecture par serveur, écriture par le responsable, le créateur ou l'admin) ; ObjectivesView.",
+    "migration-22-statuts.sql : colonnes profiles.status_text / status_emoji / status_until, modifiées via /api/manage-account (update-self) ; TeamView, presenceOf (congé, réunion, horaires).",
+    "Import CSV : parseCsv, guessMapping, normalizeImportRow, ImportTasksModal (500 lignes maximum, insertion par lots de 100). Vue Tableau : TableBoard / TableRow.",
+    "Identité visuelle « papier quadrillé » : jetons CSS (--bg, --accent, --margin-line, --grid…), polices Literata et Figtree, icônes PWA régénérées ; appliquée à l'application, à l'espace admin, à l'accueil, à la maintenance et à la confidentialité.",
+  ],
   "2026-10-30": [
     "migration-18-suivi-temps.sql : table time_entries (une seule minuterie en cours par personne, durée ≤ 24 h, lecture selon les droits sur la tâche) ; TimeTracker, RunningTimer, computeReport(timeEntries).",
     "migration-19-notes.sql : table notes (lecture/modification par tous sauf invités, suppression par l'auteur ou l'admin, lien projet) ; NotesView.",
@@ -1105,7 +1117,7 @@ function AdminPatchNotes() {
       {days && days.length === 0 && <EmptyState text="Impossible de charger les nouveautés." />}
       {(days || []).map(n => (
         <div key={n.date} style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 14 }}>
-          <div style={{ fontFamily: "Fraunces, serif", fontSize: 17, fontWeight: 600, textTransform: "capitalize", marginBottom: 8 }}>{frDate(n.date)}</div>
+          <div style={{ fontFamily: "Literata, serif", fontSize: 17, fontWeight: 600, textTransform: "capitalize", marginBottom: 8 }}>{frDate(n.date)}</div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dimmer)", marginBottom: 4 }}>Vu par les membres (page d'accueil)</div>
           <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin)", marginBottom: 4 }}>Détails techniques (admin)</div>
@@ -1328,7 +1340,7 @@ function AttachmentRow({ att, canDelete, onDelete, notify }) {
         <div style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>{fileSizeLabel(att.size || 0)}</div>
       </button>
       <button type="button" onClick={open} style={{ ...iconBtn, border: "none" }} title="Télécharger"><I.Download size={14} /></button>
-      {canDelete && <button type="button" onClick={onDelete} style={{ ...iconBtn, border: "none", color: "#FF9A8F" }} title="Retirer"><I.Trash size={14} /></button>}
+      {canDelete && <button type="button" onClick={onDelete} style={{ ...iconBtn, border: "none", color: "var(--late)" }} title="Retirer"><I.Trash size={14} /></button>}
     </div>
   );
 }
@@ -1410,7 +1422,7 @@ function ServerSettings({ server, setServer, me, session, approved, notify, onCh
         </div>
         <button type="button" onClick={() => { navigator.clipboard?.writeText(server.join_code); notify("Code copié."); }} style={{ ...secondaryBtn, display: "flex", alignItems: "center", gap: 6, padding: "8px 12px" }}><I.Copy size={13} /> Copier</button>
         {confirmCode ? (<>
-          <button type="button" onClick={newCode} style={{ ...secondaryBtn, padding: "8px 12px", color: "#FF9A8F" }}>Confirmer : l'ancien code sera invalide</button>
+          <button type="button" onClick={newCode} style={{ ...secondaryBtn, padding: "8px 12px", color: "var(--late)" }}>Confirmer : l'ancien code sera invalide</button>
           <button type="button" onClick={() => setConfirmCode(false)} style={{ ...secondaryBtn, padding: "8px 12px" }}>Annuler</button>
         </>) : <button type="button" onClick={() => setConfirmCode(true)} style={{ ...secondaryBtn, padding: "8px 12px" }}>Nouveau code</button>}
       </div>
@@ -1424,7 +1436,7 @@ function ServerSettings({ server, setServer, me, session, approved, notify, onCh
             </select>
             {!confirmTransfer
               ? <button type="button" disabled={!transferTo} onClick={() => setConfirmTransfer(true)} style={{ ...secondaryBtn, padding: "0 16px", opacity: transferTo ? 1 : 0.5 }}>Transférer</button>
-              : <button type="button" disabled={busy} onClick={transfer} style={{ ...secondaryBtn, padding: "0 16px", color: "#FF9A8F" }}>{busy ? "…" : `Confirmer : ${target ? target.display_name : ""} devient admin`}</button>}
+              : <button type="button" disabled={busy} onClick={transfer} style={{ ...secondaryBtn, padding: "0 16px", color: "var(--late)" }}>{busy ? "…" : `Confirmer : ${target ? target.display_name : ""} devient admin`}</button>}
           </div>
         )}
       </div>
@@ -1508,17 +1520,17 @@ function AdminOverview({ approved, pending, tasks, mailStatus, go }) {
 
   const alerts = [];
   if (pending.length) alerts.push({ key: "p", text: `${pending.length} demande${pending.length > 1 ? "s" : ""} d'accès en attente`, action: "Examiner", to: "members", color: "#FFC97A" });
-  if (late.length) alerts.push({ key: "l", text: `${late.length} tâche${late.length > 1 ? "s" : ""} en retard`, color: "#FF9A8F" });
+  if (late.length) alerts.push({ key: "l", text: `${late.length} tâche${late.length > 1 ? "s" : ""} en retard`, color: "var(--late)" });
   if (noOwner.length) alerts.push({ key: "n", text: `${noOwner.length} tâche${noOwner.length > 1 ? "s" : ""} sans responsable`, color: "#FFC97A" });
   if (mailStatus && !mailStatus.error) {
-    if (!mailStatus.mailConfigured) alerts.push({ key: "m", text: "L'envoi d'emails n'est pas configuré", action: "Régler", to: "settings", color: "#FF9A8F" });
+    if (!mailStatus.mailConfigured) alerts.push({ key: "m", text: "L'envoi d'emails n'est pas configuré", action: "Régler", to: "settings", color: "var(--late)" });
     else if (!mailStatus.lastRun || Date.now() - new Date(mailStatus.lastRun.ran_at).getTime() > 30 * 60000) alerts.push({ key: "c", text: "Les rappels automatiques ne tournent pas régulièrement", action: "Voir", to: "settings", color: "#FFC97A" });
   }
 
   return (
     <div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-        <StatCard value={approved.length} label="Membres" hex="#9B7EF5" onClick={() => go("members")} />
+        <StatCard value={approved.length} label="Membres" hex="var(--admin)" onClick={() => go("members")} />
         <StatCard value={open.length} label="Tâches en cours" hex="#5B9EF5" />
         <StatCard value={late.length} label="En retard" hex="#FF6B5E" />
         <StatCard value={doneWeek.length} label="Terminées (7 jours)" hex="#5FBF8B" />
@@ -1541,12 +1553,12 @@ function AdminOverview({ approved, pending, tasks, mailStatus, go }) {
       </div>
 
       <div style={adminBox}>
-        <AdminHeading right={<span style={{ fontSize: 11.5, color: "var(--text-dimmer)", display: "flex", gap: 12 }}><span><span style={{ display: "inline-block", width: 9, height: 9, background: "#5FBF8B", borderRadius: 2, marginRight: 4 }} />terminées</span><span><span style={{ display: "inline-block", width: 9, height: 9, background: "#5B6EF5", borderRadius: 2, marginRight: 4 }} />créées</span></span>}>Activité des 14 derniers jours</AdminHeading>
+        <AdminHeading right={<span style={{ fontSize: 11.5, color: "var(--text-dimmer)", display: "flex", gap: 12 }}><span><span style={{ display: "inline-block", width: 9, height: 9, background: "#5FBF8B", borderRadius: 2, marginRight: 4 }} />terminées</span><span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--accent)", borderRadius: 2, marginRight: 4 }} />créées</span></span>}>Activité des 14 derniers jours</AdminHeading>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 96 }} role="img" aria-label="Tâches créées et terminées par jour sur 14 jours">
           {days.map((day, i) => (
             <div key={day} title={`${new Date(day + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} : ${doneByDay[i]} terminée(s), ${createdByDay[i]} créée(s)`} style={{ flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 2, height: "100%" }}>
               <div style={{ width: "42%", maxWidth: 12, height: Math.max(doneByDay[i] ? 4 : 1, (doneByDay[i] / maxBar) * 100) + "%", background: "#5FBF8B", borderRadius: "3px 3px 0 0", opacity: doneByDay[i] ? 1 : 0.25 }} />
-              <div style={{ width: "42%", maxWidth: 12, height: Math.max(createdByDay[i] ? 4 : 1, (createdByDay[i] / maxBar) * 100) + "%", background: "#5B6EF5", borderRadius: "3px 3px 0 0", opacity: createdByDay[i] ? 1 : 0.25 }} />
+              <div style={{ width: "42%", maxWidth: 12, height: Math.max(createdByDay[i] ? 4 : 1, (createdByDay[i] / maxBar) * 100) + "%", background: "var(--accent)", borderRadius: "3px 3px 0 0", opacity: createdByDay[i] ? 1 : 0.25 }} />
             </div>
           ))}
         </div>
@@ -1564,7 +1576,7 @@ function AdminOverview({ approved, pending, tasks, mailStatus, go }) {
                 <div style={{ width: ((o - l) / maxLoad) * 100 + "%", background: "#5B9EF5" }} />
                 <div style={{ width: (l / maxLoad) * 100 + "%", background: "#FF6B5E" }} />
               </div>
-              <div style={{ fontSize: 12.5, color: "var(--text-dim)", minWidth: 190 }}>{o} en cours{l > 0 && <span style={{ color: "#FF9A8F" }}> ({l} en retard)</span>} · {done30} terminée(s) en 30 j</div>
+              <div style={{ fontSize: 12.5, color: "var(--text-dim)", minWidth: 190 }}>{o} en cours{l > 0 && <span style={{ color: "var(--late)" }}> ({l} en retard)</span>} · {done30} terminée(s) en 30 j</div>
             </div>
           ))}
         </div>
@@ -1661,7 +1673,7 @@ function AdminMembers({ me, session, approved, pending, tasks, notify }) {
                 <Avatar user={a} size={32} />
                 <div style={{ flex: 1, minWidth: 140 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</div><div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username} · {a.email}</div></div>
                 <button onClick={() => approve(a)} style={{ ...primaryBtn, width: "auto", padding: "7px 14px", fontSize: 13 }}>Approuver</button>
-                <button onClick={() => reject(a)} style={{ ...secondaryBtn, width: "auto", padding: "7px 14px", fontSize: 13, color: "#FF9A8F" }}>Refuser</button>
+                <button onClick={() => reject(a)} style={{ ...secondaryBtn, width: "auto", padding: "7px 14px", fontSize: 13, color: "var(--late)" }}>Refuser</button>
               </div>
             ))}
           </div>
@@ -1684,7 +1696,7 @@ function AdminMembers({ me, session, approved, pending, tasks, notify }) {
                 <div key={inv.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13 }}>
                   <span style={{ flex: 1, minWidth: 160, wordBreak: "break-all" }}>{inv.email} <span style={{ color: "var(--text-dimmer)" }}>· {(ROLES.find(r => r.id === inv.role) || ROLES[1]).label}{expired ? " · expirée" : ""}</span></span>
                   <button type="button" onClick={() => resendInvite(inv)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12 }}>Renvoyer</button>
-                  <button type="button" onClick={() => revokeInvite(inv)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12, color: "#FF9A8F" }}>Annuler</button>
+                  <button type="button" onClick={() => revokeInvite(inv)} style={{ ...secondaryBtn, width: "auto", padding: "5px 10px", fontSize: 12, color: "var(--late)" }}>Annuler</button>
                 </div>
               );
             })}
@@ -1694,7 +1706,7 @@ function AdminMembers({ me, session, approved, pending, tasks, notify }) {
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: "1 1 200px" }}><I.Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)" }} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher un membre…" style={{ ...inputStyle, paddingLeft: 32, background: "var(--bg-2)" }} /></div>
-        <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(135deg,var(--admin),#B08CFA)", border: "none", color: "#fff", fontWeight: 600, fontSize: 13.5, padding: "10px 16px", borderRadius: 9, cursor: "pointer", boxShadow: "0 8px 20px rgba(155,126,245,.3)" }}><I.UserPlus size={16} /> Créer un compte</button>
+        <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--admin)", border: "none", color: "#fff", fontWeight: 600, fontSize: 13.5, padding: "10px 16px", borderRadius: 9, cursor: "pointer", boxShadow: "0 8px 20px rgba(155,126,245,.3)" }}><I.UserPlus size={16} /> Créer un compte</button>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {shown.length === 0 && <EmptyState text="Aucun membre ne correspond." />}
@@ -1707,13 +1719,13 @@ function AdminMembers({ me, session, approved, pending, tasks, notify }) {
               <div style={{ flex: 1, minWidth: 140 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontWeight: 600, fontSize: 14 }}>{a.display_name}</span>
-                  {a.role === "admin" ? <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--admin)", background: "#9B7EF51A", padding: "2px 7px", borderRadius: 6 }}>ADMIN</span> : <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent-2)", background: "#5B6EF51A", padding: "2px 7px", borderRadius: 6 }}>{(ROLES.find(r => r.id === a.role) || ROLES[1]).label.toUpperCase()}</span>}
+                  {a.role === "admin" ? <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--admin)", background: "color-mix(in srgb, var(--admin) 12%, transparent)", padding: "2px 7px", borderRadius: 6 }}>ADMIN</span> : <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent-2)", background: "color-mix(in srgb, var(--accent) 10%, transparent)", padding: "2px 7px", borderRadius: 6 }}>{(ROLES.find(r => r.id === a.role) || ROLES[1]).label.toUpperCase()}</span>}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>@{a.username} · {a.email}</div>
               </div>
-              <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{mine.length} tâche(s) en cours{lateN > 0 && <span style={{ color: "#FF9A8F" }}> · {lateN} en retard</span>}</div>
+              <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{mine.length} tâche(s) en cours{lateN > 0 && <span style={{ color: "var(--late)" }}> · {lateN} en retard</span>}</div>
               <button onClick={() => { setEditing(a); setShowForm(true); }} style={iconBtn} title="Modifier" aria-label="Modifier"><I.Settings size={14} /></button>
-              {a.role !== "admin" && <button onClick={() => removeUser(a)} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer" aria-label="Supprimer"><I.Trash size={15} /></button>}
+              {a.role !== "admin" && <button onClick={() => removeUser(a)} style={{ ...iconBtn, color: "var(--late)" }} title="Supprimer" aria-label="Supprimer"><I.Trash size={15} /></button>}
             </div>
           );
         })}
@@ -1734,7 +1746,7 @@ function EmailsCard({ status, reload, session, notify }) {
   };
   const Line = ({ ok, children, hint }) => (
     <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", fontSize: 13.5 }}>
-      <span style={{ width: 16, flexShrink: 0, fontWeight: 700, color: ok === true ? "#5FBF8B" : ok === false ? "#FF9A8F" : "var(--text-dimmer)" }}>{ok === true ? "✓" : ok === false ? "✗" : "•"}</span>
+      <span style={{ width: 16, flexShrink: 0, fontWeight: 700, color: ok === true ? "#5FBF8B" : ok === false ? "var(--late)" : "var(--text-dimmer)" }}>{ok === true ? "✓" : ok === false ? "✗" : "•"}</span>
       <div><div>{children}</div>{hint && <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2, lineHeight: 1.5 }}>{hint}</div>}</div>
     </div>
   );
@@ -1905,7 +1917,7 @@ function AdminSite({ notify }) {
           {dtInput(mEnd, setMEnd, "Fin (obligatoire)")}
         </div>
         <Field label="Bandeau d'avertissement (300 caractères maximum, laissez vide pour ne rien afficher)"><textarea value={shownMsg} maxLength={300} rows={2} onChange={e => { setMMsg(e.target.value); setMMsgEdited(true); setMConfirm(false); }} placeholder="Choisissez un début et une fin : le message est proposé automatiquement" style={{ ...inputStyle, resize: "vertical" }} /></Field>
-        {mError && <div style={{ fontSize: 12.5, color: "#FF9A8F", marginBottom: 10 }}>{mError}</div>}
+        {mError && <div style={{ fontSize: 12.5, color: "var(--late)", marginBottom: 10 }}>{mError}</div>}
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button type="button" onClick={scheduleMaintenance} disabled={!mValid || mBusy} style={{ ...primaryBtn, width: "auto", padding: "10px 20px", opacity: mValid && !mBusy ? 1 : 0.5, ...(mConfirm ? { background: "#E2574C", boxShadow: "none" } : {}) }}>
             {mBusy ? "…" : mConfirm ? "Confirmer la programmation" : "Programmer la maintenance"}
@@ -1922,7 +1934,7 @@ function AdminSite({ notify }) {
                   <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 3 }}>heure de Paris{r.message ? " · " + r.message : ""}</div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, color: col, border: `1px solid ${col}`, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap" }}>{lab}</span>
-                <button type="button" onClick={() => remove(r.id, lab === "Programmée" ? "Maintenance annulée." : "Maintenance supprimée.")} style={{ ...iconBtn, color: "#FF9A8F" }} title={lab === "Programmée" ? "Annuler la maintenance" : "Supprimer"} aria-label={lab === "Programmée" ? "Annuler la maintenance" : "Supprimer la maintenance"}><I.Trash size={14} /></button>
+                <button type="button" onClick={() => remove(r.id, lab === "Programmée" ? "Maintenance annulée." : "Maintenance supprimée.")} style={{ ...iconBtn, color: "var(--late)" }} title={lab === "Programmée" ? "Annuler la maintenance" : "Supprimer"} aria-label={lab === "Programmée" ? "Annuler la maintenance" : "Supprimer la maintenance"}><I.Trash size={14} /></button>
               </div>
             ); })}
           </div>
@@ -1949,7 +1961,7 @@ function AdminSite({ notify }) {
                 <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 3 }}>{fmtDate(r.display_at)} (heure de Paris)</div>
               </div>
               <span style={{ fontSize: 11, fontWeight: 700, color: col, border: `1px solid ${col}`, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap" }}>{lab}</span>
-              <button type="button" onClick={() => remove(r.id)} style={{ ...iconBtn, color: "#FF9A8F" }} title="Supprimer" aria-label="Supprimer l'annonce"><I.Trash size={14} /></button>
+              <button type="button" onClick={() => remove(r.id)} style={{ ...iconBtn, color: "var(--late)" }} title="Supprimer" aria-label="Supprimer l'annonce"><I.Trash size={14} /></button>
             </div>
           ); })}
         </div>
@@ -1977,14 +1989,14 @@ function UserForm({ initial, onCancel, onSave }) {
   return (
     <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
       <div className="modal-card" style={modalStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}><h2 style={{ fontFamily: "Fraunces, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>{initial ? "Modifier le compte" : "Nouveau compte"}</h2><button type="button" onClick={onCancel} style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}><h2 style={{ fontFamily: "Literata, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>{initial ? "Modifier le compte" : "Nouveau compte"}</h2><button type="button" onClick={onCancel} style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
         <Field label="Nom affiché"><input autoFocus value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} /></Field>
         <Field label="Identifiant"><input value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} /></Field>
         {!initial && <Field label="Email (sert à se connecter)"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="personne@exemple.com" style={inputStyle} /></Field>}
         <Field label={initial ? "Nouveau mot de passe (laisser vide pour ne pas changer)" : "Mot de passe"}><input type="text" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} /></Field>
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Rôle</div>
-          <div style={{ display: "flex", gap: 8 }}>{ROLES.map(r => (<button key={r.id} type="button" onClick={() => changeRole(r.id)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, border: `1.5px solid ${role === r.id ? "var(--accent)" : "var(--border-soft)"}`, background: role === r.id ? "#5B6EF51A" : "transparent", color: role === r.id ? "var(--accent-2)" : "var(--text-dim)" }}>{r.label}</button>))}</div>
+          <div style={{ display: "flex", gap: 8 }}>{ROLES.map(r => (<button key={r.id} type="button" onClick={() => changeRole(r.id)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, border: `1.5px solid ${role === r.id ? "var(--accent)" : "var(--border-soft)"}`, background: role === r.id ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent", color: role === r.id ? "var(--accent-2)" : "var(--text-dim)" }}>{r.label}</button>))}</div>
         </div>
         <div style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Droits individuels</div>
@@ -2019,7 +2031,7 @@ function AdminGate({ title, text, action, href, onLogout }) {
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
         <div style={{ maxWidth: 420, textAlign: "center", background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 16, padding: 32 }}>
           <div style={{ fontSize: 30, marginBottom: 6 }}>🛡️</div>
-          <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 21, margin: "0 0 8px" }}>{title}</h1>
+          <h1 style={{ fontFamily: "Literata, serif", fontSize: 21, margin: "0 0 8px" }}>{title}</h1>
           <p style={{ color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.6, marginBottom: 20 }}>{text}</p>
           <a href={href} data-gate-link style={{ ...primaryBtn, display: "block", textDecoration: "none", textAlign: "center" }}>{action}</a>
           {onLogout && <button type="button" onClick={onLogout} style={{ ...secondaryBtn, width: "100%", marginTop: 10 }}>Se déconnecter</button>}
@@ -2075,6 +2087,8 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
   const [attachments, setAttachments] = useState([]);
   const [notes, setNotes] = useState([]);
   const [timeEntries, setTimeEntries] = useState([]);
+  const [objectives, setObjectives] = useState([]);
+  const [keyResults, setKeyResults] = useState([]);
   const [server, setServer] = useState(null);
   const [siteAdmin, setSiteAdmin] = useState(false);
   const [mailStatus, setMailStatus] = useState(null);
@@ -2090,6 +2104,8 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
   useLiveTable("task_attachments", setAttachments);
   useLiveTable("notes", setNotes);
   useLiveTable("time_entries", setTimeEntries);
+  useLiveTable("objectives", setObjectives);
+  useLiveTable("key_results", setKeyResults);
   const loadMail = async () => { try { setMailStatus(await callApi("/api/admin-tools", { action: "status" }, session)); } catch (e) { setMailStatus({ error: e.message }); } };
   useEffect(() => { supabase.from("servers").select("*").eq("id", me.server_id).single().then(({ data }) => setServer(data)); }, [me.server_id]);
   useEffect(() => { supabase.rpc("is_platform_admin").then(({ data, error }) => setSiteAdmin(!error && data === true)); loadMail(); }, []);
@@ -2111,7 +2127,7 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
     <div className="adm-layout">
       <header className="adm-top">
         <button type="button" className="adm-burger" aria-label="Menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}>☰</button>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}><I.Shield size={20} color="var(--admin)" /><strong style={{ fontFamily: "Fraunces, serif", fontSize: 16 }}>Le Carnet — Espace Administrateur</strong></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}><I.Shield size={20} color="var(--admin)" /><strong style={{ fontFamily: "Literata, serif", fontSize: 16 }}>Le Carnet — Espace Administrateur</strong></div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           <a href="/app/" data-back-app style={{ ...chipBtn, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>← Retour à l'application</a>
           <button type="button" onClick={onLogout} style={chipBtn} title="Se déconnecter">⎋</button>
@@ -2125,7 +2141,7 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
         </nav>
         <main className="adm-main">
           <div style={{ marginBottom: 18 }}>
-            <h1 data-admin-title style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>{title ? title[1] : ""}</h1>
+            <h1 data-admin-title style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>{title ? title[1] : ""}</h1>
             <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>{server ? server.name + " · " : ""}{approved.length} compte(s) · {tasks.length} tâche(s)</p>
           </div>
           {cur === "dashboard" && <AdminDashboard approved={approved} pending={pending} tasks={tasks} leaves={leaves} meetings={meetings} mailStatus={mailStatus} announcements={announcements} go={go} />}
@@ -2142,7 +2158,7 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
             {server && <ServerSettings server={server} setServer={setServer} me={me} session={session} approved={approved} notify={notify} onChanged={() => {}} />}
             <EmailsCard status={mailStatus} reload={loadMail} session={session} notify={notify} />
           </>)}
-          {cur === "data" && <AdminData tasksAll={tasksAll} accounts={accounts} projects={projects} projectMembers={projectMembers} meetings={meetings} attendees={attendees} leaves={leaves} announcements={announcements} notes={notes} timeEntries={timeEntries} server={server} notify={notify} />}
+          {cur === "data" && <AdminData tasksAll={tasksAll} accounts={accounts} projects={projects} projectMembers={projectMembers} meetings={meetings} attendees={attendees} leaves={leaves} announcements={announcements} notes={notes} timeEntries={timeEntries} objectives={objectives} keyResults={keyResults} server={server} notify={notify} />}
           {cur === "journal" && <ActivityLog accounts={accounts} bare />}
           {cur === "status" && <AdminStatus session={session} notify={notify} go={go} />}
           {cur === "patch" && <AdminPatchNotes />}
@@ -2156,7 +2172,7 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
 
 const Kpi = ({ id, value, label, hint, color, onClick }) => (
   <button type="button" data-kpi={id} onClick={onClick} disabled={!onClick} style={{ flex: "1 1 150px", textAlign: "left", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", cursor: onClick ? "pointer" : "default", color: "inherit", font: "inherit" }}>
-    <div style={{ fontFamily: "Fraunces, serif", fontSize: 28, fontWeight: 600, color: color || "var(--text)" }}>{value}</div>
+    <div style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, color: color || "var(--text)" }}>{value}</div>
     <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{label}</div>
     {hint && <div style={{ fontSize: 11.5, color: "var(--text-dimmer)", marginTop: 2 }}>{hint}</div>}
   </button>
@@ -2284,7 +2300,7 @@ function AdminAnnouncements({ me, announcements, notify }) {
               <span style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>{live(a) ? "Affichée" : a.active ? "Expirée" : "Masquée"}{a.expires_at ? ` · jusqu'au ${fmtDay(parisDay(Date.parse(a.expires_at)), { day: "numeric", month: "short" })}` : ""}</span>
               <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                 <button type="button" data-ann-toggle onClick={() => toggle(a)} style={chipBtn}>{a.active ? "Masquer" : "Réafficher"}</button>
-                <button type="button" data-ann-delete onClick={() => remove(a)} style={{ ...chipBtn, color: "#FF9A8F" }}>Supprimer</button>
+                <button type="button" data-ann-delete onClick={() => remove(a)} style={{ ...chipBtn, color: "var(--late)" }}>Supprimer</button>
               </span>
             </div>
             {a.body && <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 6, whiteSpace: "pre-wrap" }}>{a.body}</div>}
@@ -2359,12 +2375,12 @@ function AdminTasks({ me, tasksAll, accounts, projects, attachments, notify }) {
         <strong style={{ fontSize: 13, marginRight: "auto" }}>{picked.length} sélectionnée(s)</strong>
         {status === "trash" ? (<>
           <button type="button" data-bulk="restore" disabled={busy} onClick={restore} style={chipBtn}>↩ Restaurer</button>
-          <button type="button" data-bulk="purge" disabled={busy} onClick={purge} style={{ ...chipBtn, color: "#FF9A8F" }}>Supprimer définitivement</button>
+          <button type="button" data-bulk="purge" disabled={busy} onClick={purge} style={{ ...chipBtn, color: "var(--late)" }}>Supprimer définitivement</button>
         </>) : (<>
           <select data-bulk-target value={target} onChange={e => setTarget(e.target.value)} aria-label="Réassigner à" style={{ ...inputStyle, width: "auto", padding: "6px 10px" }}><option value="">Réassigner à…</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.display_name}</option>)}</select>
           <button type="button" data-bulk="reassign" disabled={busy || !target} onClick={reassign} style={{ ...chipBtn, opacity: target ? 1 : 0.5 }}>Réassigner</button>
           <button type="button" data-bulk="done" disabled={busy} onClick={finish} style={chipBtn}>✓ Terminer</button>
-          <button type="button" data-bulk="trash" disabled={busy} onClick={trash} style={{ ...chipBtn, color: "#FF9A8F" }}>🗑 Corbeille</button>
+          <button type="button" data-bulk="trash" disabled={busy} onClick={trash} style={{ ...chipBtn, color: "var(--late)" }}>🗑 Corbeille</button>
         </>)}
       </div>
     )}
@@ -2384,7 +2400,7 @@ function AdminTasks({ me, tasksAll, accounts, projects, attachments, notify }) {
                 <td style={{ padding: "8px 12px" }}><input type="checkbox" data-pick={t.id} checked={picked.includes(t.id)} onChange={() => setPicked(p => p.includes(t.id) ? p.filter(x => x !== t.id) : [...p, t.id])} aria-label={"Sélectionner « " + t.title + " »"} /></td>
                 <td style={{ padding: "8px 6px", maxWidth: 320 }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: label.hex, marginRight: 8 }} /><span style={{ textDecoration: t.done ? "line-through" : "none" }}>{t.title}</span></td>
                 <td style={{ padding: "8px 6px" }}>{who2.length ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AvatarStack users={who2} size={20} max={3} /><span style={{ color: "var(--text-dim)", fontSize: 12 }}>{who2.map(u => u.display_name).join(", ")}</span></span> : <span style={{ color: "#FFC97A", fontSize: 12 }}>Personne</span>}</td>
-                <td style={{ padding: "8px 6px", color: late ? "#FF9A8F" : "var(--text-dim)", whiteSpace: "nowrap" }}>{t.due ? formatDue(t.due, daysUntil(t.due)) : "—"}</td>
+                <td style={{ padding: "8px 6px", color: late ? "var(--late)" : "var(--text-dim)", whiteSpace: "nowrap" }}>{t.due ? formatDue(t.due, daysUntil(t.due)) : "—"}</td>
                 <td style={{ padding: "8px 6px", color: "var(--text-dim)" }}>{t.deleted_at ? "Corbeille" : t.done ? "Terminée" : t.doing ? "En cours" : "À faire"}</td>
                 <td style={{ padding: "8px 12px", textAlign: "right" }}>{!t.deleted_at && <a href={`/app/?task=${t.id}`} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-2)", fontSize: 12.5, textDecoration: "none" }}>Ouvrir ↗</a>}</td>
               </tr>
@@ -2449,8 +2465,8 @@ function AdminMeetings({ me, session, meetings, attendees, accounts, notify }) {
           {m.series_id && <span style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>🔁 {RECUR[m.recurrence] || "série"}</span>}
           <span style={{ fontSize: 12.5, color: "var(--text-dim)", textTransform: "capitalize" }}>{fmtWhen(m)}</span>
           {!past2 && <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-            <button type="button" data-meeting-cancel disabled={busyId === m.id} onClick={() => cancel(m, "one")} style={{ ...chipBtn, color: "#FF9A8F" }}>Annuler</button>
-            {m.series_id && <button type="button" data-meeting-cancel-series disabled={busyId === m.id} onClick={() => cancel(m, "series")} style={{ ...chipBtn, color: "#FF9A8F" }}>Annuler la série</button>}
+            <button type="button" data-meeting-cancel disabled={busyId === m.id} onClick={() => cancel(m, "one")} style={{ ...chipBtn, color: "var(--late)" }}>Annuler</button>
+            {m.series_id && <button type="button" data-meeting-cancel-series disabled={busyId === m.id} onClick={() => cancel(m, "series")} style={{ ...chipBtn, color: "var(--late)" }}>Annuler la série</button>}
           </span>}
         </div>
         <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 4 }}>Organisée par {org ? org.display_name : "un ancien membre"} · {list.length} participant{list.length > 1 ? "s" : ""} ({c("accepted")} ✓ · {c("declined")} ✗ · {c("invited")} sans réponse)</div>
@@ -2467,14 +2483,14 @@ function AdminMeetings({ me, session, meetings, attendees, accounts, notify }) {
   </>);
 }
 
-function AdminData({ tasksAll, accounts, projects, projectMembers, meetings, attendees, leaves, announcements, notes = [], timeEntries = [], server, notify }) {
+function AdminData({ tasksAll, accounts, projects, projectMembers, meetings, attendees, leaves, announcements, notes = [], timeEntries = [], objectives = [], keyResults = [], server, notify }) {
   const today = parisDay();
   const [busy, setBusy] = useState(false);
   const safeProfile = (a) => ({ id: a.id, username: a.username, display_name: a.display_name, email: a.email, role: a.role, status: a.status, created_at: a.created_at });
   const backup = () => {
     if (busy) return; setBusy(true);
     try {
-      const data = { app: "Le Carnet", exported_at: new Date().toISOString(), server: server ? { id: server.id, name: server.name } : null, members: accounts.map(safeProfile), projects, project_members: projectMembers, tasks: tasksAll, meetings, meeting_attendees: attendees, leave_requests: leaves, announcements, notes, time_entries: timeEntries };
+      const data = { app: "Le Carnet", exported_at: new Date().toISOString(), server: server ? { id: server.id, name: server.name } : null, members: accounts.map(safeProfile), projects, project_members: projectMembers, tasks: tasksAll, meetings, meeting_attendees: attendees, leave_requests: leaves, announcements, notes, time_entries: timeEntries, objectives, key_results: keyResults };
       downloadText(`sauvegarde-le-carnet-${today}.json`, "application/json", JSON.stringify(data, null, 2));
       notify("Sauvegarde téléchargée. Les fichiers joints ne sont pas inclus.");
     } finally { setBusy(false); }

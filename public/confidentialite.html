@@ -6,19 +6,52 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<script>try{var m=localStorage.getItem("carnet-theme");var t=(m==="light"||m==="dark")?m:((window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark");document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,600;7..72,700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>Règles de confidentialité — Le Carnet</title>
 <meta name="description" content="Les données collectées par Le Carnet, leur utilisation et vos droits." />
 <link rel="canonical" href="https://le-carnet-beta.vercel.app/confidentialite.html" />
 <style>
-  :root { color-scheme: dark; }
-  body { margin: 0; background: #14171C; color: #EDEBE3; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; line-height: 1.65; }
-  main { width: min(760px, 100% - 32px); margin: 0 auto; padding: 40px 0 60px; }
-  h1 { font-family: Georgia, serif; font-size: 34px; margin: 0 0 6px; }
-  h2 { font-family: Georgia, serif; font-size: 21px; margin: 32px 0 8px; }
-  p, li { color: #C4C9D4; font-size: 15.5px; }
-  a { color: #8E9CFF; }
-  .meta { color: #6C7484; font-size: 13.5px; }
-  footer { text-align: center; color: #6C7484; font-size: 13px; padding: 0 0 36px; }
+  /* Identité visuelle « papier quadrillé » : papier pâle, encre bleue, marge rouge ; thème sombre « ardoise ». */
+  :root {
+    --bg: #0E1420; --bg-2: #131B2A; --panel: #161F30; --panel-2: #1B2638;
+    --border: #242F45; --border-soft: #2E3B55; --text: #E9EEF7;
+    --text-dim: #97A5BE; --text-dimmer: #6F7D97;
+    --accent: #5B79F0; --accent-2: #7490F5; --admin: #4FC3A8;
+    --late: #FF9A8F; --margin-line: rgba(240,100,95,.38); --grid: rgba(124,150,255,.055);
+    --ring: #9DB1FF; --shadow: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.28); --accent-glow: rgba(91,121,240,.32);
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F1F4F8; --bg-2: #E7ECF3; --panel: #FFFFFF; --panel-2: #F7F9FC;
+    --border: #D8DFE9; --border-soft: #C5CEDB; --text: #12203A;
+    --text-dim: #475670; --text-dimmer: #66748E;
+    --accent: #1E40AF; --accent-2: #2B52C9; --admin: #0F766E;
+    --late: #B42318; --margin-line: rgba(214,69,69,.5); --grid: rgba(30,64,175,.07);
+    --ring: #1E40AF; --shadow: 0 1px 2px rgba(18,32,58,.06), 0 6px 18px rgba(18,32,58,.07); --accent-glow: rgba(30,64,175,.22);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background-color: var(--bg);
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px; background-attachment: fixed;
+    color: var(--text); font-family: 'Figtree', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 2px solid var(--ring) !important; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+  body { margin: 0; line-height: 1.65; }
+  body::before { content: ''; position: fixed; top: 0; bottom: 0; left: clamp(10px, 4.5vw, 64px); width: 1px; background: var(--margin-line); }
+  main { width: min(760px, 100% - 32px); margin: 0 auto; padding: 40px 0 60px; position: relative; }
+  h1 { font-family: 'Literata', Georgia, serif; font-size: 34px; margin: 0 0 6px; }
+  h2 { font-family: 'Literata', Georgia, serif; font-size: 21px; margin: 32px 0 8px; }
+  p, li { color: var(--text-dim); font-size: 15.5px; }
+  li strong, p strong { color: var(--text); }
+  a { color: var(--accent); }
+  .meta { color: var(--text-dimmer); font-size: 13.5px; }
+  footer { text-align: center; color: var(--text-dimmer); font-size: 13px; padding: 0 0 36px; position: relative; }
 </style>
 </head>
 <body>

@@ -244,6 +244,26 @@ async function updateSelf(me, body, res) {
       update.birthday = v;
     }
   }
+  // Statut de présence : texte court, icône et fin facultatives (null / vide = effacer)
+  if (patch.status_text !== undefined) {
+    const v = patch.status_text === null ? '' : String(patch.status_text).trim();
+    if (v.length > 80) return res.status(400).json({ error: 'Statut : 80 caractères au maximum.' });
+    update.status_text = v === '' ? null : v;
+    if (v === '') { update.status_emoji = null; update.status_until = null; }
+  }
+  if (patch.status_emoji !== undefined && update.status_text !== null) {
+    const v = patch.status_emoji === null ? '' : String(patch.status_emoji).trim();
+    if (v.length > 8) return res.status(400).json({ error: 'Icône de statut invalide.' });
+    update.status_emoji = v === '' ? null : v;
+  }
+  if (patch.status_until !== undefined && update.status_text !== null) {
+    if (patch.status_until === null || patch.status_until === '') update.status_until = null;
+    else {
+      const t = Date.parse(String(patch.status_until));
+      if (!Number.isFinite(t)) return res.status(400).json({ error: 'Fin de statut invalide.' });
+      update.status_until = new Date(t).toISOString();
+    }
+  }
   if (!Object.keys(update).length) return res.status(400).json({ error: 'Rien à modifier.' });
   const { error } = await supabaseAdmin.from('profiles').update(update).eq('id', me.id);
   if (error) {

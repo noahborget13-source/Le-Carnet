@@ -1,5 +1,16 @@
 [
   {
+    "date": "2026-10-31",
+    "items": [
+      "Nouvelle identité visuelle : papier quadrillé, encre bleue et marge rouge, avec un mode sombre « ardoise ». Elle s'applique partout : application, espace administrateur, page d'accueil et pages d'information.",
+      "Cloche de notifications : vous êtes prévenu dans le Carnet quand une tâche vous est assignée, qu'on vous écrit, qu'on vous mentionne avec @, qu'une réunion vous concerne ou qu'un congé est décidé. Un clic ouvre l'élément concerné.",
+      "Nouvel onglet « Objectifs » : fixez un cap à l'équipe et mesurez l'avancement avec des résultats clés, soit un chiffre à atteindre, soit un groupe de tâches à terminer.",
+      "Nouvel onglet « Équipe » : voyez qui est disponible, en réunion, en congé ou hors horaires, et choisissez un statut personnalisé (« En déplacement », « Concentré »…) avec une durée facultative.",
+      "Import de tâches depuis un fichier CSV ou un texte collé (Excel, Google Sheets, Todoist…) : choix des colonnes, vérification ligne par ligne avant import, 500 tâches au maximum, modèle à télécharger.",
+      "Nouvelle vue « Tableau » dans les tâches : modifiez directement le titre, le statut, la priorité, l'échéance, la personne, le projet et l'étiquette dans les cellules, triez par colonne et regroupez les tâches."
+    ]
+  },
+  {
     "date": "2026-10-30",
     "items": [
       "Recherche globale (Ctrl + K, ou ⌘ K sur Mac) : tâches, notes, réunions, personnes et pages au même endroit, avec navigation au clavier. Un bouton de recherche est aussi disponible dans le menu.",

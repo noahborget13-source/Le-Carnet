@@ -7,20 +7,53 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<script>try{var m=localStorage.getItem("carnet-theme");var t=(m==="light"||m==="dark")?m:((window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark");document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,600;7..72,700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>Maintenance en cours — Le Carnet</title>
 <style>
-  body { font-family: sans-serif; text-align: center; padding: 150px 20px; background: #f4f4f4; color: #333; margin: 0; }
-  h1 { font-size: 44px; margin: 0 0 16px; }
-  p { font-size: 20px; margin: 0; }
-  button { margin-top: 18px; padding: 9px 18px; border: 1px solid #bbb; border-radius: 8px; background: #fff; color: #333; font-size: 14px; cursor: pointer; }
-  small { display: block; margin-top: 28px; color: #888; font-size: 13px; }
+  /* Identité visuelle « papier quadrillé » : papier pâle, encre bleue, marge rouge ; thème sombre « ardoise ». */
+  :root {
+    --bg: #0E1420; --bg-2: #131B2A; --panel: #161F30; --panel-2: #1B2638;
+    --border: #242F45; --border-soft: #2E3B55; --text: #E9EEF7;
+    --text-dim: #97A5BE; --text-dimmer: #6F7D97;
+    --accent: #5B79F0; --accent-2: #7490F5; --admin: #4FC3A8;
+    --late: #FF9A8F; --margin-line: rgba(240,100,95,.38); --grid: rgba(124,150,255,.055);
+    --ring: #9DB1FF; --shadow: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.28); --accent-glow: rgba(91,121,240,.32);
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F1F4F8; --bg-2: #E7ECF3; --panel: #FFFFFF; --panel-2: #F7F9FC;
+    --border: #D8DFE9; --border-soft: #C5CEDB; --text: #12203A;
+    --text-dim: #475670; --text-dimmer: #66748E;
+    --accent: #1E40AF; --accent-2: #2B52C9; --admin: #0F766E;
+    --late: #B42318; --margin-line: rgba(214,69,69,.5); --grid: rgba(30,64,175,.07);
+    --ring: #1E40AF; --shadow: 0 1px 2px rgba(18,32,58,.06), 0 6px 18px rgba(18,32,58,.07); --accent-glow: rgba(30,64,175,.22);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background-color: var(--bg);
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px; background-attachment: fixed;
+    color: var(--text); font-family: 'Figtree', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 2px solid var(--ring) !important; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+  body { margin: 0; padding: 150px 20px; text-align: center; min-height: 100vh; }
+  body::before { content: ''; position: fixed; top: 0; bottom: 0; left: clamp(10px, 4.5vw, 64px); width: 1px; background: var(--margin-line); }
+  h1 { font-family: 'Literata', Georgia, serif; font-size: 44px; font-weight: 600; margin: 0 0 16px; }
+  p { font-size: 20px; margin: 0; color: var(--text); }
+  button { margin-top: 18px; padding: 10px 20px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+  small { display: block; margin-top: 28px; color: var(--text-dimmer); font-size: 13px; }
   @media (max-width: 600px) { body { padding-top: 90px; } h1 { font-size: 32px; } p { font-size: 17px; } }
 </style>
 </head>
 <body>
   <h1>Nous revenons très vite !</h1>
   <p>Le Carnet est actuellement en cours de mise à jour. Merci de votre patience. L'espace Administrateur est toujours disponible.</p>
-  <p id="back" style="font-size:17px;margin-top:14px;color:#555"></p>
+  <p id="back" style="font-size:17px;margin-top:14px;color:var(--text-dim)"></p>
   <small id="status">Cette page se rafraîchit toute seule : vous serez redirigé dès que c'est terminé.</small>
   <button id="retry" type="button">Vérifier maintenant</button>
 <script>
