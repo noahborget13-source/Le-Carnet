@@ -94,7 +94,7 @@
 
   .tab-more, .more-sheet, .more-backdrop { display: none; }
   .more-backdrop { position: fixed; inset: 0; z-index: 58; background: rgba(0,0,0,.25); }
-  .more-sheet { position: fixed; left: 10px; right: 10px; bottom: calc(60px + env(safe-area-inset-bottom)); z-index: 59; flex-direction: column; gap: 4px; padding: 8px; background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 16px; box-shadow: 0 16px 40px rgba(0,0,0,.45); }
+  .more-sheet { position: fixed; left: 10px; right: 10px; bottom: calc(60px + env(safe-area-inset-bottom)); z-index: 59; flex-direction: column; max-height: calc(100dvh - 60px - 150px); overflow-y: auto; overscroll-behavior: contain; gap: 4px; padding: 8px; background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 16px; box-shadow: 0 16px 40px rgba(0,0,0,.45); }
   .more-sheet button { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; border: none; border-radius: 10px; background: transparent; color: var(--text); font-size: 15px; font-weight: 500; text-align: left; cursor: pointer; }
   .more-sheet button[aria-current="true"] { background: var(--panel); font-weight: 700; }
 
@@ -318,6 +318,9 @@ const I = {
   Chevron: p => <Icon {...p} path={<polyline points="6 9 12 15 18 9"/>} />,
   Target: p => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>} />,
   Users: p => <Icon {...p} path={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />,
+  Repeat: p => <Icon {...p} path={<><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></>} />,
+  Building: p => <Icon {...p} path={<><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="18"/><line x1="15" y1="22" x2="15" y2="18"/><line x1="8" y1="6" x2="8.01" y2="6"/><line x1="12" y1="6" x2="12.01" y2="6"/><line x1="16" y1="6" x2="16.01" y2="6"/><line x1="8" y1="10" x2="8.01" y2="10"/><line x1="12" y1="10" x2="12.01" y2="10"/><line x1="16" y1="10" x2="16.01" y2="10"/><line x1="8" y1="14" x2="8.01" y2="14"/><line x1="12" y1="14" x2="12.01" y2="14"/><line x1="16" y1="14" x2="16.01" y2="14"/></>} />,
+  Pulse: p => <Icon {...p} path={<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>} />,
   Note: p => <Icon {...p} path={<><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></>} />,
   Search: p => <Icon {...p} path={<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>} />,
   Filter: p => <Icon {...p} path={<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>} />,
@@ -1178,6 +1181,16 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   }, [unreadNotifs]);
   const [notes, setNotes] = useState([]);
   const [objectives, setObjectives] = useState([]);
+  const [savedViews, setSavedViews] = useState([]);
+  const [checkins, setCheckins] = useState([]);
+  const focusKey = "carnet-focus-" + me.id;
+  const [focus, setFocusRaw] = useState(() => { try { const v = JSON.parse(localStorage.getItem(focusKey) || "null"); return v && v.endsAt && v.taskId ? v : null; } catch (_) { return null; } });
+  const setFocus = (v) => { setFocusRaw(v); try { if (v) localStorage.setItem(focusKey, JSON.stringify(v)); else localStorage.removeItem(focusKey); } catch (_) {} };
+  const [showReview, setShowReview] = useState(false);
+  const [habits, setHabits] = useState([]);
+  const [habitLogs, setHabitLogs] = useState([]);
+  const [resources, setResources] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [keyResults, setKeyResults] = useState([]);
   const [showPalette, setShowPalette] = useState(false);
   const [focusNote, setFocusNote] = useState(null);
@@ -1221,6 +1234,12 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   useLiveTable('notifications', setNotifs, q => q.order('created_at', { ascending: false }).limit(100));
   useLiveTable('notes', setNotes);
   useLiveTable('objectives', setObjectives);
+  useLiveTable('saved_views', setSavedViews);
+  useLiveTable('checkins', setCheckins);
+  useLiveTable('habits', setHabits);
+  useLiveTable('habit_logs', setHabitLogs);
+  useLiveTable('resources', setResources);
+  useLiveTable('bookings', setBookings);
   useLiveTable('key_results', setKeyResults);
   useEffect(() => { const id = setInterval(() => setClock(c => c + 1), 60000); return () => clearInterval(id); }, []);
 
@@ -1251,6 +1270,9 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
     { id: "meetings", label: "Réunions", icon: I.Video, secondary: true },
     { id: "reports", label: "Rapports", icon: I.Chart, secondary: true },
     { id: "team", label: "Équipe", icon: I.Users, secondary: true },
+    { id: "activity", label: "Activité", icon: I.Pulse, secondary: true },
+    { id: "bookings", label: "Réservations", icon: I.Building, secondary: true },
+    { id: "habits", label: "Habitudes", icon: I.Repeat, secondary: true },
     { id: "objectives", label: "Objectifs", icon: I.Target, secondary: true },
     { id: "notes", label: "Notes", icon: I.Note, secondary: true },
     { id: "messages", label: "Messages", icon: I.Message },
@@ -1260,6 +1282,14 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const goTab = (id) => { setMoreOpen(false); setTab(id); };
   const openFromAnywhere = (id) => setOpenId(id);
+  const startFocus = async (task, workMin, breakMin, rounds) => {
+    const { data: running } = await supabase.from("time_entries").select("*").eq("user_id", me.id).is("ended_at", null);
+    for (const r of running || []) await stopEntry(r);
+    const { error } = await supabase.from("time_entries").insert({ server_id: me.server_id, task_id: task.id, user_id: me.id, started_at: new Date().toISOString() });
+    if (error) { notify(error.message, "err"); return; }
+    setFocus({ taskId: task.id, phase: "work", endsAt: Date.now() + workMin * focusMin(), workMin, breakMin, rounds: rounds || (focus && focus.rounds) || 0 });
+    notify(`Séance de concentration lancée : ${workMin} min.`);
+  };
   useDesktopNotifications({ me, tasks, meetings, attendees, messages, channelMsgs, leaves, accounts: people });
   // Recherche globale : Ctrl+K (ou ⌘K), même dans un champ de saisie
   useEffect(() => {
@@ -1279,7 +1309,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       if (document.querySelector(".modal-card")) return;
       const k = ev.key.toLowerCase();
       if (Date.now() - gAt < 1500) {
-        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", n: "notes", m: "messages", p: "profile", a: "admin" };
+        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", b: "bookings", i: "habits", f: "activity", n: "notes", m: "messages", p: "profile", a: "admin" };
         gAt = 0;
         if (map[k] && (k !== "a" || isAdmin)) { setTab(map[k]); ev.preventDefault(); }
         return;
@@ -1328,14 +1358,18 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       <main className="app-main" style={{ flex: 1, minWidth: 0, padding: "26px 34px", overflowY: "auto" }}>
         <div className="app-topbar" style={{ justifyContent: "flex-end", marginBottom: 10 }}><NotificationBell variant="top" me={me} items={notifs} onOpenTask={openFromAnywhere} goTo={setTab} notify={notify} /></div>
         <AnnouncementBanner items={announcements} />
-        <RunningTimer me={me} entries={timeEntries} tasks={tasks} onOpen={openFromAnywhere} notify={notify} />
+        <FocusSession me={me} tasks={tasks} focus={focus} setFocus={setFocus} onStart={startFocus} onOpen={openFromAnywhere} notify={notify} />
+        {!(focus && focus.phase === "work") && <RunningTimer me={me} entries={timeEntries} tasks={tasks} onOpen={openFromAnywhere} notify={notify} />}
         <AlertBanner inline />
-        {tab === "home" && <HomeView projects={projects} me={me} accounts={people} tasks={tasks} comments={comments} leaves={leaves} meetings={meetings} attendees={attendees} events={teamEvents} onOpen={openFromAnywhere} goTo={setTab} />}
-        {tab === "tasks" && <TasksView projects={projects} projectMembers={projectMembers} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
+        {tab === "home" && <HomeView projects={projects} me={me} accounts={people} tasks={tasks} comments={comments} leaves={leaves} meetings={meetings} attendees={attendees} events={teamEvents} onOpen={openFromAnywhere} goTo={setTab} onReview={() => setShowReview(true)} />}
+        {tab === "tasks" && <TasksView savedViews={savedViews} projects={projects} projectMembers={projectMembers} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} events={teamEvents} isAdmin={isAdmin} notify={notify} me={me} onOpen={openFromAnywhere} />}
         {tab === "meetings" && <MeetingsView meetingFiles={meetingFiles} onFilesChanged={reloadMeetingFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} tasks={tasks} notify={notify} />}
         {tab === "reports" && <ReportsView me={me} accounts={people} tasks={tasks} projects={projects} meetings={meetings} attendees={attendees} timeEntries={timeEntries} onOpen={openFromAnywhere} notify={notify} />}
-        {tab === "team" && <TeamView me={me} session={session} accounts={people} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} goTo={setTab} onChanged={onProfileChanged} notify={notify} />}
+        {tab === "activity" && <ActivityView me={me} accounts={people} tasks={tasks} comments={comments} notes={notes} objectives={objectives} meetings={meetings} announcements={announcements} checkins={checkins} bookings={bookings} resources={resources} onOpen={openFromAnywhere} onNote={(id) => { setFocusNote(id); setTab("notes"); }} goTo={setTab} />}
+        {tab === "bookings" && <BookingsView me={me} accounts={people} resources={resources} bookings={bookings} notify={notify} />}
+        {tab === "habits" && <HabitsView me={me} habits={habits} logs={habitLogs} notify={notify} />}
+        {tab === "team" && <TeamView checkins={checkins} me={me} session={session} accounts={people} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} goTo={setTab} onChanged={onProfileChanged} notify={notify} />}
         {tab === "objectives" && <ObjectivesView me={me} accounts={people} objectives={objectives} keyResults={keyResults} tasks={tasks} projects={projects} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "notes" && <NotesView me={me} accounts={people} notes={notes} projects={projects} focusId={focusNote} onFocused={() => setFocusNote(null)} notify={notify} />}
         {tab === "messages" && <MessagesView unread={unread} markRead={markRead} messageFiles={messageFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} reactions={reactions} accounts={people} messages={messages} channelMsgs={channelMsgs} pollVotes={pollVotes} reloadVotes={reloadVotes} notify={notify} />}
@@ -1343,10 +1377,11 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} leaves={leaves} meetings={meetings} attendees={attendees} notify={notify} onChanged={onProfileChanged} />}
         <SiteFooter />
       </main>
-      {showPalette && <CommandPalette tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} />}
+      {showPalette && <CommandPalette tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} onReview={() => { setShowPalette(false); setShowReview(true); }} />}
+      {showReview && <WeeklyReview me={me} tasks={tasks} meetings={meetings} attendees={attendees} timeEntries={timeEntries} notify={notify} onClose={() => setShowReview(false)} onOpen={(id) => { setShowReview(false); setOpenId(id); }} />}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} />}
       {showServers && <ServersModal initialCode={inviteFromUrl} me={me} session={session} notify={notify} onClose={() => setShowServers(false)} />}
-      {openTask && <TaskDetail reactions={reactions} task={openTask} accounts={people} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openTask.id)} attachments={attachments.filter(a => a.task_id === openTask.id)} onAttachmentsChanged={reloadAttachments} timeEntries={timeEntries.filter(e => e.task_id === openTask.id)} notify={notify} onClose={() => setOpenId(null)} />}
+      {openTask && <TaskDetail onFocus={startFocus} reactions={reactions} task={openTask} accounts={people} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openTask.id)} attachments={attachments.filter(a => a.task_id === openTask.id)} onAttachmentsChanged={reloadAttachments} timeEntries={timeEntries.filter(e => e.task_id === openTask.id)} notify={notify} onClose={() => setOpenId(null)} />}
     </div>
   );
 }
@@ -1975,7 +2010,7 @@ function dayExtras(iso, events = [], accounts = []) {
   };
 }
 
-const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
+const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis F", "Fil d'activité"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
 function ShortcutsHelp({ onClose, isAdmin }) {
   return (
     <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
@@ -2364,7 +2399,7 @@ async function stopEntry(e) {
   return supabase.from("time_entries").update({ ended_at: end }).eq("id", e.id);
 }
 
-function TimeTracker({ task, me, isAdmin, entries, accounts, notify }) {
+function TimeTracker({ task, me, isAdmin, entries, accounts, notify, onFocus }) {
   const [, tick] = useState(0);
   const [minutes, setMinutes] = useState("");
   const [day, setDay] = useState(parisDay());
@@ -2405,6 +2440,7 @@ function TimeTracker({ task, me, isAdmin, entries, accounts, notify }) {
         {canTrack && (mine
           ? <button key="stop" type="button" data-timer-stop onClick={stop} disabled={busy} style={{ ...chipBtn, marginLeft: "auto", color: "var(--late)", borderColor: "#FF6B5E" }}>■ Arrêter · <span data-timer-clock>{fmtClock(entryMs(mine))}</span></button>
           : <button key="start" type="button" data-timer-start onClick={start} disabled={busy} style={{ ...chipBtn, marginLeft: "auto" }}>▶ Démarrer le chrono</button>)}
+        {canTrack && onFocus && !task.done && <span style={{ display: "inline-flex", gap: 6 }}><button type="button" data-focus-start="25" onClick={() => onFocus(task, 25, 5)} title="25 minutes de concentration, puis 5 minutes de pause" style={chipBtn}>🎯 25 min</button><button type="button" data-focus-start="50" onClick={() => onFocus(task, 50, 10)} title="50 minutes de concentration, puis 10 minutes de pause" style={chipBtn}>🎯 50 min</button></span>}
       </div>
       {perPerson.length > 1 && <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginBottom: 8 }}>{perPerson.map(x => `${x.a.display_name} : ${fmtDur(x.ms)}`).join(" · ")}</div>}
       {canTrack && (
@@ -2446,7 +2482,7 @@ function RunningTimer({ me, entries, tasks, onOpen, notify }) {
 
 /** Recherche globale (Ctrl K) : pages, tâches, réunions, notes. */
 const normSearch = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab, onTask, onNote, onNewTask, canCreate }) {
+function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab, onTask, onNote, onNewTask, canCreate, onReview }) {
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const inputRef = useRef(null);
@@ -2456,8 +2492,9 @@ function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab
     const out = [];
     const pages = tabs.map(t => ({ k: "tab-" + t.id, kind: "Page", label: t.label, hint: "Aller à cette page", run: () => onTab(t.id) }));
     if (canCreate) pages.unshift({ k: "new-task", kind: "Action", label: "Nouvelle tâche", hint: "Créer une tâche", run: onNewTask });
+    if (onReview) pages.push({ k: "review", kind: "Action", label: "Revue de la semaine", hint: "Faire le point guidé", run: onReview });
     const match = (txt) => !needle || normSearch(txt).includes(needle);
-    out.push(...pages.filter(p => match(p.label)).slice(0, needle ? 4 : 14));
+    out.push(...pages.filter(p => match(p.label)).slice(0, needle ? 4 : 20));
     if (needle) {
       out.push(...tasks.filter(t => match(t.title) || match((t.tags || []).join(" "))).slice(0, 6).map(t => ({ k: "task-" + t.id, kind: t.done ? "Tâche terminée" : "Tâche", label: t.title, hint: t.due ? "Échéance " + formatDue(t.due, daysUntil(t.due)).toLowerCase() : "Sans échéance", run: () => onTask(t.id) })));
       out.push(...notes.filter(n => match(n.title) || match(n.body)).slice(0, 4).map(n => ({ k: "note-" + n.id, kind: "Note", label: n.title, hint: "Ouvrir la note", run: () => onNote(n.id) })));
@@ -2581,7 +2618,21 @@ function StatusEditor({ me, session, notify, onChanged, onClose }) {
   );
 }
 
-function TeamView({ me, session, accounts, tasks, meetings, attendees, leaves, goTo, onChanged, notify }) {
+function TeamView({ checkins = [], ...props }) {
+  const [panel, setPanel] = useState("presence");
+  const seg = (id, label) => (<button key={id} type="button" data-team-panel={id} aria-pressed={panel === id} onClick={() => setPanel(id)} style={{ ...chipBtn, background: panel === id ? "var(--panel-2)" : "transparent", color: panel === id ? "var(--text)" : "var(--text-dim)", fontWeight: panel === id ? 600 : 500, borderColor: panel === id ? "var(--accent)" : "var(--border-soft)" }}>{label}</button>);
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>{seg("presence", "Présence")}{seg("checkins", "Points du jour")}</div>
+      {panel === "presence" ? <TeamPresence {...props} /> : (
+        <div>
+          <div style={{ marginBottom: 16 }}><h1 style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Points du jour</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", maxWidth: 560 }}>Un court point quotidien, comme un stand-up écrit : humeur, ce qui est fait, ce qui est prévu, ce qui bloque.</p></div>
+          <CheckinsPanel me={props.me} accounts={props.accounts} checkins={checkins} notify={props.notify} />
+        </div>)}
+    </div>
+  );
+}
+function TeamPresence({ me, session, accounts, tasks, meetings, attendees, leaves, goTo, onChanged, notify }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all");
   const [editStatus, setEditStatus] = useState(false);
@@ -3376,7 +3427,7 @@ function MyStats({ me, tasks, projects }) {
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const frDate = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 /** Onglet réservé à l'administrateur du site : historique complet, avec les détails techniques. */
-function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], attendees = [], events = [], onOpen, goTo, projects = [] }) {
+function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], attendees = [], events = [], onOpen, goTo, projects = [], onReview }) {
   const mine = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id));
   const late = mine.filter(t => t.due && dueInfo(t).late);
   const today = mine.filter(t => t.due && !dueInfo(t).late && daysUntil(t.due) === 0);
@@ -3406,9 +3457,12 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
 
   return (
     <div>
-      <div style={{ marginBottom: 22 }}>
-        <h1 style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Bonjour {first} 👋</h1>
-        <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", textTransform: "capitalize" }}>{dateLabel}</p>
+      <div style={{ marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Bonjour {first} 👋</h1>
+          <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", textTransform: "capitalize" }}>{dateLabel}</p>
+        </div>
+        {onReview && <button type="button" data-review-open onClick={onReview} style={chipBtn}>📋 Revue de la semaine</button>}
       </div>
       <MyDay me={me} accounts={accounts} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} events={events} onOpen={onOpen} goTo={goTo} />
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 26 }}>
@@ -3768,7 +3822,7 @@ const COLUMNS = [
   { id: "done", label: "Terminé", hex: "#5FBF8B" },
 ];
 
-function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, templates, comments, attachments, onOpen, notify, projects = [], projectMembers = [] }) {
+function TasksView({ savedViews = [], me, session, isAdmin, myPerms, accounts, tasks, trashed, templates, comments, attachments, onOpen, notify, projects = [], projectMembers = [] }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [showTrash, setShowTrash] = useState(false);
@@ -3782,7 +3836,7 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
   const [showProjects, setShowProjects] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const canCreateProject = isAdmin || me.role === "moderator";
-  const [view, setView] = useState(() => { try { const v = localStorage.getItem("carnet-view"); return v === "kanban" || v === "week" || v === "gantt" || v === "table" ? v : "list"; } catch (_) { return "list"; } });
+  const [view, setView] = useState(() => { try { const v = localStorage.getItem("carnet-view"); return v === "kanban" || v === "week" || v === "gantt" || v === "table" || v === "matrix" ? v : "list"; } catch (_) { return "list"; } });
   useEffect(() => {
     const f = () => { window.__carnetNewTask = false; if (isAdmin || myPerms.createTasks) { setEditing(null); setShowForm(true); } };
     if (window.__carnetNewTask) f();
@@ -3917,7 +3971,12 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
       notify(e2 ? "Terminée, mais la prochaine occurrence n'a pas pu être créée." : `Terminée · prochaine échéance : ${formatDue(next, daysUntil(next))}.`, e2 ? "err" : "ok");
     }
   };
-  const toggleDone = (t) => setStatus(t, t.done ? "todo" : "done");
+  const byId = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
+  const openBlockers = (t) => (t.blocked_by || []).map(id => byId.get(id)).filter(x => x && !x.done);
+  const toggleDone = (t) => {
+    if (!t.done) { const b = openBlockers(t); if (b.length && !window.confirm(`Cette tâche est bloquée par « ${b.map(x => x.title).join(" », « ")} ». La terminer quand même ?`)) return; }
+    setStatus(t, t.done ? "todo" : "done");
+  };
 
   // ---- Sélection multiple (vue Liste) : terminer, reporter ou supprimer plusieurs tâches d'un coup
   const [selectMode, setSelectMode] = useState(false);
@@ -3948,6 +4007,21 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
     exitSelect();
   };
 
+  const currentFilters = { view, query, sortBy, filterLabel, filterDone, filterMine, filterProject, filterDue };
+  const applyFilters = (f) => {
+    const v = f.view; if (["list", "kanban", "week", "gantt", "table", "matrix"].includes(v)) { setView(v); try { localStorage.setItem("carnet-view", v); } catch (_) {} }
+    setQuery(f.query || ""); setSortBy(f.sortBy || "priority"); setFilterLabel(f.filterLabel || null); setFilterDone(f.filterDone || "open");
+    setFilterMine(Boolean(f.filterMine)); setFilterProject(f.filterProject || ""); setFilterDue(f.filterDue || "");
+  };
+  const quickCreate = async (p) => {
+    const assignees = p.assignees.length ? p.assignees : (accounts.some(a => a.id === me.id) ? [me.id] : []);
+    const { data: created, error } = await supabase.from("tasks").insert({ title: p.title, notes: "", label: LABELS[0].id, priority: p.priority || 2, due: p.due, due_time: p.due_time, assignees, assignee: assignees[0] || null, tags: p.tags, project_id: p.project_id, done: false, created_by: me.id, server_id: me.server_id }).select().single();
+    if (error) { notify(error.message, "err"); return false; }
+    notify("Tâche ajoutée : « " + p.title + " ».");
+    const others = assignees.filter(x => x !== me.id);
+    if (created && others.length) tellAssignees(created.id, others);
+    return true;
+  };
   const counts = { open: tasks.filter(t => !t.done).length, late: tasks.filter(t => !t.done && t.due && dueInfo(t).late).length };
   const viewBtn = (id, Icon, title) => (
     <button key={id} type="button" title={title} onClick={() => changeView(id)} style={{ ...chipBtn, display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", background: view === id ? "var(--panel-2)" : "var(--bg-2)", color: view === id ? "var(--text)" : "var(--text-dim)", borderColor: view === id ? "var(--accent)" : "var(--border-soft)" }}><Icon size={14} /> <span className="hide-mobile">{title}</span></button>
@@ -3965,8 +4039,9 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
           <button onClick={() => { setEditing(null); setShowForm(true); }} style={{ display: (isAdmin || myPerms.createTasks) ? "flex" : "none", alignItems: "center", gap: 7, ...primaryBtn, padding: "10px 16px", width: "auto" }}><I.Plus size={16} /> Nouvelle tâche</button>
         </div>
       </div>
+      {(isAdmin || myPerms.createTasks) && <QuickAdd me={me} accounts={accounts} projects={projects} onCreate={quickCreate} />}
       <div className="task-toolbar" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 20 }}>
-        <div style={{ display: "flex", gap: 6 }}>{viewBtn("list", I.List, "Liste")}{viewBtn("kanban", I.Columns, "Kanban")}{viewBtn("week", I.Calendar, "Semaine")}{viewBtn("gantt", I.Calendar, "Chronologie")}{viewBtn("table", I.List, "Tableau")}</div>
+        <div style={{ display: "flex", gap: 6 }}>{viewBtn("list", I.List, "Liste")}{viewBtn("kanban", I.Columns, "Kanban")}{viewBtn("week", I.Calendar, "Semaine")}{viewBtn("gantt", I.Calendar, "Chronologie")}{viewBtn("table", I.List, "Tableau")}{viewBtn("matrix", I.Columns, "Matrice")}</div>
         <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}><I.Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)" }} /><input data-search value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher (titre, notes, #étiquette)…" style={{ ...inputStyle, paddingLeft: 32, background: "var(--bg-2)" }} /></div>
         <SelectPill icon={I.Sort} value={sortBy} onChange={setSortBy} options={[{ value: "priority", label: "Trier : priorité" }, { value: "due", label: "Trier : échéance" }, { value: "title", label: "Trier : titre" }]} />
         {view === "list" && <button type="button" data-select-toggle onClick={() => (selectMode ? exitSelect() : setSelectMode(true))} style={{ ...chipBtn, borderColor: selectMode ? "var(--accent)" : "var(--border-soft)", color: selectMode ? "var(--text)" : "var(--text-dim)" }}>{selectMode ? "✕ Quitter la sélection" : "☑ Sélectionner"}</button>}
@@ -3977,13 +4052,14 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
         <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>{LABELS.map(l => (<button key={l.id} title={l.name} onClick={() => setFilterLabel(f => f === l.id ? null : l.id)} style={{ width: 22, height: 22, borderRadius: "50%", background: l.hex, cursor: "pointer", border: filterLabel === l.id ? "2px solid var(--text)" : "2px solid transparent" }} />))}</div>
       </div>
 
+      <SavedViewsBar me={me} savedViews={savedViews} current={currentFilters} onApply={applyFilters} notify={notify} />
       {view === "list" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {visible.length === 0 && <EmptyState text="Aucune tâche ici." />}
           {visible.map(t => (
             <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {selectMode && <input type="checkbox" data-pick={t.id} checked={picked.includes(t.id)} onChange={() => setPicked(p => (p.includes(t.id) ? p.filter(x => x !== t.id) : [...p, t.id]))} aria-label={"Sélectionner « " + t.title + " »"} style={{ width: 18, height: 18, flexShrink: 0, accentColor: "var(--accent)", cursor: "pointer" }} />}
-              <div style={{ flex: 1, minWidth: 0 }}><TaskCard task={t} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} project={projects.find(p => p.id === t.project_id)} commentCount={comments.filter(c => c.task_id === t.id).length} attachCount={attachments.filter(a => a.task_id === t.id).length} onOpen={() => onOpen(t.id)} onTagClick={setQuery} onToggle={() => toggleDone(t)} onEdit={() => openEdit(t)} onDelete={() => removeTask(t)} /></div>
+              <div style={{ flex: 1, minWidth: 0 }}><TaskCard task={t} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} project={projects.find(p => p.id === t.project_id)} blockers={openBlockers(t)} commentCount={comments.filter(c => c.task_id === t.id).length} attachCount={attachments.filter(a => a.task_id === t.id).length} onOpen={() => onOpen(t.id)} onTagClick={setQuery} onToggle={() => toggleDone(t)} onEdit={() => openEdit(t)} onDelete={() => removeTask(t)} /></div>
             </div>
           ))}
           {selectMode && (
@@ -3996,6 +4072,8 @@ function TasksView({ me, session, isAdmin, myPerms, accounts, tasks, trashed, te
             </div>
           )}
         </div>
+      ) : view === "matrix" ? (
+        <MatrixBoard tasks={visible} accounts={accounts} onOpen={onOpen} />
       ) : view === "table" ? (
         <TableBoard tasks={visible} accounts={accounts} projects={projects} canEditTask={canEditTask} onOpen={onOpen} onMove={setStatus} onPatch={patchTask} onMoveDue={(t, day) => moveDue(t, day)} />
       ) : view === "gantt" ? (
@@ -4244,6 +4322,608 @@ function TableBoard({ tasks, accounts, projects, canEditTask, onOpen, onMove, on
           </tbody>))}
           {tasks.length === 0 && <tbody><tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: "var(--text-dimmer)" }}>Aucune tâche ici.</td></tr></tbody>}
         </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Ajout rapide en langage naturel ---------------- */
+const QA_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+const QA_MONTHS = ["janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre"];
+/** Lit une phrase comme « Appeler Paul demain 14h #famille !urgente @bob +Maison » et en tire une tâche. */
+function parseQuickAdd(input, ctx) {
+  const { accounts = [], projects = [], today = parisDay(), nowMs = Date.now() } = ctx || {};
+  let text = " " + String(input || "").replace(/\s+/g, " ").trim() + " ";
+  const out = { title: "", due: null, due_time: null, priority: null, tags: [], assignees: [], project_id: null, unknown: [] };
+  // mots-clés : #étiquette, !priorité, @personne, +projet
+  text = text.replace(/\s#([\p{L}\d_-]{1,30})(?=\s)/gu, (m, t) => { const v = t.toLowerCase(); if (!out.tags.includes(v) && out.tags.length < 10) out.tags.push(v); return " "; });
+  text = text.replace(/\s!([\p{L}]{2,10})(?=\s)/gu, (m, w) => { const k = normSearch(w); if (/^(urgent|urgente|haute|high|important|importante)$/.test(k)) out.priority = 3; else if (/^(normale|normal|moyenne)$/.test(k)) out.priority = 2; else if (/^(basse|bas|low|faible)$/.test(k)) out.priority = 1; else return m; return " "; });
+  text = text.replace(/\s@([\p{L}\d._-]{1,40})(?=\s)/gu, (m, w) => { const k = normSearch(w); const a = accounts.find(x => normSearch(x.username) === k) || accounts.find(x => normSearch(x.display_name).split(" ")[0] === k) || accounts.find(x => normSearch(x.display_name).replace(/\s/g, "").startsWith(k)); if (a) { if (!out.assignees.includes(a.id)) out.assignees.push(a.id); } else out.unknown.push("@" + w); return " "; });
+  text = text.replace(/\s\+([\p{L}\d_-]{1,40})(?=\s)/gu, (m, w) => { const k = normSearch(w); const p = projects.find(x => normSearch(x.name).replace(/\s/g, "") === k) || projects.find(x => normSearch(x.name).replace(/\s/g, "").startsWith(k)); if (p) out.project_id = p.id; else out.unknown.push("+" + w); return " "; });
+  // heure : « 14h », « 14h30 », « 14:30 », « à 9h »
+  let timeFound = null;
+  text = text.replace(/(?:\s(?:à|a)\s|\s)(\d{1,2})(?:h(\d{2})?|:(\d{2}))(?=\s)/i, (m, h, m1, m2) => { const hh = +h, mm = +(m1 || m2 || 0); if (hh > 23 || mm > 59) return m; timeFound = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); return " "; });
+  // date
+  const lead = "(?:\\s(?:pour|avant|le|vers)(?=\\s))?";
+  let day = null;
+  const tryRe = (re, fn) => { if (day) return; const m = re.exec(text); if (!m) return; const d = fn(m); if (d) { day = d; text = text.replace(re, " "); } };
+  tryRe(new RegExp(lead + "\\s(?:aujourd'hui|aujourdhui)(?=\\s)", "i"), () => today);
+  tryRe(new RegExp(lead + "\\s(?:apr[èe]s-?demain)(?=\\s)", "i"), () => shiftDay(today, 2));
+  tryRe(new RegExp(lead + "\\sdemain(?=\\s)", "i"), () => shiftDay(today, 1));
+  tryRe(new RegExp(lead + "\\sdans (\\d{1,3}) (jours?|semaines?|mois)(?=\\s)", "i"), (m) => { const n = +m[1]; return /semaine/i.test(m[2]) ? shiftDay(today, 7 * n) : /mois/i.test(m[2]) ? shiftDay(today, 30 * n) : shiftDay(today, n); });
+  tryRe(new RegExp(lead + "\\s(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?: prochain)?(?=\\s)", "i"), (m) => { const target = QA_DAYS.indexOf(m[1].toLowerCase()) + 1; let n = (target - isoWd(today) + 7) % 7; if (n === 0) n = 7; return shiftDay(today, n); });
+  const mk = (d, mo, y) => { const yy = y ? (y < 100 ? 2000 + y : y) : null; const base = yy || +today.slice(0, 4); const dt = new Date(Date.UTC(base, mo - 1, d)); if (dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null; let s = `${base}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`; if (!yy && s < today) s = `${base + 1}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`; return s; };
+  tryRe(new RegExp(lead + "\\s(\\d{1,2})/(\\d{1,2})(?:/(\\d{2,4}))?(?=\\s)", "i"), (m) => mk(+m[1], +m[2], m[3] ? +m[3] : 0));
+  tryRe(new RegExp(lead + "\\s(\\d{1,2})(?:er)? (janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)(?: (\\d{4}))?(?=\\s)", "i"), (m) => mk(+m[1], QA_MONTHS.indexOf(normSearch(m[2])) + 1, m[3] ? +m[3] : 0));
+  if (!day && timeFound) { const [h, mi] = timeFound.split(":").map(Number); const nowParis = new Date(nowMs).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }); day = (h * 60 + mi) * 60000 > (+nowParis.slice(0, 2) * 60 + +nowParis.slice(3, 5)) * 60000 ? today : shiftDay(today, 1); }
+  out.due = day; out.due_time = day ? timeFound : null;
+  out.title = text.replace(/\s+/g, " ").trim().slice(0, 200);
+  return out;
+}
+function QuickAdd({ me, accounts, projects, onCreate }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const parsed = useMemo(() => parseQuickAdd(text, { accounts, projects }), [text, accounts, projects]);
+  const nameOf = (id) => (accounts.find(a => a.id === id) || {}).display_name || "";
+  const chips = [];
+  if (text.trim()) {
+    if (parsed.due) chips.push(["due", "Échéance : " + fmtDay(parsed.due, { weekday: "long", day: "numeric", month: "long" }) + (parsed.due_time ? " à " + parsed.due_time : "")]);
+    if (parsed.priority) chips.push(["prio", "Priorité : " + (PRIORITIES.find(p => p.id === parsed.priority) || {}).label]);
+    for (const id of parsed.assignees) chips.push(["who", "Pour : " + nameOf(id)]);
+    for (const t of parsed.tags) chips.push(["tag", "#" + t]);
+    if (parsed.project_id) chips.push(["proj", "Projet : " + (projects.find(p => p.id === parsed.project_id) || {}).name]);
+    for (const u of parsed.unknown) chips.push(["unk", "« " + u + " » est inconnu"]);
+  }
+  const submit = async (ev) => {
+    ev.preventDefault();
+    if (busy || !parsed.title) return;
+    setBusy(true);
+    const ok = await onCreate(parsed);
+    setBusy(false);
+    if (ok) setText("");
+  };
+  return (
+    <form onSubmit={submit} data-quick-add-form style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input data-quick-add value={text} onChange={e => setText(e.target.value)} maxLength={300} aria-label="Ajout rapide d'une tâche" placeholder="Ajout rapide : Appeler Paul demain 14h #famille !urgente @bob" style={{ ...inputStyle, background: "var(--panel)" }} />
+        <button type="submit" data-quick-add-go disabled={busy || !parsed.title} style={{ ...primaryBtn, padding: "0 18px", opacity: parsed.title ? 1 : 0.5, whiteSpace: "nowrap" }}>Ajouter</button>
+      </div>
+      {chips.length > 0 && <div data-quick-preview style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, fontSize: 12.5 }}>{parsed.title && <span style={{ color: "var(--text-dim)", alignSelf: "center" }}>« {parsed.title} »</span>}{chips.map(([k, c], i) => <span key={i} data-qa-chip={k} style={{ background: k === "unk" ? "color-mix(in srgb, var(--late) 14%, transparent)" : "color-mix(in srgb, var(--accent) 12%, transparent)", color: k === "unk" ? "var(--late)" : "var(--text)", borderRadius: 6, padding: "2px 8px" }}>{c}</span>)}</div>}
+    </form>
+  );
+}
+
+/* ---------------- Vues enregistrées ---------------- */
+function SavedViewsBar({ me, savedViews, current, onApply, notify }) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const mine = savedViews.filter(v => v.user_id === me.id).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const same = (a, b) => JSON.stringify(Object.keys(current).sort().map(k => [k, (a || {})[k] ?? null])) === JSON.stringify(Object.keys(current).sort().map(k => [k, (b || {})[k] ?? null]));
+  const save = async (ev) => {
+    ev.preventDefault();
+    const n = name.trim().slice(0, 40);
+    if (!n || busy) return;
+    setBusy(true);
+    const { error } = await supabase.from("saved_views").insert({ server_id: me.server_id, user_id: me.id, name: n, filters: current });
+    setBusy(false);
+    if (error) { notify(/duplicate|unique/i.test(error.message) ? "Une vue porte déjà ce nom." : error.message, "err"); return; }
+    setName(""); setAdding(false); notify("Vue enregistrée.");
+  };
+  const del = async (v) => { const { error } = await supabase.from("saved_views").delete().eq("id", v.id); if (error) notify(error.message, "err"); else notify("Vue supprimée."); };
+  if (!mine.length && !adding) return (<div style={{ marginBottom: 14 }}><button type="button" data-view-add onClick={() => setAdding(true)} style={{ ...chipBtn, fontSize: 12.5 }}>☆ Enregistrer cette vue</button></div>);
+  return (
+    <div data-saved-views style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+      <span style={{ fontSize: 12.5, color: "var(--text-dim)" }}>Mes vues</span>
+      {mine.map(v => { const on = same(v.filters, current); return (
+        <span key={v.id} style={{ display: "inline-flex", alignItems: "stretch" }}>
+          <button type="button" data-saved-view={v.name} aria-pressed={on} onClick={() => onApply(v.filters)} style={{ ...chipBtn, borderRadius: "8px 0 0 8px", borderRight: "none", background: on ? "var(--panel-2)" : "var(--bg-2)", color: on ? "var(--text)" : "var(--text-dim)", borderColor: on ? "var(--accent)" : "var(--border-soft)", fontWeight: on ? 600 : 500 }}>{v.name}</button>
+          <button type="button" data-saved-view-del={v.name} aria-label={"Supprimer la vue " + v.name} onClick={() => del(v)} style={{ ...chipBtn, borderRadius: "0 8px 8px 0", padding: "8px 8px", borderColor: on ? "var(--accent)" : "var(--border-soft)" }}>×</button>
+        </span>); })}
+      {adding ? (
+        <form onSubmit={save} style={{ display: "inline-flex", gap: 6 }}>
+          <input autoFocus data-view-name value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Nom de la vue" aria-label="Nom de la vue" style={{ ...inputStyle, width: 170, padding: "6px 10px", fontSize: 13 }} />
+          <button type="submit" data-view-save disabled={busy || !name.trim()} style={{ ...primaryBtn, padding: "0 14px", fontSize: 13 }}>Enregistrer</button>
+          <button type="button" onClick={() => { setAdding(false); setName(""); }} style={{ ...chipBtn }}>Annuler</button>
+        </form>
+      ) : (mine.length < 20 && <button type="button" data-view-add onClick={() => setAdding(true)} style={{ ...chipBtn, fontSize: 12.5 }}>☆ Enregistrer cette vue</button>)}
+    </div>
+  );
+}
+
+/* ---------------- Matrice de priorités ---------------- */
+function MatrixBoard({ tasks, accounts, onOpen }) {
+  const open = tasks.filter(t => !t.done);
+  const urgent = (t) => Boolean(t.due) && daysUntil(t.due) <= 2;
+  const important = (t) => t.priority >= 2;
+  const quads = [
+    { id: "now", title: "À faire maintenant", hint: "Urgent et important", hex: "#FF6B5E", test: t => urgent(t) && important(t) },
+    { id: "plan", title: "À planifier", hint: "Important, sans urgence", hex: "#5B9EF5", test: t => !urgent(t) && important(t) },
+    { id: "delegate", title: "À déléguer ou expédier", hint: "Urgent, moins important", hex: "#FFB648", test: t => urgent(t) && !important(t) },
+    { id: "later", title: "Plus tard", hint: "Ni urgent ni important", hex: "#8A94A6", test: t => !urgent(t) && !important(t) },
+  ];
+  return (
+    <div>
+      <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 10px" }}>Urgent : échéance dans 2 jours ou moins, ou dépassée. Important : priorité Normale ou Urgente. Seules les tâches non terminées apparaissent.</p>
+      <div data-matrix style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12 }}>
+        {quads.map(q => { const list = open.filter(q.test).sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999")); return (
+          <section key={q.id} data-quadrant={q.id} className="paper" style={{ border: "1px solid var(--border-soft)", borderTop: "3px solid " + q.hex, borderRadius: 12, padding: "12px 14px", minHeight: 160 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}><strong style={{ fontSize: 14 }}>{q.title}</strong><span style={{ fontSize: 12, color: "var(--text-dimmer)" }}>{q.hint} · {list.length}</span></div>
+            {list.length === 0 && <div style={{ fontSize: 12.5, color: "var(--text-dimmer)", padding: "14px 0" }}>Rien dans cette case.</div>}
+            {list.slice(0, 12).map(t => { const people = assigneeIds(t).map(id => accounts.find(a => a.id === id)).filter(Boolean); return (
+              <button key={t.id} type="button" data-matrix-task={t.title} onClick={() => onOpen(t.id)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", background: "var(--bg-2)", border: "1px solid var(--border-soft)", borderRadius: 9, padding: "7px 10px", marginBottom: 6, cursor: "pointer", color: "var(--text)", font: "inherit", fontSize: 13 }}>
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>{t.title}</span>
+                {t.due && <span style={{ fontSize: 11.5, color: daysUntil(t.due) < 0 ? "var(--late)" : "var(--text-dim)" }}>{formatDue(t.due, daysUntil(t.due))}</span>}
+                {people.length > 0 && <AvatarStack users={people} size={18} max={2} />}
+              </button>); })}
+            {list.length > 12 && <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>+ {list.length - 12} autre(s)</div>}
+          </section>); })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Point quotidien d'équipe ---------------- */
+const MOODS = [["😞", "Difficile"], ["😕", "Moyen"], ["😐", "Neutre"], ["🙂", "Bien"], ["😄", "Excellent"]];
+function CheckinsPanel({ me, accounts, checkins, notify }) {
+  const today = parisDay();
+  const [day, setDay] = useState(today);
+  const mine = checkins.find(c => c.user_id === me.id && c.day === day) || null;
+  const canWrite = me.role !== "guest";
+  const [mood, setMood] = useState(mine ? mine.mood : null);
+  const [did, setDid] = useState(mine ? mine.did : "");
+  const [will, setWill] = useState(mine ? mine.will : "");
+  const [blockers, setBlockers] = useState(mine ? mine.blockers : "");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setMood(mine ? mine.mood : null); setDid(mine ? mine.did : ""); setWill(mine ? mine.will : ""); setBlockers(mine ? mine.blockers : ""); }, [day, mine && mine.id, mine && mine.updated_at]);
+  const dayRows = checkins.filter(c => c.day === day).sort((a, b) => (a.user_id === me.id ? -1 : b.user_id === me.id ? 1 : a.created_at.localeCompare(b.created_at)));
+  const who = (id) => accounts.find(a => a.id === id);
+  const missing = day === today ? accounts.filter(a => a.role !== "guest" && !dayRows.some(c => c.user_id === a.id)) : [];
+  const save = async (ev) => {
+    ev.preventDefault();
+    if (busy) return;
+    if (!mood && !did.trim() && !will.trim() && !blockers.trim()) { notify("Renseignez au moins une information.", "err"); return; }
+    setBusy(true);
+    const row = { mood: mood || null, did: did.trim().slice(0, 600), will: will.trim().slice(0, 600), blockers: blockers.trim().slice(0, 600) };
+    const { error } = mine ? await supabase.from("checkins").update(row).eq("id", mine.id) : await supabase.from("checkins").insert({ ...row, server_id: me.server_id, user_id: me.id, day });
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    notify(mine ? "Point mis à jour." : "Point enregistré. Merci !");
+  };
+  const del = async () => { if (!mine) return; const { error } = await supabase.from("checkins").delete().eq("id", mine.id); if (error) notify(error.message, "err"); else notify("Point supprimé."); };
+  const avg = dayRows.filter(c => c.mood).length ? dayRows.filter(c => c.mood).reduce((s, c) => s + c.mood, 0) / dayRows.filter(c => c.mood).length : null;
+  const ta = (label, val, set, ph, key) => (<Field label={label}><textarea data-checkin-field={key} value={val} onChange={e => set(e.target.value)} rows={2} maxLength={600} placeholder={ph} style={{ ...inputStyle, resize: "vertical" }} /></Field>);
+  return (
+    <div data-checkins>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        <button type="button" data-checkin-prev onClick={() => setDay(shiftDay(day, -1))} style={chipBtn} aria-label="Jour précédent">←</button>
+        <strong data-checkin-day style={{ fontSize: 15 }}>{day === today ? "Aujourd'hui" : fmtDay(day, { weekday: "long", day: "numeric", month: "long" })}</strong>
+        <button type="button" data-checkin-next disabled={day >= today} onClick={() => setDay(shiftDay(day, 1))} style={{ ...chipBtn, opacity: day >= today ? 0.4 : 1 }} aria-label="Jour suivant">→</button>
+        {day !== today && <button type="button" onClick={() => setDay(today)} style={chipBtn}>Revenir à aujourd'hui</button>}
+        {avg != null && <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--text-dim)" }}>Humeur moyenne : {MOODS[Math.round(avg) - 1][0]} {avg.toFixed(1).replace(".", ",")}/5</span>}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14, alignItems: "start" }}>
+        {canWrite && (
+          <form onSubmit={save} data-checkin-form className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "16px 18px" }}>
+            <h2 style={{ fontFamily: "Literata, serif", fontSize: 17, fontWeight: 600, margin: "0 0 12px" }}>{mine ? "Votre point" : "Faire votre point"}</h2>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 6, fontWeight: 500 }}>Comment allez-vous ?</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>{MOODS.map(([e, l], i) => (<button key={i} type="button" data-mood={i + 1} aria-pressed={mood === i + 1} title={l} onClick={() => setMood(mood === i + 1 ? null : i + 1)} style={{ fontSize: 22, width: 44, height: 44, borderRadius: 10, cursor: "pointer", background: mood === i + 1 ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "var(--bg-2)", border: "1.5px solid " + (mood === i + 1 ? "var(--accent)" : "var(--border-soft)") }}>{e}</button>))}</div>
+            {ta("Ce que j'ai fait", did, setDid, "Rapport terminé, appel avec le client…", "did")}
+            {ta("Ce que je prévois", will, setWill, "Préparer le devis…", "will")}
+            {ta("Ce qui me bloque", blockers, setBlockers, "Rien, ou une personne ou une information qui manque.", "blockers")}
+            <div style={{ display: "flex", gap: 10, justifyContent: "space-between" }}>
+              {mine ? <button type="button" data-checkin-del onClick={del} style={{ ...secondaryBtn, padding: "10px 16px" }}>Supprimer</button> : <span />}
+              <button type="submit" data-checkin-save disabled={busy} style={{ ...primaryBtn, padding: "10px 20px" }}>{mine ? "Mettre à jour" : "Enregistrer"}</button>
+            </div>
+          </form>
+        )}
+        <div>
+          <h2 style={{ fontFamily: "Literata, serif", fontSize: 17, fontWeight: 600, margin: "0 0 10px" }}>Les points de l'équipe · {dayRows.length}</h2>
+          {dayRows.length === 0 && <div className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 12, padding: 20, color: "var(--text-dim)", fontSize: 14 }}>{day === today ? "Personne n'a encore fait son point aujourd'hui." : "Aucun point ce jour-là."}</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {dayRows.map(c => { const u = who(c.user_id); return (
+              <article key={c.id} data-checkin={u ? u.display_name : "?"} className="paper" style={{ border: "1px solid var(--border-soft)", borderLeft: c.blockers.trim() ? "3px solid var(--late)" : "1px solid var(--border-soft)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>{u && <Avatar user={u} size={26} />}<strong style={{ fontSize: 14 }}>{u ? u.display_name : "Ancien membre"}</strong>{c.mood && <span title={MOODS[c.mood - 1][1]} style={{ fontSize: 18, marginLeft: "auto" }}>{MOODS[c.mood - 1][0]}</span>}</div>
+                {c.did.trim() && <p style={{ margin: "4px 0", fontSize: 13.5 }}><span style={{ color: "var(--text-dim)" }}>Fait : </span>{c.did}</p>}
+                {c.will.trim() && <p style={{ margin: "4px 0", fontSize: 13.5 }}><span style={{ color: "var(--text-dim)" }}>Prévu : </span>{c.will}</p>}
+                {c.blockers.trim() && <p data-blockers style={{ margin: "4px 0", fontSize: 13.5 }}><span style={{ color: "var(--late)", fontWeight: 600 }}>Blocage : </span>{c.blockers}</p>}
+              </article>); })}
+          </div>
+          {missing.length > 0 && <p data-missing style={{ fontSize: 12.5, color: "var(--text-dimmer)", marginTop: 12 }}>Pas encore de point : {missing.map(a => a.display_name).join(", ")}.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Habitudes ---------------- */
+const WD_SHORT = ["L", "M", "M", "J", "V", "S", "D"];
+const WD_LONG = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+function habitStreak(h, logSet, today) {
+  const sched = (d) => (h.weekdays || [1, 2, 3, 4, 5, 6, 7]).includes(isoWd(d));
+  let d = today, n = 0;
+  if (sched(d) && !logSet.has(h.id + "|" + d)) d = shiftDay(d, -1);
+  for (let i = 0; i < 400; i++) {
+    if (d < parisDay(Date.parse(h.created_at)) && !logSet.has(h.id + "|" + d)) break;
+    if (sched(d)) { if (logSet.has(h.id + "|" + d)) n++; else break; }
+    d = shiftDay(d, -1);
+  }
+  return n;
+}
+function HabitModal({ me, initial, onClose, notify }) {
+  const [name, setName] = useState(initial ? initial.name : "");
+  const [emoji, setEmoji] = useState(initial ? initial.emoji : "");
+  const [days, setDays] = useState(initial ? initial.weekdays : [1, 2, 3, 4, 5, 6, 7]);
+  const [busy, setBusy] = useState(false);
+  const toggle = (d) => setDays(l => l.includes(d) ? (l.length > 1 ? l.filter(x => x !== d) : l) : [...l, d].sort());
+  const save = async (ev) => {
+    ev.preventDefault();
+    if (busy) return;
+    if (!name.trim()) { notify("Donnez un nom à l'habitude.", "err"); return; }
+    setBusy(true);
+    const row = { name: name.trim().slice(0, 60), emoji: emoji.trim().slice(0, 4), weekdays: days };
+    const { error } = initial ? await supabase.from("habits").update(row).eq("id", initial.id) : await supabase.from("habits").insert({ ...row, user_id: me.id, server_id: me.server_id });
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    notify(initial ? "Habitude modifiée." : "Habitude ajoutée."); onClose();
+  };
+  return (
+    <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
+      <form className="modal-card" data-habit-form onSubmit={save} style={modalStyle}>
+        <h2 style={{ fontFamily: "Literata, serif", fontSize: 20, fontWeight: 600, margin: "0 0 14px" }}>{initial ? "Modifier l'habitude" : "Nouvelle habitude"}</h2>
+        <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ width: 70 }}><Field label="Icône"><input value={emoji} onChange={e => setEmoji(e.target.value)} maxLength={4} aria-label="Icône" placeholder="🚶" style={{ ...inputStyle, textAlign: "center" }} /></Field></div>
+          <div style={{ flex: 1 }}><Field label="Habitude"><input autoFocus data-habit-name value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="Lire 20 minutes" style={inputStyle} /></Field></div>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 6, fontWeight: 500 }}>Jours concernés</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>{WD_SHORT.map((l, i) => (<button key={i} type="button" data-habit-day={i + 1} aria-pressed={days.includes(i + 1)} title={WD_LONG[i]} onClick={() => toggle(i + 1)} style={{ width: 36, height: 36, borderRadius: 9, cursor: "pointer", fontWeight: 600, background: days.includes(i + 1) ? "var(--accent)" : "var(--bg-2)", color: days.includes(i + 1) ? "#fff" : "var(--text-dim)", border: "1px solid var(--border-soft)" }}>{l}</button>))}</div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}><button type="button" onClick={onClose} style={secondaryBtn}>Annuler</button><button type="submit" data-habit-save disabled={busy} style={primaryBtn}>{initial ? "Enregistrer" : "Ajouter"}</button></div>
+      </form>
+    </div>
+  );
+}
+function HabitsView({ me, habits, logs, notify }) {
+  const today = parisDay();
+  const [modal, setModal] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const logSet = useMemo(() => new Set(logs.map(l => l.habit_id + "|" + l.day)), [logs]);
+  const active = habits.filter(h => !h.archived && h.user_id === me.id).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const archived = habits.filter(h => h.archived && h.user_id === me.id);
+  const days = Array.from({ length: 7 }, (_, i) => shiftDay(today, i - 6));
+  const toggle = async (h, d) => {
+    const on = logSet.has(h.id + "|" + d);
+    const { error } = on ? await supabase.from("habit_logs").delete().eq("habit_id", h.id).eq("day", d) : await supabase.from("habit_logs").insert({ habit_id: h.id, user_id: me.id, day: d });
+    if (error) notify(error.message, "err");
+  };
+  const archive = async (h, v) => { const { error } = await supabase.from("habits").update({ archived: v }).eq("id", h.id); if (error) notify(error.message, "err"); else notify(v ? "Habitude archivée." : "Habitude réactivée."); };
+  const remove = async (h) => { if (!window.confirm(`Supprimer l'habitude « ${h.name} » et tout son historique ?`)) return; const { error } = await supabase.from("habits").delete().eq("id", h.id); if (error) notify(error.message, "err"); else notify("Habitude supprimée."); };
+  const dueToday = active.filter(h => (h.weekdays || []).includes(isoWd(today)));
+  const doneToday = dueToday.filter(h => logSet.has(h.id + "|" + today)).length;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+        <div><h1 style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Habitudes</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", maxWidth: 560 }}>Vos routines personnelles, cochées jour après jour. Elles restent privées : personne d'autre ne les voit.</p></div>
+        <button type="button" data-habit-new onClick={() => setModal({ initial: null })} style={{ ...primaryBtn, padding: "10px 18px", display: "flex", alignItems: "center", gap: 7 }}><I.Plus size={15} /> Nouvelle habitude</button>
+      </div>
+      {dueToday.length > 0 && <div data-habit-summary style={{ fontSize: 14, marginBottom: 12 }}><strong>{doneToday} sur {dueToday.length}</strong> faite{doneToday > 1 ? "s" : ""} aujourd'hui{doneToday === dueToday.length ? ". Journée complète !" : "."}</div>}
+      {active.length === 0 && <div data-habit-empty className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "30px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14 }}>Aucune habitude pour le moment. Ajoutez-en une, par exemple « Marcher 20 minutes » ou « Écrire dans le carnet ».</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {active.map(h => { const streak = habitStreak(h, logSet, today); return (
+          <div key={h.id} data-habit={h.name} className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "12px 16px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{h.emoji ? h.emoji + " " : ""}{h.name}</div>
+              <div data-habit-streak style={{ fontSize: 12.5, color: streak > 0 ? "var(--text)" : "var(--text-dimmer)" }}>{streak > 0 ? `🔥 Série de ${streak} jour${streak > 1 ? "s" : ""}` : "Pas de série en cours"}{h.weekdays.length < 7 ? " · " + h.weekdays.map(d => WD_LONG[d - 1].slice(0, 3)).join(", ") : ""}</div>
+            </div>
+            <div style={{ display: "flex", gap: 5 }}>{days.map(d => { const sched = h.weekdays.includes(isoWd(d)); const on = logSet.has(h.id + "|" + d); return (
+              <button key={d} type="button" data-habit-cell={d} data-on={on ? "1" : "0"} disabled={!sched && !on} title={fmtDay(d, { weekday: "long", day: "numeric", month: "long" })} onClick={() => toggle(h, d)} style={{ width: 34, height: 40, borderRadius: 9, cursor: sched || on ? "pointer" : "default", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, background: on ? "var(--accent)" : "var(--bg-2)", color: on ? "#fff" : sched ? "var(--text-dim)" : "var(--text-dimmer)", border: "1px solid " + (d === today ? "var(--accent)" : "var(--border-soft)"), opacity: sched || on ? 1 : 0.45, fontSize: 10.5 }}><span>{WD_SHORT[isoWd(d) - 1]}</span><span style={{ fontSize: 13, fontWeight: 700 }}>{on ? "✓" : Number(d.slice(8))}</span></button>); })}</div>
+            <div style={{ display: "flex", gap: 6 }}><button type="button" data-habit-edit onClick={() => setModal({ initial: h })} style={chipBtn}>Modifier</button><button type="button" data-habit-archive onClick={() => archive(h, true)} style={chipBtn}>Archiver</button></div>
+          </div>); })}
+      </div>
+      {archived.length > 0 && <div style={{ marginTop: 18 }}>
+        <button type="button" data-habit-archived-toggle onClick={() => setShowArchived(v => !v)} style={chipBtn}>{showArchived ? "Masquer" : "Voir"} les habitudes archivées ({archived.length})</button>
+        {showArchived && <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>{archived.map(h => (<div key={h.id} data-habit-archived={h.name} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--text-dim)" }}><span style={{ flex: 1 }}>{h.emoji} {h.name}</span><button type="button" onClick={() => archive(h, false)} style={chipBtn}>Réactiver</button><button type="button" data-habit-delete onClick={() => remove(h)} style={{ ...chipBtn, color: "var(--late)" }}>Supprimer</button></div>))}</div>}
+      </div>}
+      {modal && <HabitModal me={me} initial={modal.initial} onClose={() => setModal(null)} notify={notify} />}
+    </div>
+  );
+}
+
+/* ---------------- Réservation de ressources ---------------- */
+const bkHM = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", "h");
+function BookingModal({ me, resources, bookings, day0, resourceId, onClose, notify }) {
+  const [rid, setRid] = useState(resourceId || (resources[0] && resources[0].id) || "");
+  const [day, setDay] = useState(day0);
+  const [start, setStart] = useState("09:00");
+  const [end, setEnd] = useState("10:00");
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const s = parisInstant(day, start), e = parisInstant(day, end);
+  const clash = e > s ? bookings.find(b => b.resource_id === rid && Date.parse(b.starts_at) < e && Date.parse(b.ends_at) > s) : null;
+  const save = async (ev) => {
+    ev.preventDefault();
+    if (busy) return;
+    if (!rid) { notify("Choisissez une ressource.", "err"); return; }
+    if (!(e > s)) { notify("L'heure de fin doit suivre l'heure de début.", "err"); return; }
+    if (clash) { notify("Cette ressource est déjà réservée sur ce créneau.", "err"); return; }
+    setBusy(true);
+    const { error } = await supabase.from("bookings").insert({ resource_id: rid, server_id: me.server_id, user_id: me.id, title: title.trim().slice(0, 80), starts_at: new Date(s).toISOString(), ends_at: new Date(e).toISOString() });
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    notify("Réservation enregistrée."); onClose();
+  };
+  return (
+    <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
+      <form className="modal-card" data-booking-form onSubmit={save} style={modalStyle}>
+        <h2 style={{ fontFamily: "Literata, serif", fontSize: 20, fontWeight: 600, margin: "0 0 14px" }}>Réserver</h2>
+        <Field label="Ressource"><select data-booking-resource value={rid} onChange={e => setRid(e.target.value)} style={inputStyle}>{resources.map(r => <option key={r.id} value={r.id}>{(r.emoji ? r.emoji + " " : "") + r.name}</option>)}</select></Field>
+        <Field label="Jour"><input data-booking-day type="date" value={day} onChange={e => setDay(e.target.value)} style={inputStyle} /></Field>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ flex: 1 }}><Field label="De"><input data-booking-start type="time" value={start} onChange={e => setStart(e.target.value)} style={inputStyle} /></Field></div>
+          <div style={{ flex: 1 }}><Field label="À"><input data-booking-end type="time" value={end} onChange={e => setEnd(e.target.value)} style={inputStyle} /></Field></div>
+        </div>
+        <Field label="Objet (facultatif)"><input data-booking-title value={title} onChange={e => setTitle(e.target.value)} maxLength={80} placeholder="Atelier, déménagement…" style={inputStyle} /></Field>
+        {clash && <div data-booking-clash style={{ fontSize: 13, color: "var(--late)", marginBottom: 12 }}>Déjà réservée de {bkHM(clash.starts_at)} à {bkHM(clash.ends_at)}.</div>}
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}><button type="button" onClick={onClose} style={secondaryBtn}>Annuler</button><button type="submit" data-booking-save disabled={busy || Boolean(clash)} style={{ ...primaryBtn, opacity: clash ? 0.5 : 1 }}>Réserver</button></div>
+      </form>
+    </div>
+  );
+}
+function ResourcesManager({ me, resources, onClose, notify }) {
+  const [name, setName] = useState(""); const [kind, setKind] = useState(""); const [emoji, setEmoji] = useState("");
+  const add = async (ev) => {
+    ev.preventDefault();
+    if (!name.trim()) return;
+    const { error } = await supabase.from("resources").insert({ server_id: me.server_id, name: name.trim().slice(0, 60), kind: kind.trim().slice(0, 30), emoji: emoji.trim().slice(0, 4), created_by: me.id });
+    if (error) { notify(error.message, "err"); return; }
+    setName(""); setKind(""); setEmoji(""); notify("Ressource ajoutée.");
+  };
+  const toggle = async (r) => { const { error } = await supabase.from("resources").update({ active: !r.active }).eq("id", r.id); if (error) notify(error.message, "err"); };
+  const remove = async (r) => { if (!window.confirm(`Supprimer « ${r.name} » et toutes ses réservations ?`)) return; const { error } = await supabase.from("resources").delete().eq("id", r.id); if (error) notify(error.message, "err"); else notify("Ressource supprimée."); };
+  return (
+    <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
+      <div className="modal-card" data-resources-manager style={{ ...modalStyle, width: 520 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><h2 style={{ fontFamily: "Literata, serif", fontSize: 20, fontWeight: 600, margin: 0 }}>Ressources</h2><button type="button" onClick={onClose} aria-label="Fermer" style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
+        <form onSubmit={add} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <input value={emoji} onChange={e => setEmoji(e.target.value)} maxLength={4} aria-label="Icône" placeholder="🏢" style={{ ...inputStyle, width: 56, textAlign: "center" }} />
+          <input data-resource-name value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="Salle Bleue" aria-label="Nom" style={{ ...inputStyle, flex: "1 1 140px", width: "auto" }} />
+          <input value={kind} onChange={e => setKind(e.target.value)} maxLength={30} placeholder="Type (salle, véhicule…)" aria-label="Type" style={{ ...inputStyle, flex: "1 1 120px", width: "auto" }} />
+          <button type="submit" data-resource-add style={{ ...primaryBtn, padding: "0 16px" }}>Ajouter</button>
+        </form>
+        {resources.length === 0 && <div style={{ fontSize: 13.5, color: "var(--text-dimmer)" }}>Aucune ressource pour l'instant.</div>}
+        {resources.map(r => (<div key={r.id} data-resource-row={r.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderTop: "1px solid var(--border-soft)", fontSize: 14 }}><span style={{ flex: 1, opacity: r.active ? 1 : 0.55 }}>{r.emoji} {r.name}{r.kind ? <span style={{ color: "var(--text-dimmer)" }}> · {r.kind}</span> : null}{!r.active ? " (désactivée)" : ""}</span><button type="button" data-resource-toggle onClick={() => toggle(r)} style={chipBtn}>{r.active ? "Désactiver" : "Réactiver"}</button><button type="button" data-resource-delete onClick={() => remove(r)} aria-label={"Supprimer " + r.name} style={{ ...iconBtn, border: "none", color: "var(--late)" }}><I.Trash size={14} /></button></div>))}
+      </div>
+    </div>
+  );
+}
+function BookingsView({ me, accounts, resources, bookings, notify }) {
+  const today = parisDay();
+  const [day, setDay] = useState(today);
+  const [modal, setModal] = useState(null);
+  const [manage, setManage] = useState(false);
+  const isAdmin = me.role === "admin", canManage = isAdmin || me.role === "moderator", canBook = me.role !== "guest";
+  const active = resources.filter(r => r.active).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  const d0 = parisInstant(day), d1 = parisInstant(shiftDay(day, 1));
+  const of = (rid) => bookings.filter(b => b.resource_id === rid && Date.parse(b.starts_at) < d1 && Date.parse(b.ends_at) > d0).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const who = (id) => (accounts.find(a => a.id === id) || {}).display_name || "Ancien membre";
+  const cancel = async (b) => { if (!window.confirm("Annuler cette réservation ?")) return; const { error } = await supabase.from("bookings").delete().eq("id", b.id); if (error) notify(error.message, "err"); else notify("Réservation annulée."); };
+  const nowMs = Date.now();
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+        <div><h1 style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Réservations</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", maxWidth: 560 }}>Salles, véhicules, matériel : réservez un créneau, sans jamais vous marcher dessus.</p></div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {canManage && <button type="button" data-resources-manage onClick={() => setManage(true)} style={chipBtn}>Gérer les ressources</button>}
+          {canBook && active.length > 0 && <button type="button" data-booking-new onClick={() => setModal({ rid: "" })} style={{ ...primaryBtn, padding: "10px 18px", display: "flex", alignItems: "center", gap: 7 }}><I.Plus size={15} /> Réserver</button>}
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        <button type="button" data-bk-prev onClick={() => setDay(shiftDay(day, -1))} style={chipBtn} aria-label="Jour précédent">←</button>
+        <input data-bk-day type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} aria-label="Jour" style={{ ...inputStyle, width: "auto", padding: "7px 10px" }} />
+        <button type="button" data-bk-next onClick={() => setDay(shiftDay(day, 1))} style={chipBtn} aria-label="Jour suivant">→</button>
+        <strong style={{ fontSize: 14 }}>{fmtDay(day, { weekday: "long", day: "numeric", month: "long" })}</strong>
+        {day !== today && <button type="button" onClick={() => setDay(today)} style={chipBtn}>Aujourd'hui</button>}
+      </div>
+      {active.length === 0 && <div data-resources-empty className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "30px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14 }}>{canManage ? "Aucune ressource à réserver. Utilisez « Gérer les ressources » pour ajouter une salle, un véhicule ou du matériel." : "Aucune ressource n'est encore disponible. Demandez à un modérateur ou à l'administrateur d'en ajouter."}</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+        {active.map(r => { const list = of(r.id); const busyNow = list.some(b => Date.parse(b.starts_at) <= nowMs && nowMs < Date.parse(b.ends_at)) && day === today; return (
+          <section key={r.id} data-resource={r.name} className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <strong style={{ fontSize: 15, flex: 1 }}>{r.emoji ? r.emoji + " " : ""}{r.name}</strong>
+              {day === today && <span data-resource-state style={{ fontSize: 12, fontWeight: 600, color: busyNow ? "var(--late)" : "#1F9D6B" }}>{busyNow ? "Occupée" : "Libre"}</span>}
+            </div>
+            {r.kind && <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: -4, marginBottom: 8 }}>{r.kind}</div>}
+            {list.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "6px 0" }}>Libre toute la journée.</div>}
+            {list.map(b => (<div key={b.id} data-booking={b.title || who(b.user_id)} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "1px solid var(--border-soft)", borderRadius: 9, padding: "6px 10px", marginBottom: 6, fontSize: 13 }}>
+              <strong style={{ whiteSpace: "nowrap" }}>{bkHM(b.starts_at)}–{bkHM(b.ends_at)}</strong>
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)" }}>{b.title ? b.title + " · " : ""}{who(b.user_id)}</span>
+              {(b.user_id === me.id || isAdmin) && <button type="button" data-booking-cancel onClick={() => cancel(b)} aria-label="Annuler la réservation" style={{ ...iconBtn, border: "none", padding: 3 }}><I.X size={14} /></button>}
+            </div>))}
+            {canBook && <button type="button" data-booking-here onClick={() => setModal({ rid: r.id })} style={{ ...chipBtn, marginTop: 4 }}>Réserver</button>}
+          </section>); })}
+      </div>
+      {modal && <BookingModal me={me} resources={active} bookings={bookings} day0={day} resourceId={modal.rid} onClose={() => setModal(null)} notify={notify} />}
+      {manage && <ResourcesManager me={me} resources={resources} onClose={() => setManage(false)} notify={notify} />}
+    </div>
+  );
+}
+
+/* ---------------- Mode concentration ---------------- */
+const focusMin = () => (typeof window !== "undefined" && window.__FOCUS_MS) || 60000;
+const fmtCountdown = (ms) => { const t = Math.max(0, Math.ceil(ms / 1000)); return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); };
+function focusBeep() { try { const C = window.AudioContext || window.webkitAudioContext; if (!C) return; const c = new C(), o = c.createOscillator(), g = c.createGain(); o.frequency.value = 660; g.gain.value = 0.05; o.connect(g); g.connect(c.destination); o.start(); setTimeout(() => { o.stop(); c.close(); }, 350); } catch (_) {} }
+function FocusSession({ me, tasks, focus, setFocus, onStart, onOpen, notify }) {
+  const [now, setNow] = useState(Date.now());
+  const busy = useRef(false);
+  useEffect(() => { if (!focus) return; const id = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(id); }, [Boolean(focus)]);
+  useEffect(() => {
+    if (!focus || busy.current || now < focus.endsAt) return;
+    busy.current = true;
+    (async () => {
+      if (focus.phase === "work") {
+        const { data: running } = await supabase.from("time_entries").select("*").eq("user_id", me.id).is("ended_at", null);
+        for (const r of running || []) if (r.task_id === focus.taskId) await supabase.from("time_entries").update({ ended_at: new Date(Math.min(focus.endsAt, Date.now())).toISOString() }).eq("id", r.id);
+        focusBeep();
+        notify(`Séance terminée : ${focus.workMin} min de concentration enregistrées. Pause de ${focus.breakMin} min.`);
+        setFocus({ ...focus, phase: "break", endsAt: Date.now() + focus.breakMin * focusMin(), rounds: (focus.rounds || 0) + 1 });
+      } else if (focus.phase === "break") {
+        focusBeep();
+        setFocus({ ...focus, phase: "idle" });
+      }
+      busy.current = false;
+    })();
+  }, [now, focus]);
+  if (!focus) return null;
+  const t = tasks.find(x => x.id === focus.taskId);
+  const left = focus.endsAt - now;
+  const stopNow = async () => {
+    const { data: running } = await supabase.from("time_entries").select("*").eq("user_id", me.id).is("ended_at", null);
+    for (const r of running || []) if (r.task_id === focus.taskId) await stopEntry(r);
+    notify("Séance arrêtée. Le temps écoulé est enregistré."); setFocus(null);
+  };
+  const phaseLabel = focus.phase === "work" ? "Concentration" : focus.phase === "break" ? "Pause" : "Pause terminée";
+  return (
+    <div data-focus data-phase={focus.phase} role="timer" style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--panel)", border: "1px solid " + (focus.phase === "work" ? "var(--accent)" : "#1F9D6B"), borderRadius: 12, padding: "10px 16px", marginBottom: 14, flexWrap: "wrap" }}>
+      <span aria-hidden="true" style={{ fontSize: 18 }}>{focus.phase === "work" ? "🎯" : "☕"}</span>
+      <strong style={{ fontSize: 13.5 }}>{phaseLabel}</strong>
+      {focus.phase !== "idle" && <span data-focus-clock style={{ fontFamily: "Literata, serif", fontSize: 24, fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmtCountdown(left)}</span>}
+      {t && <button type="button" onClick={() => onOpen(t.id)} style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: 13, padding: 0, textAlign: "left", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</button>}
+      {(focus.rounds || 0) > 0 && <span data-focus-rounds style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{focus.rounds} séance{focus.rounds > 1 ? "s" : ""} terminée{focus.rounds > 1 ? "s" : ""}</span>}
+      <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+        {focus.phase === "work" && <button type="button" data-focus-extend onClick={() => setFocus({ ...focus, endsAt: focus.endsAt + 5 * focusMin(), workMin: focus.workMin + 5 })} style={chipBtn}>+ 5 min</button>}
+        {focus.phase === "work" && <button type="button" data-focus-stop onClick={stopNow} style={{ ...chipBtn, color: "var(--late)", borderColor: "#FF6B5E" }}>■ Terminer</button>}
+        {focus.phase === "break" && <button type="button" data-focus-skip onClick={() => setFocus(null)} style={chipBtn}>Passer la pause</button>}
+        {focus.phase === "idle" && t && <button type="button" data-focus-again onClick={() => onStart(t, focus.workMin, focus.breakMin, focus.rounds)} style={chipBtn}>Nouvelle séance</button>}
+        {focus.phase === "idle" && <button type="button" data-focus-close onClick={() => setFocus(null)} style={chipBtn}>Fermer</button>}
+      </span>
+    </div>
+  );
+}
+
+/* ---------------- Fil d'activité ---------------- */
+function ActivityView({ me, accounts, tasks, comments, notes, objectives, meetings, announcements, checkins, bookings, resources, onOpen, onNote, goTo }) {
+  const [filter, setFilter] = useState("all");
+  const [limit, setLimit] = useState(60);
+  const who = (id) => (accounts.find(a => a.id === id) || {}).display_name || "Un ancien membre";
+  const events = useMemo(() => {
+    const ev = [];
+    const taskById = new Map(tasks.map(t => [t.id, t]));
+    for (const t of tasks) {
+      if (t.created_at) ev.push({ id: "tc" + t.id, ts: t.created_at, actor: t.created_by, kind: "task", text: "a créé la tâche", subject: t.title, open: () => onOpen(t.id) });
+      if (t.done && t.done_at) ev.push({ id: "td" + t.id, ts: t.done_at, actor: assigneeIds(t)[0] || null, kind: "task", text: assigneeIds(t).length ? "a terminé la tâche" : "La tâche suivante a été terminée :", subject: t.title, open: () => onOpen(t.id) });
+    }
+    for (const c of comments) { const t = taskById.get(c.task_id); if (t) ev.push({ id: "c" + c.id, ts: c.created_at, actor: c.author_id, kind: "comment", text: "a commenté", subject: t.title, extra: String(c.text || "").slice(0, 140), open: () => onOpen(t.id) }); }
+    for (const n of notes) ev.push({ id: "n" + n.id, ts: n.updated_at || n.created_at, actor: n.updated_by || n.created_by, kind: "note", text: "a modifié la note", subject: n.title, open: () => onNote(n.id) });
+    for (const o of objectives) ev.push({ id: "o" + o.id, ts: o.created_at, actor: o.created_by, kind: "team", text: "a fixé l'objectif", subject: o.title, open: () => goTo("objectives") });
+    const seen = new Set();
+    for (const m of [...meetings].sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""))) { const k = m.series_id || m.id; if (seen.has(k)) continue; seen.add(k); if (m.created_at) ev.push({ id: "m" + m.id, ts: m.created_at, actor: m.created_by, kind: "team", text: m.series_id ? "a planifié la série de réunions" : "a planifié la réunion", subject: m.title, open: () => goTo("meetings") }); }
+    for (const a of announcements) if (a.created_at) ev.push({ id: "a" + a.id, ts: a.created_at, actor: a.created_by || null, kind: "team", text: "a publié l'annonce", subject: a.title || a.message || "", open: null });
+    for (const c of checkins) ev.push({ id: "k" + c.id, ts: c.updated_at || c.created_at, actor: c.user_id, kind: "team", text: "a fait son point du jour", subject: "", open: () => goTo("team") });
+    for (const b of bookings) { const r = resources.find(x => x.id === b.resource_id); ev.push({ id: "b" + b.id, ts: b.created_at, actor: b.user_id, kind: "team", text: "a réservé", subject: r ? r.name : "une ressource", open: () => goTo("bookings") }); }
+    return ev.filter(e => e.ts).sort((a, b) => b.ts.localeCompare(a.ts));
+  }, [tasks, comments, notes, objectives, meetings, announcements, checkins, bookings, resources]);
+  const shown = events.filter(e => filter === "all" || (filter === "tasks" ? (e.kind === "task" || e.kind === "comment") : filter === "notes" ? e.kind === "note" : e.kind === "team"));
+  const today = parisDay();
+  const dayLabel = (d) => d === today ? "Aujourd'hui" : d === shiftDay(today, -1) ? "Hier" : fmtDay(d, { weekday: "long", day: "numeric", month: "long" });
+  const groups = []; for (const e of shown.slice(0, limit)) { const d = parisDay(Date.parse(e.ts)); const g = groups[groups.length - 1]; if (g && g.day === d) g.items.push(e); else groups.push({ day: d, items: [e] }); }
+  const fb = (id, label) => (<button key={id} type="button" data-activity-filter={id} aria-pressed={filter === id} onClick={() => { setFilter(id); setLimit(60); }} style={{ ...chipBtn, background: filter === id ? "var(--panel-2)" : "transparent", color: filter === id ? "var(--text)" : "var(--text-dim)", fontWeight: filter === id ? 600 : 500, borderColor: filter === id ? "var(--accent)" : "var(--border-soft)" }}>{label}</button>);
+  const timeOf = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", "h");
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}><h1 style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Activité</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", maxWidth: 560 }}>Ce qui s'est passé récemment dans votre serveur : tâches, commentaires, notes, réunions, objectifs.</p></div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>{fb("all", "Tout")}{fb("tasks", "Tâches et commentaires")}{fb("notes", "Notes")}{fb("team", "Équipe")}</div>
+      {shown.length === 0 && <div data-activity-empty className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "28px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14 }}>Aucune activité pour ce filtre.</div>}
+      {groups.map(g => (
+        <section key={g.day} data-activity-day={g.day} style={{ marginBottom: 18 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-dim)", margin: "0 0 8px", textTransform: "capitalize" }}>{dayLabel(g.day)}</h2>
+          <div className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 12, overflow: "hidden" }}>
+            {g.items.map((e, i) => { const u = accounts.find(a => a.id === e.actor); const Row = e.open ? "button" : "div"; return (
+              <Row key={e.id} {...(e.open ? { type: "button", onClick: e.open } : {})} data-activity-item={e.kind} style={{ display: "flex", alignItems: "flex-start", gap: 10, width: "100%", textAlign: "left", padding: "10px 14px", background: "transparent", border: "none", borderTop: i ? "1px solid var(--border-soft)" : "none", color: "var(--text)", font: "inherit", fontSize: 13.5, cursor: e.open ? "pointer" : "default" }}>
+                {u ? <Avatar user={u} size={24} /> : <span style={{ width: 24, height: 24 }} />}
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span>{e.actor ? <strong>{who(e.actor)}</strong> : null}{e.actor ? " " : ""}{e.text}{e.subject ? <> <strong>« {e.subject} »</strong></> : null}</span>
+                  {e.extra && <span style={{ display: "block", color: "var(--text-dim)", fontSize: 12.5, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.extra}</span>}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-dimmer)", whiteSpace: "nowrap" }}>{timeOf(e.ts)}</span>
+              </Row>); })}
+          </div>
+        </section>
+      ))}
+      {shown.length > limit && <button type="button" data-activity-more onClick={() => setLimit(l => l + 60)} style={chipBtn}>Afficher plus ({shown.length - limit} restantes)</button>}
+    </div>
+  );
+}
+
+/* ---------------- Revue hebdomadaire ---------------- */
+function WeeklyReview({ me, tasks, meetings, attendees, timeEntries, notify, onClose, onOpen }) {
+  const [step, setStep] = useState(0);
+  const [saved, setSaved] = useState(false);
+  const today = parisDay();
+  const weekAgo = shiftDay(today, -7), nextWeek = shiftDay(today, 7);
+  const mineOpen = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id));
+  const doneWeek = tasks.filter(t => t.done && t.done_at && parisDay(Date.parse(t.done_at)) >= weekAgo && assigneeIds(t).includes(me.id));
+  const timeMs = timeEntries.filter(e => e.user_id === me.id && e.started_at && parisDay(Date.parse(e.started_at)) >= weekAgo).reduce((n, e) => n + entryMs(e), 0);
+  const overdue = mineOpen.filter(t => t.due && t.due < today).sort((a, b) => a.due.localeCompare(b.due));
+  const upcoming = mineOpen.filter(t => t.due && t.due >= today && t.due <= nextWeek).sort((a, b) => a.due.localeCompare(b.due));
+  const undated = mineOpen.filter(t => !t.due);
+  const mine = (m) => m.created_by === me.id || attendees.some(a => a.meeting_id === m.id && a.user_id === me.id && a.response !== "declined");
+  const meets = meetings.filter(m => mine(m) && Date.parse(m.starts_at) >= Date.now() && Date.parse(m.starts_at) < parisInstant(nextWeek)).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const nextMonday = shiftDay(today, ((8 - isoWd(today)) % 7) || 7);
+  const reschedule = async (t, day) => { const { error } = await supabase.from("tasks").update(duePatch(t, day)).eq("id", t.id); if (error) notify(error.message, "err"); };
+  const finish = async (t) => { const { error } = await supabase.from("tasks").update({ done: true }).eq("id", t.id); if (error) notify(error.message, "err"); };
+  const drop = async (t) => { const { error } = await supabase.rpc("trash_task", { p_id: t.id }); if (error) notify(error.message, "err"); else notify("Tâche placée dans la corbeille."); };
+  const steps = ["Bilan", "En retard", "À planifier", "Semaine à venir"];
+  const dayLabel = (d) => fmtDay(d, { weekday: "short", day: "numeric", month: "short" });
+  const taskRow = (t, actions) => (
+    <div key={t.id} data-review-task={t.title} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 0", borderTop: "1px solid var(--border-soft)" }}>
+      <button type="button" onClick={() => onOpen(t.id)} style={{ flex: "1 1 160px", minWidth: 0, textAlign: "left", background: "none", border: "none", color: "var(--text)", cursor: "pointer", fontSize: 13.5, fontWeight: 600, padding: 0 }}>{t.title}{t.due ? <span style={{ fontWeight: 400, color: t.due < today ? "var(--late)" : "var(--text-dim)" }}> · {dayLabel(t.due)}</span> : null}</button>
+      {actions}
+    </div>);
+  const act = (label, fn, key, danger) => <button key={key} type="button" data-review-act={key} onClick={fn} style={{ ...chipBtn, fontSize: 12, padding: "5px 9px", color: danger ? "var(--late)" : undefined }}>{label}</button>;
+  const body = () => {
+    if (step === 0) return (<div>
+      <p style={{ fontSize: 14, margin: "0 0 12px" }}>Voici votre semaine écoulée.</p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 12 }}>
+        <div data-review-stat="done" className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 10, padding: 12 }}><div style={{ fontFamily: "Literata, serif", fontSize: 26, fontWeight: 700 }}>{doneWeek.length}</div><div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>tâche{doneWeek.length > 1 ? "s" : ""} terminée{doneWeek.length > 1 ? "s" : ""}</div></div>
+        <div data-review-stat="time" className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 10, padding: 12 }}><div style={{ fontFamily: "Literata, serif", fontSize: 26, fontWeight: 700 }}>{timeMs ? fmtDur(timeMs) : "—"}</div><div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>de temps suivi</div></div>
+        <div data-review-stat="late" className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 10, padding: 12 }}><div style={{ fontFamily: "Literata, serif", fontSize: 26, fontWeight: 700, color: overdue.length ? "var(--late)" : undefined }}>{overdue.length}</div><div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>en retard</div></div>
+      </div>
+      {doneWeek.slice(0, 8).map(t => <div key={t.id} style={{ fontSize: 13.5, padding: "3px 0", color: "var(--text-dim)" }}>✓ {t.title}</div>)}
+      {doneWeek.length > 8 && <div style={{ fontSize: 12.5, color: "var(--text-dimmer)" }}>+ {doneWeek.length - 8} autre(s)</div>}
+    </div>);
+    if (step === 1) return (<div>
+      <p style={{ fontSize: 14, margin: "0 0 8px" }}>{overdue.length ? "Pour chaque tâche en retard : reportez-la, terminez-la ou laissez-la tomber." : "Aucune tâche en retard. Bravo !"}</p>
+      {overdue.map(t => taskRow(t, <>{act("Demain", () => reschedule(t, shiftDay(today, 1)), "tomorrow")}{act("Lundi", () => reschedule(t, nextMonday), "monday")}{act("+ 1 semaine", () => reschedule(t, shiftDay(today, 7)), "week")}{!t.recurrence && act("Terminée", () => finish(t), "done")}{act("Abandonner", () => drop(t), "drop", true)}</>))}
+    </div>);
+    if (step === 2) return (<div>
+      <p style={{ fontSize: 14, margin: "0 0 8px" }}>{undated.length ? "Ces tâches n'ont pas de date. Donnez-leur une échéance, ou laissez-les telles quelles." : "Toutes vos tâches ont une échéance."}</p>
+      {undated.slice(0, 20).map(t => taskRow(t, <>{act("Demain", () => reschedule(t, shiftDay(today, 1)), "tomorrow")}{act("Lundi", () => reschedule(t, nextMonday), "monday")}{act("+ 1 semaine", () => reschedule(t, shiftDay(today, 7)), "week")}</>))}
+      {undated.length > 20 && <div style={{ fontSize: 12.5, color: "var(--text-dimmer)", marginTop: 6 }}>+ {undated.length - 20} autre(s) dans la liste des tâches.</div>}
+    </div>);
+    return (<div>
+      <p style={{ fontSize: 14, margin: "0 0 8px" }}>Les 7 prochains jours.</p>
+      {upcoming.length === 0 && meets.length === 0 && <div style={{ fontSize: 13.5, color: "var(--text-dim)" }}>Rien de prévu pour l'instant.</div>}
+      {meets.map(m => <div key={m.id} data-review-meeting style={{ fontSize: 13.5, padding: "6px 0", borderTop: "1px solid var(--border-soft)" }}>📅 <strong>{m.title}</strong> <span style={{ color: "var(--text-dim)" }}>· {fmtDay(parisDay(Date.parse(m.starts_at)), { weekday: "short", day: "numeric", month: "short" })} à {new Date(m.starts_at).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", "h")}</span></div>)}
+      {upcoming.map(t => taskRow(t, null))}
+      <div style={{ marginTop: 14 }}><button type="button" data-review-save-note disabled={saved} onClick={saveNote} style={{ ...primaryBtn, padding: "10px 16px", opacity: saved ? 0.6 : 1 }}>{saved ? "Enregistré dans vos notes" : "Enregistrer cette revue dans mes notes"}</button></div>
+    </div>);
+  };
+  const saveNote = async () => {
+    const title = `Revue de la semaine du ${fmtDay(today, { day: "numeric", month: "long" })}`;
+    const lines = ["## Bilan", `- ${doneWeek.length} tâche(s) terminée(s)` + (timeMs ? `, ${fmtDur(timeMs)} de temps suivi` : ""), ...doneWeek.slice(0, 15).map(t => `- [x] ${t.title}`), "", "## Pour la semaine à venir", ...upcoming.map(t => `- [ ] ${t.title} (${dayLabel(t.due)})`), ...(meets.length ? ["", "## Réunions", ...meets.map(m => `- ${m.title}, ${fmtDay(parisDay(Date.parse(m.starts_at)), { weekday: "long", day: "numeric", month: "long" })}`)] : [])];
+    const { error } = await supabase.from("notes").insert({ server_id: me.server_id, created_by: me.id, title, body: lines.join("\n").slice(0, 20000) });
+    if (error) { notify(error.message, "err"); return; }
+    setSaved(true); notify("Revue enregistrée dans vos notes.");
+  };
+  return (
+    <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
+      <div className="modal-card" data-review style={{ ...modalStyle, width: 640 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}><h2 style={{ fontFamily: "Literata, serif", fontSize: 20, fontWeight: 600, margin: 0 }}>Revue de la semaine</h2><button type="button" onClick={onClose} aria-label="Fermer" style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>{steps.map((s, i) => (<button key={s} type="button" data-review-step={i} aria-current={step === i ? "step" : undefined} onClick={() => setStep(i)} style={{ ...chipBtn, fontSize: 12.5, background: step === i ? "var(--panel-2)" : "transparent", color: step === i ? "var(--text)" : "var(--text-dim)", fontWeight: step === i ? 600 : 500, borderColor: step === i ? "var(--accent)" : "var(--border-soft)" }}>{i + 1}. {s}</button>))}</div>
+        <div style={{ minHeight: 180 }}>{body()}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+          <button type="button" data-review-prev disabled={step === 0} onClick={() => setStep(step - 1)} style={{ ...secondaryBtn, padding: "10px 16px", opacity: step === 0 ? 0.5 : 1 }}>Précédent</button>
+          {step < 3 ? <button type="button" data-review-next onClick={() => setStep(step + 1)} style={{ ...primaryBtn, padding: "10px 20px" }}>Suivant</button> : <button type="button" data-review-done onClick={onClose} style={{ ...primaryBtn, padding: "10px 20px" }}>Terminer</button>}
+        </div>
       </div>
     </div>
   );
@@ -4517,7 +5197,7 @@ function ProjectsModal({ projects, members, accounts, me, isAdmin, canCreate, no
   );
 }
 
-function TaskCard({ task, project, accounts, me, isAdmin, myPerms, commentCount, attachCount, onOpen, onTagClick, onToggle, onEdit, onDelete }) {
+function TaskCard({ blockers = [], task, project, accounts, me, isAdmin, myPerms, commentCount, attachCount, onOpen, onTagClick, onToggle, onEdit, onDelete }) {
   const label = LABELS.find(l => l.id === task.label) || LABELS[0];
   const prio = PRIORITIES.find(p => p.id === task.priority) || PRIORITIES[1];
   const people = assigneeIds(task).map(id => accounts.find(a => a.id === id)).filter(Boolean);
@@ -4527,7 +5207,7 @@ function TaskCard({ task, project, accounts, me, isAdmin, myPerms, commentCount,
   const own = task.created_by === me.id;
   const canEdit = isAdmin || myPerms.editAnyTask || (own && myPerms.editOwnTask);
   const canDelete = isAdmin || myPerms.deleteAnyTask || (own && myPerms.deleteOwnTask);
-  const hasMeta = (task.tags || []).length > 0 || (task.subtasks || []).length > 0 || task.recurrence || commentCount > 0 || attachCount > 0 || task.doing || Boolean(project);
+  const hasMeta = (task.tags || []).length > 0 || (task.subtasks || []).length > 0 || task.recurrence || commentCount > 0 || attachCount > 0 || task.doing || Boolean(project) || blockers.length > 0;
   return (
     <div className="fade-in" style={{ display: "flex", alignItems: "stretch", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", opacity: task.done ? 0.55 : 1 }}>
       <div style={{ width: 5, background: label.hex, flexShrink: 0 }} />
@@ -4539,6 +5219,7 @@ function TaskCard({ task, project, accounts, me, isAdmin, myPerms, commentCount,
           {hasMeta && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
               {project && <ProjectChip project={project} />}
+              {blockers.length > 0 && !task.done && <span data-blocked title={"Bloquée par : " + blockers.map(b => b.title).join(", ")} style={{ fontSize: 11, fontWeight: 600, color: "var(--late)", background: "color-mix(in srgb, var(--late) 12%, transparent)", padding: "1px 7px", borderRadius: 6 }}>🔒 Bloquée par {blockers.length === 1 ? "« " + (blockers[0].title.length > 22 ? blockers[0].title.slice(0, 21) + "…" : blockers[0].title) + " »" : blockers.length + " tâches"}</span>}
               {task.doing && !task.done && <span style={{ fontSize: 11, fontWeight: 600, color: "#FFB648", background: "#FFB6481A", padding: "1px 7px", borderRadius: 6 }}>En cours</span>}
               {(task.tags || []).map(tag => <button key={tag} type="button" onClick={() => onTagClick(tag)} style={{ background: "var(--bg-2)", border: "1px solid var(--border-soft)", color: "var(--text-dim)", fontSize: 11, padding: "1px 7px", borderRadius: 6, cursor: "pointer" }}>#{tag}</button>)}
               {(task.subtasks || []).length > 0 && <span onClick={onOpen} style={{ cursor: "pointer", fontSize: 11.5, color: "var(--text-dim)" }}>☑ {(task.subtasks || []).filter(x => x.done).length}/{(task.subtasks || []).length}</span>}
@@ -4574,6 +5255,7 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
   const [subtasks, setSubtasks] = useState(initial?.subtasks || []);
   const [newSub, setNewSub] = useState("");
   const [recurrence, setRecurrence] = useState(initial?.recurrence || "");
+  const [blockedBy, setBlockedBy] = useState(initial?.blocked_by || []);
   const [tplId, setTplId] = useState("");
   const [asTemplate, setAsTemplate] = useState(false);
   const [tplName, setTplName] = useState("");
@@ -4603,7 +5285,7 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
       ...(initial?.id ? { id: initial.id } : {}),
       title: title.trim(), notes: notes.trim(), label, priority: Number(priority), due: due || null, start_date: due && startDate && startDate <= due ? startDate : null, due_time: due && timed && dueTime ? dueTime : null,
       assignees, assignee: assignees[0] || null, project_id: projectId || null,
-      tags: parseTags(tagsText), subtasks: pendingSub, recurrence: recurrence || null,
+      tags: parseTags(tagsText), subtasks: pendingSub, recurrence: recurrence || null, blocked_by: blockedBy,
       saveAsTemplate: asTemplate ? (tplName.trim() || title.trim()) : null,
       __files: pendingFiles,
     }); } finally { setSaving(false); }
@@ -4663,6 +5345,15 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
             {projects.map(p => <option key={p.id} value={p.id}>{(p.is_private ? "🔒 " : "") + p.name}</option>)}
           </select>{proj && proj.is_private && <div style={{ fontSize: 11.5, color: "var(--text-dimmer)", marginTop: 6 }}>Projet privé : seuls ses membres peuvent être assignés.</div>}</Field>
         )}
+        {(() => {
+          const cands = allTasks.filter(t => !t.done && t.id !== (initial && initial.id) && !blockedBy.includes(t.id) && !(initial && (t.blocked_by || []).includes(initial.id)) && (!projectId || !t.project_id || t.project_id === projectId || true));
+          return (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 6, fontWeight: 500 }}>Bloquée par (facultatif)</div>
+              {blockedBy.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{blockedBy.map(id => { const t = allTasks.find(x => x.id === id); return <span key={id} data-blocker-chip style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-2)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "3px 4px 3px 9px", fontSize: 12.5 }}>🔒 {t ? t.title : "Tâche supprimée"}<button type="button" aria-label="Retirer" onClick={() => setBlockedBy(l => l.filter(x => x !== id))} style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: "0 4px" }}>×</button></span>; })}</div>}
+              {blockedBy.length < 10 && <select data-blocker-select value="" onChange={e => { if (e.target.value) setBlockedBy(l => [...l, e.target.value]); }} style={inputStyle}><option value="">Ajouter une tâche qui doit être terminée avant…</option>{cands.slice(0, 200).map(t => <option key={t.id} value={t.id} style={{ background: "var(--bg-2)" }}>{t.title}</option>)}</select>}
+            </div>);
+        })()}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, fontWeight: 500 }}>Assignée à {assignees.length > 1 ? `(${assignees.length} personnes)` : ""}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -4796,7 +5487,7 @@ function AttachmentRow({ att, canDelete, onDelete, notify }) {
     </div>
   );
 }
-function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, attachments, onAttachmentsChanged, notify, onClose, reactions = [], timeEntries = [] }) {
+function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, attachments, onAttachmentsChanged, notify, onClose, reactions = [], timeEntries = [], onFocus }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -4935,7 +5626,7 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
           </div>
         )}
 
-        <TimeTracker task={task} me={me} isAdmin={isAdmin} entries={timeEntries} accounts={accounts} notify={notify} />
+        <TimeTracker task={task} me={me} isAdmin={isAdmin} entries={timeEntries} accounts={accounts} notify={notify} onFocus={onFocus} />
 
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
