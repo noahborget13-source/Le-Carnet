@@ -1,5 +1,21 @@
 [
   {
+    "date": "2026-11-03",
+    "items": [
+      "Ajout rapide en langage naturel : tapez « Appeler Marie demain 14h30 #client !urgente @bob » et la tâche est créée avec la date, l'heure, l'étiquette, la priorité et la personne.",
+      "Dépendances entre tâches : indiquez qu'une tâche est « bloquée par » d'autres ; un badge l'indique et le Carnet vous prévient si vous tentez de la terminer trop tôt.",
+      "Vues enregistrées : sauvegardez vos filtres favoris et retrouvez-les en un clic (privées, 20 au maximum).",
+      "Matrice de priorités : nouvelle vue des tâches en quatre cases, urgent / important, façon Eisenhower.",
+      "Point quotidien d'équipe : dans l'onglet « Équipe », chacun indique son humeur, ce qu'il a fait, ce qu'il va faire et ses blocages.",
+      "Suivi d'habitudes : nouvel onglet « Habitudes » avec jours choisis, séries et vue sur les semaines. Vos habitudes restent strictement privées.",
+      "Réservation de ressources : nouvel onglet « Réservations » pour les salles, véhicules ou matériels, avec détection des chevauchements. Les administrateurs et modérateurs gèrent la liste des ressources.",
+      "Mode concentration : lancez une séance de 25 ou 50 minutes depuis une tâche ; le temps est suivi automatiquement, puis une pause vous est proposée.",
+      "Fil d'activité : nouvel onglet « Activité » qui retrace ce qui s'est passé dans votre serveur, avec des filtres.",
+      "Revue de la semaine : un assistant en quatre étapes (bilan, retards, tâches à planifier, semaine à venir) accessible depuis l'accueil ou la recherche globale, avec enregistrement dans vos notes.",
+      "Le menu « Plus » du mobile défile désormais lorsque la liste est longue."
+    ]
+  },
+  {
     "date": "2026-10-31",
     "items": [
       "Nouvelle identité visuelle : papier quadrillé, encre bleue et marge rouge, avec un mode sombre « ardoise ». Elle s'applique partout : application, espace administrateur, page d'accueil et pages d'information.",

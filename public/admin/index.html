@@ -1062,6 +1062,15 @@ function computeStats(tasks, meId, now = Date.now()) {
    Les nouveautés visibles de tous sont dans /patchnotes.json (affichées sur la page d'accueil du site).
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const PATCH_TECH = {
+  "2026-11-03": [
+    "migration-23-dependances.sql : colonne tasks.blocked_by uuid[] (10 maximum, jamais soi-même) ; badge « bloquée » et confirmation avant de terminer une tâche dont un prérequis est ouvert.",
+    "migration-24-vues-enregistrees.sql : table saved_views (privée par utilisateur, 20 maximum, noms uniques) ; SavedViewsBar.",
+    "migration-25-points-quotidiens.sql : table checkins (un point par personne et par jour, lecture par serveur, écriture par soi-même hors invités) ; CheckinsPanel dans Équipe.",
+    "migration-26-habitudes.sql : tables habits et habit_logs, strictement privées (RLS propriétaire uniquement), 20 habitudes actives maximum ; HabitsView.",
+    "migration-27-reservations.sql : tables resources et bookings ; le trigger bookings_guard refuse tout chevauchement (verrou consultatif) ; BookingsView, ResourcesManager.",
+    "Côté client uniquement : ajout rapide en langage naturel (parseQuickAdd), matrice de priorités, mode concentration (FocusSession, état en localStorage, entrée time_entries), fil d'activité (ActivityView, calculé depuis les tables existantes), revue hebdomadaire (WeeklyReview).",
+    "La sauvegarde JSON de l'espace admin inclut désormais checkins, resources et bookings ; les vues enregistrées et les habitudes, privées, en sont exclues."
+  ],
   "2026-10-31": [
     "migration-20-notifications.sql : table notifications (lecture/lecture seule de read_at par la personne concernée, aucune insertion côté client) alimentée par des triggers security definer (assignation, commentaires, mentions @, messages, réunions, congés, annonces) ; NotificationBell.",
     "migration-21-objectifs.sql : tables objectives et key_results (résultats « valeur » ou « tâches liées », politiques de lecture par serveur, écriture par le responsable, le créateur ou l'admin) ; ObjectivesView.",
@@ -2088,6 +2097,9 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
   const [notes, setNotes] = useState([]);
   const [timeEntries, setTimeEntries] = useState([]);
   const [objectives, setObjectives] = useState([]);
+  const [checkinsAll, setCheckinsAll] = useState([]);
+  const [resourcesAll, setResourcesAll] = useState([]);
+  const [bookingsAll, setBookingsAll] = useState([]);
   const [keyResults, setKeyResults] = useState([]);
   const [server, setServer] = useState(null);
   const [siteAdmin, setSiteAdmin] = useState(false);
@@ -2105,6 +2117,9 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
   useLiveTable("notes", setNotes);
   useLiveTable("time_entries", setTimeEntries);
   useLiveTable("objectives", setObjectives);
+  useLiveTable("checkins", setCheckinsAll);
+  useLiveTable("resources", setResourcesAll);
+  useLiveTable("bookings", setBookingsAll);
   useLiveTable("key_results", setKeyResults);
   const loadMail = async () => { try { setMailStatus(await callApi("/api/admin-tools", { action: "status" }, session)); } catch (e) { setMailStatus({ error: e.message }); } };
   useEffect(() => { supabase.from("servers").select("*").eq("id", me.server_id).single().then(({ data }) => setServer(data)); }, [me.server_id]);
@@ -2158,7 +2173,7 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
             {server && <ServerSettings server={server} setServer={setServer} me={me} session={session} approved={approved} notify={notify} onChanged={() => {}} />}
             <EmailsCard status={mailStatus} reload={loadMail} session={session} notify={notify} />
           </>)}
-          {cur === "data" && <AdminData tasksAll={tasksAll} accounts={accounts} projects={projects} projectMembers={projectMembers} meetings={meetings} attendees={attendees} leaves={leaves} announcements={announcements} notes={notes} timeEntries={timeEntries} objectives={objectives} keyResults={keyResults} server={server} notify={notify} />}
+          {cur === "data" && <AdminData tasksAll={tasksAll} accounts={accounts} projects={projects} projectMembers={projectMembers} meetings={meetings} attendees={attendees} leaves={leaves} announcements={announcements} notes={notes} timeEntries={timeEntries} objectives={objectives} keyResults={keyResults} checkins={checkinsAll} resources={resourcesAll} bookings={bookingsAll} server={server} notify={notify} />}
           {cur === "journal" && <ActivityLog accounts={accounts} bare />}
           {cur === "status" && <AdminStatus session={session} notify={notify} go={go} />}
           {cur === "patch" && <AdminPatchNotes />}
@@ -2483,14 +2498,14 @@ function AdminMeetings({ me, session, meetings, attendees, accounts, notify }) {
   </>);
 }
 
-function AdminData({ tasksAll, accounts, projects, projectMembers, meetings, attendees, leaves, announcements, notes = [], timeEntries = [], objectives = [], keyResults = [], server, notify }) {
+function AdminData({ tasksAll, accounts, projects, projectMembers, meetings, attendees, leaves, announcements, notes = [], timeEntries = [], objectives = [], keyResults = [], checkins = [], resources = [], bookings = [], server, notify }) {
   const today = parisDay();
   const [busy, setBusy] = useState(false);
   const safeProfile = (a) => ({ id: a.id, username: a.username, display_name: a.display_name, email: a.email, role: a.role, status: a.status, created_at: a.created_at });
   const backup = () => {
     if (busy) return; setBusy(true);
     try {
-      const data = { app: "Le Carnet", exported_at: new Date().toISOString(), server: server ? { id: server.id, name: server.name } : null, members: accounts.map(safeProfile), projects, project_members: projectMembers, tasks: tasksAll, meetings, meeting_attendees: attendees, leave_requests: leaves, announcements, notes, time_entries: timeEntries, objectives, key_results: keyResults };
+      const data = { app: "Le Carnet", exported_at: new Date().toISOString(), server: server ? { id: server.id, name: server.name } : null, members: accounts.map(safeProfile), projects, project_members: projectMembers, tasks: tasksAll, meetings, meeting_attendees: attendees, leave_requests: leaves, announcements, notes, time_entries: timeEntries, objectives, key_results: keyResults, checkins, resources, bookings };
       downloadText(`sauvegarde-le-carnet-${today}.json`, "application/json", JSON.stringify(data, null, 2));
       notify("Sauvegarde téléchargée. Les fichiers joints ne sont pas inclus.");
     } finally { setBusy(false); }
