@@ -1,5 +1,11 @@
 [
   {
+    "date": "2026-11-04",
+    "items": [
+      "Nouvel onglet « Rendez-vous » : choisissez un membre de l'équipe, un mode (en présentiel ou par appel) et réservez l'un de ses créneaux libres. Chacun publie ses disponibilités de la semaine (jours, horaires, durée des rendez-vous, lieu ou lien d'appel). Un créneau ne peut être pris qu'une seule fois, et vous pouvez annuler à tout moment."
+    ]
+  },
+  {
     "date": "2026-11-03",
     "items": [
       "Ajout rapide en langage naturel : tapez « Appeler Marie demain 14h30 #client !urgente @bob » et la tâche est créée avec la date, l'heure, l'étiquette, la priorité et la personne.",
