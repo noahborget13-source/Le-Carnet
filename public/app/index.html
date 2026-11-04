@@ -320,6 +320,7 @@ const I = {
   Users: p => <Icon {...p} path={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />,
   Repeat: p => <Icon {...p} path={<><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></>} />,
   Building: p => <Icon {...p} path={<><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="18"/><line x1="15" y1="22" x2="15" y2="18"/><line x1="8" y1="6" x2="8.01" y2="6"/><line x1="12" y1="6" x2="12.01" y2="6"/><line x1="16" y1="6" x2="16.01" y2="6"/><line x1="8" y1="10" x2="8.01" y2="10"/><line x1="12" y1="10" x2="12.01" y2="10"/><line x1="16" y1="10" x2="16.01" y2="10"/><line x1="8" y1="14" x2="8.01" y2="14"/><line x1="12" y1="14" x2="12.01" y2="14"/><line x1="16" y1="14" x2="16.01" y2="14"/></>} />,
+  Handshake: p => <Icon {...p} path={<><path d="M8 11l4-4 4 4"/><path d="M3 12l5 5a2 2 0 0 0 3 0l1-1"/><path d="M21 12l-5 5a2 2 0 0 1-3 0l-1-1"/><path d="M3 12l4-4h4M21 12l-4-4h-4"/></>} />,
   Pulse: p => <Icon {...p} path={<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>} />,
   Note: p => <Icon {...p} path={<><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></>} />,
   Search: p => <Icon {...p} path={<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>} />,
@@ -1191,6 +1192,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [habitLogs, setHabitLogs] = useState([]);
   const [resources, setResources] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [availabilities, setAvailabilities] = useState([]);
+  const [appointments, setAppointments] = useState([]);
   const [keyResults, setKeyResults] = useState([]);
   const [showPalette, setShowPalette] = useState(false);
   const [focusNote, setFocusNote] = useState(null);
@@ -1240,6 +1243,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   useLiveTable('habit_logs', setHabitLogs);
   useLiveTable('resources', setResources);
   useLiveTable('bookings', setBookings);
+  useLiveTable('availabilities', setAvailabilities);
+  useLiveTable('appointments', setAppointments);
   useLiveTable('key_results', setKeyResults);
   useEffect(() => { const id = setInterval(() => setClock(c => c + 1), 60000); return () => clearInterval(id); }, []);
 
@@ -1272,6 +1277,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
     { id: "team", label: "Équipe", icon: I.Users, secondary: true },
     { id: "activity", label: "Activité", icon: I.Pulse, secondary: true },
     { id: "bookings", label: "Réservations", icon: I.Building, secondary: true },
+    { id: "appointments", label: "Rendez-vous", icon: I.Handshake, secondary: true },
     { id: "habits", label: "Habitudes", icon: I.Repeat, secondary: true },
     { id: "objectives", label: "Objectifs", icon: I.Target, secondary: true },
     { id: "notes", label: "Notes", icon: I.Note, secondary: true },
@@ -1309,7 +1315,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       if (document.querySelector(".modal-card")) return;
       const k = ev.key.toLowerCase();
       if (Date.now() - gAt < 1500) {
-        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", b: "bookings", i: "habits", f: "activity", n: "notes", m: "messages", p: "profile", a: "admin" };
+        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", b: "bookings", v: "appointments", i: "habits", f: "activity", n: "notes", m: "messages", p: "profile", a: "admin" };
         gAt = 0;
         if (map[k] && (k !== "a" || isAdmin)) { setTab(map[k]); ev.preventDefault(); }
         return;
@@ -1367,6 +1373,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "meetings" && <MeetingsView meetingFiles={meetingFiles} onFilesChanged={reloadMeetingFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} tasks={tasks} notify={notify} />}
         {tab === "reports" && <ReportsView me={me} accounts={people} tasks={tasks} projects={projects} meetings={meetings} attendees={attendees} timeEntries={timeEntries} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "activity" && <ActivityView me={me} accounts={people} tasks={tasks} comments={comments} notes={notes} objectives={objectives} meetings={meetings} announcements={announcements} checkins={checkins} bookings={bookings} resources={resources} onOpen={openFromAnywhere} onNote={(id) => { setFocusNote(id); setTab("notes"); }} goTo={setTab} />}
+        {tab === "appointments" && <AppointmentsView me={me} accounts={people} availabilities={availabilities} appointments={appointments} notify={notify} />}
         {tab === "bookings" && <BookingsView me={me} accounts={people} resources={resources} bookings={bookings} notify={notify} />}
         {tab === "habits" && <HabitsView me={me} habits={habits} logs={habitLogs} notify={notify} />}
         {tab === "team" && <TeamView checkins={checkins} me={me} session={session} accounts={people} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} goTo={setTab} onChanged={onProfileChanged} notify={notify} />}
@@ -2010,7 +2017,7 @@ function dayExtras(iso, events = [], accounts = []) {
   };
 }
 
-const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis F", "Fil d'activité"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
+const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis F", "Fil d'activité"], ["G puis V", "Rendez-vous"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
 function ShortcutsHelp({ onClose, isAdmin }) {
   return (
     <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
@@ -4743,6 +4750,167 @@ function BookingsView({ me, accounts, resources, bookings, notify }) {
       </div>
       {modal && <BookingModal me={me} resources={active} bookings={bookings} day0={day} resourceId={modal.rid} onClose={() => setModal(null)} notify={notify} />}
       {manage && <ResourcesManager me={me} resources={resources} onClose={() => setManage(false)} notify={notify} />}
+    </div>
+  );
+}
+
+/* ---------------- Rendez-vous ---------------- */
+const MODE_LABEL = { presentiel: "En présentiel", appel: "Par appel" };
+const MODE_ICON = { presentiel: "🏢", appel: "📞" };
+const minHM = (m) => String(Math.floor(m / 60)).padStart(2, "0") + "h" + String(m % 60).padStart(2, "0");
+const minInput = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+const inputMin = (v) => { const [h, m] = String(v || "0:0").split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+const ISO_WD = ["", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+function slotsOf(avs, day, mode, busy) {
+  const out = [], wd = isoWd(day), now = Date.now();
+  for (const a of avs.filter(x => x.weekday === wd && (x.modes || []).includes(mode))) {
+    for (let m = a.start_min; m + a.slot_min <= a.end_min; m += a.slot_min) {
+      const s = parisInstant(day, minInput(m)), e = parisInstant(day, minInput(m + a.slot_min));
+      if (s < now) continue;
+      if (busy.some(b => Date.parse(b.starts_at) < e && Date.parse(b.ends_at) > s)) continue;
+      out.push({ m, s, e, loc: a.location });
+    }
+  }
+  return out.sort((x, y) => x.s - y.s);
+}
+function MyAvailabilities({ me, availabilities, notify }) {
+  const mine = availabilities.filter(a => a.host_id === me.id).sort((a, b) => a.weekday - b.weekday || a.start_min - b.start_min);
+  const [wds, setWds] = useState([1, 2, 3, 4, 5]);
+  const [from, setFrom] = useState("09:00"); const [to, setTo] = useState("12:00");
+  const [slot, setSlot] = useState(30); const [modes, setModes] = useState(["presentiel", "appel"]);
+  const [loc, setLoc] = useState(""); const [busy, setBusy] = useState(false);
+  const toggle = (arr, set, v) => set(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v]);
+  const bad = !wds.length || !modes.length || inputMin(to) < inputMin(from) + slot;
+  const add = async (ev) => {
+    ev.preventDefault(); if (busy || bad) return; setBusy(true);
+    const rows = wds.map(w => ({ server_id: me.server_id, host_id: me.id, weekday: w, start_min: inputMin(from), end_min: inputMin(to), slot_min: slot, modes, location: loc.trim().slice(0, 120) }));
+    const { error } = await supabase.from("availabilities").insert(rows);
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    notify("Disponibilités publiées.");
+  };
+  const del = async (a) => { const { error } = await supabase.from("availabilities").delete().eq("id", a.id); if (error) notify(error.message, "err"); };
+  return (
+    <div data-avail-panel>
+      <form onSubmit={add} className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "16px 18px", marginBottom: 16 }}>
+        <h2 style={{ fontSize: 15, margin: "0 0 12px" }}>Ajouter des plages de disponibilité</h2>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          {[1, 2, 3, 4, 5, 6, 7].map(w => <button key={w} type="button" data-avail-wd={w} aria-pressed={wds.includes(w)} onClick={() => toggle(wds, setWds, w)} style={{ ...chipBtn, background: wds.includes(w) ? "var(--panel-2)" : "transparent", borderColor: wds.includes(w) ? "var(--accent)" : "var(--border-soft)", fontWeight: wds.includes(w) ? 700 : 500 }}>{ISO_WD[w].slice(0, 3)}</button>)}
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 110px" }}><Field label="De"><input data-avail-from type="time" value={from} onChange={e => setFrom(e.target.value)} style={inputStyle} /></Field></div>
+          <div style={{ flex: "1 1 110px" }}><Field label="À"><input data-avail-to type="time" value={to} onChange={e => setTo(e.target.value)} style={inputStyle} /></Field></div>
+          <div style={{ flex: "1 1 130px" }}><Field label="Durée d'un rendez-vous"><select data-avail-slot value={slot} onChange={e => setSlot(Number(e.target.value))} style={inputStyle}>{[15, 20, 30, 45, 60, 90].map(n => <option key={n} value={n}>{n} min</option>)}</select></Field></div>
+        </div>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", margin: "0 0 12px", fontSize: 13.5 }}>
+          {["presentiel", "appel"].map(m => <label key={m} style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}><input type="checkbox" data-avail-mode={m} checked={modes.includes(m)} onChange={() => toggle(modes, setModes, m)} /> {MODE_ICON[m]} {MODE_LABEL[m]}</label>)}
+        </div>
+        <Field label="Lieu ou lien d'appel (facultatif)"><input data-avail-loc value={loc} onChange={e => setLoc(e.target.value)} maxLength={120} placeholder="Bureau 2, 12 rue des Lilas — ou numéro / lien de visioconférence" style={inputStyle} /></Field>
+        {inputMin(to) < inputMin(from) + slot && <div style={{ fontSize: 13, color: "var(--late)", marginBottom: 10 }}>La plage doit durer au moins {slot} minutes.</div>}
+        <button type="submit" data-avail-add disabled={busy || bad} style={{ ...primaryBtn, padding: "10px 18px", opacity: bad ? 0.5 : 1 }}>Publier ces disponibilités</button>
+      </form>
+      {mine.length === 0 && <div data-avail-empty style={{ fontSize: 14, color: "var(--text-dim)" }}>Vous n'avez publié aucune disponibilité : personne ne peut encore prendre rendez-vous avec vous.</div>}
+      {mine.length > 0 && <div className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 12, overflow: "hidden" }}>
+        {mine.map((a, i) => <div key={a.id} data-avail-row={a.weekday} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: i ? "1px solid var(--border-soft)" : "none", fontSize: 13.5, flexWrap: "wrap" }}>
+          <strong style={{ minWidth: 80 }}>{ISO_WD[a.weekday]}</strong>
+          <span>{minHM(a.start_min)}–{minHM(a.end_min)}</span>
+          <span style={{ color: "var(--text-dim)" }}>créneaux de {a.slot_min} min · {(a.modes || []).map(m => MODE_ICON[m] + " " + MODE_LABEL[m].toLowerCase()).join(" · ")}{a.location ? " · " + a.location : ""}</span>
+          <button type="button" data-avail-del onClick={() => del(a)} aria-label="Supprimer cette plage" style={{ ...iconBtn, border: "none", marginLeft: "auto" }}><I.X size={14} /></button>
+        </div>)}
+      </div>}
+    </div>
+  );
+}
+function AppointmentsView({ me, accounts, availabilities, appointments, notify }) {
+  const today = parisDay();
+  const canBook = me.role !== "guest";
+  const [panel, setPanel] = useState("book");
+  const hosts = useMemo(() => accounts.filter(a => a.id !== me.id && availabilities.some(v => v.host_id === a.id)).sort((a, b) => (a.display_name || "").localeCompare(b.display_name || "", "fr")), [accounts, availabilities, me.id]);
+  const [hostId, setHostId] = useState("");
+  const [mode, setMode] = useState("presentiel");
+  const [offset, setOffset] = useState(0);
+  const [busyList, setBusyList] = useState([]);
+  const [pick, setPick] = useState(null);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { if (!hostId && hosts[0]) setHostId(hosts[0].id); if (hostId && !hosts.some(h => h.id === hostId)) setHostId(hosts[0] ? hosts[0].id : ""); }, [hosts]);
+  const hostAvs = availabilities.filter(a => a.host_id === hostId);
+  const hostModes = [...new Set(hostAvs.flatMap(a => a.modes || []))];
+  useEffect(() => { if (hostModes.length && !hostModes.includes(mode)) setMode(hostModes[0]); }, [hostId, hostModes.join()]);
+  const monday = shiftDay(today, 1 - isoWd(today) + offset * 7);
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => shiftDay(monday, i));
+  const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    if (!hostId) { setBusyList([]); return; }
+    let alive = true;
+    supabase.rpc("busy_slots", { p_host: hostId, p_from: new Date(parisInstant(days[0])).toISOString(), p_to: new Date(parisInstant(shiftDay(days[6], 1))).toISOString() }).then(({ data }) => { if (alive) setBusyList(data || []); });
+    return () => { alive = false; };
+  }, [hostId, offset, refresh, appointments.length]);
+  const book = async () => {
+    if (!pick || saving) return; setSaving(true);
+    const { error } = await supabase.from("appointments").insert({ server_id: me.server_id, host_id: hostId, guest_id: me.id, starts_at: new Date(pick.s).toISOString(), ends_at: new Date(pick.e).toISOString(), mode, note: note.trim().slice(0, 300) });
+    setSaving(false);
+    if (error) { notify(error.message, "err"); setRefresh(r => r + 1); setPick(null); return; }
+    notify("Rendez-vous confirmé."); setPick(null); setNote(""); setPanel("mine");
+  };
+  const who = (id) => (accounts.find(a => a.id === id) || {}).display_name || "Ancien membre";
+  const mineAll = appointments.filter(a => a.host_id === me.id || a.guest_id === me.id).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const upcoming = mineAll.filter(a => Date.parse(a.ends_at) >= Date.now()), past = mineAll.filter(a => Date.parse(a.ends_at) < Date.now()).reverse();
+  const [showPast, setShowPast] = useState(false);
+  const cancel = async (a) => { if (!window.confirm("Annuler ce rendez-vous ?")) return; const { error } = await supabase.from("appointments").delete().eq("id", a.id); if (error) notify(error.message, "err"); else notify("Rendez-vous annulé."); };
+  const locOf = (a) => { const wd = isoWd(parisDay(Date.parse(a.starts_at))); const v = availabilities.find(x => x.host_id === a.host_id && x.weekday === wd && x.location); return v ? v.location : ""; };
+  const row = (a, i) => {
+    const mineHost = a.host_id === me.id, other = mineHost ? a.guest_id : a.host_id, d = parisDay(Date.parse(a.starts_at)), over = Date.parse(a.ends_at) < Date.now();
+    return (<div key={a.id} data-appt={who(other)} data-appt-mode={a.mode} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 14px", borderTop: i ? "1px solid var(--border-soft)" : "none", opacity: over ? 0.65 : 1, flexWrap: "wrap" }}>
+      <div style={{ minWidth: 118 }}><strong style={{ fontSize: 14, textTransform: "capitalize" }}>{fmtDay(d, { weekday: "short", day: "numeric", month: "short" })}</strong><div style={{ fontSize: 13, color: "var(--text-dim)" }}>{bkHM(a.starts_at)}–{bkHM(a.ends_at)}</div></div>
+      <div style={{ flex: 1, minWidth: 160, fontSize: 13.5 }}>
+        <div>{MODE_ICON[a.mode]} <strong>{mineHost ? "Avec " + who(other) : "Rendez-vous avec " + who(other)}</strong> <span style={{ color: "var(--text-dim)" }}>· {MODE_LABEL[a.mode].toLowerCase()}{a.mode === "presentiel" && locOf(a) ? " · " + locOf(a) : ""}{a.mode === "appel" && locOf(a) ? " · " + locOf(a) : ""}</span></div>
+        {mineHost && <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>Vous recevez</div>}
+        {a.note && <div style={{ color: "var(--text-dim)", marginTop: 3 }}>« {a.note} »</div>}
+      </div>
+      {!over && <button type="button" data-appt-cancel onClick={() => cancel(a)} style={{ ...chipBtn, color: "var(--late)" }}>Annuler</button>}
+    </div>);
+  };
+  const seg = (id, label) => <button key={id} type="button" data-appt-panel={id} aria-pressed={panel === id} onClick={() => setPanel(id)} style={{ ...chipBtn, background: panel === id ? "var(--panel-2)" : "transparent", color: panel === id ? "var(--text)" : "var(--text-dim)", fontWeight: panel === id ? 600 : 500, borderColor: panel === id ? "var(--accent)" : "var(--border-soft)" }}>{label}</button>;
+  const anySlots = days.some(d => slotsOf(hostAvs, d, mode, busyList).length);
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}><h1 style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Rendez-vous</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", maxWidth: 580 }}>Prenez rendez-vous avec un membre de l'équipe, en présentiel ou par appel, sur ses créneaux disponibles. Publiez les vôtres pour être sollicité.</p></div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>{canBook && seg("book", "Prendre rendez-vous")}{seg("mine", "Mes rendez-vous" + (upcoming.length ? " (" + upcoming.length + ")" : ""))}{canBook && seg("avail", "Mes disponibilités")}</div>
+      {panel === "book" && canBook && (hosts.length === 0
+        ? <div data-appt-nohost className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "28px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14 }}>Personne n'a encore publié de disponibilités. Ouvrez « Mes disponibilités » pour publier les vôtres.</div>
+        : <div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 14 }}>
+            <div style={{ flex: "1 1 220px", maxWidth: 320 }}><Field label="Avec qui ?"><select data-appt-host value={hostId} onChange={e => { setHostId(e.target.value); setPick(null); }} style={inputStyle}>{hosts.map(h => <option key={h.id} value={h.id}>{h.display_name}</option>)}</select></Field></div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>{hostModes.map(m => <button key={m} type="button" data-appt-mode-pick={m} aria-pressed={mode === m} onClick={() => { setMode(m); setPick(null); }} style={{ ...chipBtn, padding: "9px 14px", background: mode === m ? "var(--panel-2)" : "transparent", borderColor: mode === m ? "var(--accent)" : "var(--border-soft)", fontWeight: mode === m ? 700 : 500 }}>{MODE_ICON[m]} {MODE_LABEL[m]}</button>)}</div>
+          </div>
+          {(() => { const l = hostAvs.find(v => v.location); return l ? <div data-appt-loc style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 12 }}>📍 {l.location}</div> : null; })()}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+            <button type="button" data-appt-prev disabled={offset <= 0} onClick={() => { setOffset(offset - 1); setPick(null); }} style={{ ...chipBtn, opacity: offset <= 0 ? 0.4 : 1 }} aria-label="Semaine précédente">←</button>
+            <strong style={{ fontSize: 14 }}>Semaine du {fmtDay(days[0], { day: "numeric", month: "long" })}</strong>
+            <button type="button" data-appt-next disabled={offset >= 8} onClick={() => { setOffset(offset + 1); setPick(null); }} style={{ ...chipBtn, opacity: offset >= 8 ? 0.4 : 1 }} aria-label="Semaine suivante">→</button>
+          </div>
+          {!anySlots && <div data-appt-noslot style={{ fontSize: 14, color: "var(--text-dim)", padding: "10px 0" }}>Aucun créneau libre cette semaine {hostModes.includes(mode) ? "pour ce mode" : ""}. Essayez la semaine suivante.</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
+            {days.map(d => { const sl = slotsOf(hostAvs, d, mode, busyList); if (!sl.length) return null; return (
+              <section key={d} data-appt-day={d} className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 12, padding: "10px 12px" }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8, textTransform: "capitalize" }}>{fmtDay(d, { weekday: "long", day: "numeric", month: "short" })}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{sl.map(x => <button key={x.s} type="button" data-slot={minInput(x.m)} aria-pressed={pick && pick.s === x.s} onClick={() => setPick(x)} style={{ ...chipBtn, fontSize: 12.5, padding: "6px 10px", background: pick && pick.s === x.s ? "var(--accent)" : "transparent", color: pick && pick.s === x.s ? "#fff" : "var(--text)", borderColor: pick && pick.s === x.s ? "var(--accent)" : "var(--border-soft)" }}>{minHM(x.m)}</button>)}</div>
+              </section>); })}
+          </div>
+          {pick && <div data-appt-confirm className="paper" style={{ border: "1px solid var(--accent)", borderRadius: 14, padding: "14px 16px", marginTop: 16, maxWidth: 520 }}>
+            <div style={{ fontSize: 14, marginBottom: 10 }}>{MODE_ICON[mode]} <strong>{who(hostId)}</strong> · <span style={{ textTransform: "capitalize" }}>{fmtDay(parisDay(pick.s), { weekday: "long", day: "numeric", month: "long" })}</span> à {bkHM(new Date(pick.s).toISOString())}, {MODE_LABEL[mode].toLowerCase()}</div>
+            <Field label="Objet du rendez-vous (facultatif)"><input data-appt-note value={note} onChange={e => setNote(e.target.value)} maxLength={300} placeholder="Le sujet dont vous souhaitez parler" style={inputStyle} /></Field>
+            <div style={{ display: "flex", gap: 10 }}><button type="button" data-appt-confirm-btn disabled={saving} onClick={book} style={{ ...primaryBtn, padding: "10px 18px" }}>Confirmer le rendez-vous</button><button type="button" onClick={() => setPick(null)} style={secondaryBtn}>Annuler</button></div>
+          </div>}
+        </div>)}
+      {panel === "mine" && <div>
+        {upcoming.length === 0 && <div data-appt-empty className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "26px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14 }}>Aucun rendez-vous à venir.</div>}
+        {upcoming.length > 0 && <div data-appt-list className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 12, overflow: "hidden" }}>{upcoming.map(row)}</div>}
+        {past.length > 0 && <div style={{ marginTop: 16 }}><button type="button" data-appt-past-toggle onClick={() => setShowPast(!showPast)} style={chipBtn}>{showPast ? "Masquer" : "Afficher"} les rendez-vous passés ({past.length})</button>
+          {showPast && <div className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 12, overflow: "hidden", marginTop: 10 }}>{past.slice(0, 30).map(row)}</div>}</div>}
+      </div>}
+      {panel === "avail" && canBook && <MyAvailabilities me={me} availabilities={availabilities} notify={notify} />}
     </div>
   );
 }

@@ -1062,6 +1062,10 @@ function computeStats(tasks, meId, now = Date.now()) {
    Les nouveautés visibles de tous sont dans /patchnotes.json (affichées sur la page d'accueil du site).
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const PATCH_TECH = {
+  "2026-11-04": [
+    "migration-28-rendez-vous.sql : tables availabilities (plages hebdomadaires par hôte : jour ISO, minutes de début et de fin, durée de créneau, modes présentiel / appel, lieu) et appointments (lecture limitée à l'hôte, l'invité et l'administrateur) ; la fonction busy_slots (security definer) révèle uniquement les créneaux occupés ; le trigger appointments_guard impose que le créneau corresponde à une plage publiée, soit à venir, libre (verrou consultatif) et sans conflit pour l'invité.",
+    "Interface : AppointmentsView (réservation par semaine, mode, confirmation avec objet), MyAvailabilities (publication des plages), liste « Mes rendez-vous » avec annulation. Raccourci G puis V."
+  ],
   "2026-11-03": [
     "migration-23-dependances.sql : colonne tasks.blocked_by uuid[] (10 maximum, jamais soi-même) ; badge « bloquée » et confirmation avant de terminer une tâche dont un prérequis est ouvert.",
     "migration-24-vues-enregistrees.sql : table saved_views (privée par utilisateur, 20 maximum, noms uniques) ; SavedViewsBar.",
