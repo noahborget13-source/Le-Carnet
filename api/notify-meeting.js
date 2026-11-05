@@ -36,10 +36,10 @@ export default async function handler(req, res) {
     }
     const { data: atts } = await supabaseAdmin.from('meeting_attendees').select('user_id, response').eq('meeting_id', meeting.id);
     const ids = [...new Set((atts || []).map(a => a.user_id))];
-    const { data: people } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, server_id, work_hours, notify_meetings, notify_conflicts').in('id', ids.concat(meeting.created_by));
+    const { data: people } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, server_id, work_hours, notify_meetings, notify_conflicts, banned_at').in('id', ids.concat(meeting.created_by));
     const byId = new Map((people || []).map(p => [p.id, p]));
     const organizer = byId.get(meeting.created_by) || caller;
-    const attendees = ids.map(id => byId.get(id)).filter(p => p && p.status === 'approved' && p.server_id === caller.server_id && p.email);
+    const attendees = ids.map(id => byId.get(id)).filter(p => p && p.status === 'approved' && !p.banned_at && p.server_id === caller.server_id && p.email);
     const link = meetingLink(meeting);
     const site = siteUrl(req);
     const when = occ ? `${whenText(occ[0])} · ${seriesText(occ[0], occ.length)}` : whenText(meeting);

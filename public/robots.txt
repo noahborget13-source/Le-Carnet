@@ -2,6 +2,7 @@ User-agent: *
 Allow: /
 Disallow: /app/
 Disallow: /admin/
+Disallow: /supra/
 Disallow: /api/
 
 Sitemap: https://le-carnet-beta.vercel.app/sitemap.xml

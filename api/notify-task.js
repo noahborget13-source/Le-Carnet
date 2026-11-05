@@ -33,8 +33,8 @@ export default async function handler(req, res) {
     if (!ids.length) return res.status(200).json({ ok: true, sent: 0 });
 
     const { data: people } = await supabaseAdmin.from('profiles')
-      .select('id, email, display_name, status, server_id, notify_assigned, notify_conflicts, work_hours').in('id', ids);
-    const members = (people || []).filter(p => p.status === 'approved' && p.server_id === caller.server_id);
+      .select('id, email, display_name, status, server_id, notify_assigned, notify_conflicts, work_hours, banned_at').in('id', ids);
+    const members = (people || []).filter(p => p.status === 'approved' && !p.banned_at && p.server_id === caller.server_id);
 
     // Conflits d'horaire : congé, hors horaires, réunion déjà prévue, agenda externe occupé, autre tâche à la même heure.
     const conflicts = new Map();   // userId -> raisons

@@ -82,8 +82,8 @@ async function taskReminders(link, room, skipDigest = new Set()) {
 
   const userIds = [...new Set(open.flatMap(assigneesOf))];
   const { data: people } = await supabaseAdmin.from('profiles')
-    .select('id, email, display_name, status, notify_assigned, notify_soon, notify_overdue, notify_digest, remind_lead_minutes').in('id', userIds);
-  const profiles = new Map((people || []).map(p => [p.id, p]));
+    .select('id, email, display_name, status, notify_assigned, notify_soon, notify_overdue, notify_digest, remind_lead_minutes, banned_at').in('id', userIds);
+  const profiles = new Map(banned(people).map(p => [p.id, p]));
   // Congé accepté aujourd'hui : aucun rappel (ni échéance proche, ni retard, ni récapitulatif)
   const { data: leaves } = await supabaseAdmin.from('leave_requests').select('user_id').in('user_id', userIds).eq('status', 'approved').lte('start_date', today).gte('end_date', today);
   for (const l of leaves || []) { const p = profiles.get(l.user_id); if (p) p.onLeave = true; }
@@ -151,8 +151,8 @@ async function meetingReminders(room, link) {
   if (!meetings || !meetings.length) return 0;
   const { data: atts } = await supabaseAdmin.from('meeting_attendees').select('meeting_id, user_id, response').in('meeting_id', meetings.map(m => m.id));
   const uids = [...new Set((atts || []).map(a => a.user_id))];
-  const { data: people } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, notify_meetings').in('id', uids);
-  const profiles = new Map((people || []).map(p => [p.id, p]));
+  const { data: people } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, notify_meetings, banned_at').in('id', uids);
+  const profiles = new Map(banned(people).map(p => [p.id, p]));
   const sentMap = await loadNotifs(['meeting_remind'], meetings.map(m => m.id));
   let sent = 0; const marks = [];
   for (const m of meetings) {
@@ -184,8 +184,8 @@ async function weeklySummary(room, link) {
   const covered = new Set();
   if (isoWeekday(today) !== 1 || hour < DIGEST_FROM_HOUR || hour >= DIGEST_UNTIL_HOUR) return { sent: 0, covered };
   const monday = mondayOf(today), sunday = addDays(monday, 6);
-  const { data: all } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, server_id, birthday, notify_weekly').eq('status', 'approved');
-  const members = all || [];
+  const { data: all } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, server_id, birthday, notify_weekly, banned_at').eq('status', 'approved');
+  const members = (all || []).filter(p => !p.banned_at);
   const targets = members.filter(p => p.email && wants(p, 'notify_weekly'));
   if (!targets.length) return { sent: 0, covered };
   const ids = targets.map(p => p.id);
@@ -261,8 +261,8 @@ async function conflictScan(room, link) {
   const mAtts = meetings && meetings.length ? (await supabaseAdmin.from('meeting_attendees').select('meeting_id, user_id, response').in('meeting_id', meetings.map(m => m.id))).data || [] : [];
   const userIds = [...new Set([...mAtts.map(a => a.user_id), ...soonTasks.flatMap(t => (t.assignees && t.assignees.length ? t.assignees : (t.assignee ? [t.assignee] : [])))])];
   if (!userIds.length) return 0;
-  const { data: people } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, work_hours, notify_conflicts').in('id', userIds);
-  const profiles = new Map((people || []).filter(p => p.status === 'approved').map(p => [p.id, p]));
+  const { data: people } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, work_hours, notify_conflicts, banned_at').in('id', userIds);
+  const profiles = new Map(banned(people).filter(p => p.status === 'approved').map(p => [p.id, p]));
   const notified = await loadNotifs(['conflict_meeting', 'conflict_task'], [...(meetings || []).map(m => m.id), ...soonTasks.map(t => t.id)]);
   const busy = await loadBusy(supabaseAdmin, [...profiles.keys()], now, horizon + 86400000);
   const timed = await loadTimedTasks(supabaseAdmin, [...profiles.keys()], parisToday(now), addDays(parisToday(now), 2));
@@ -289,6 +289,9 @@ async function conflictScan(room, link) {
   for (const c of clears) await supabaseAdmin.from('event_notifications').delete().eq('kind', c.kind).eq('item_id', c.item_id).eq('user_id', c.user_id);
   return sent;
 }
+
+// Un compte banni (banned_at) ne reçoit plus aucun email : on le traite comme non approuvé.
+const banned = (rows) => (rows || []).map(p => (p.banned_at ? { ...p, status: 'banned' } : p));
 
 export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
