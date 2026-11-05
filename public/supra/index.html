@@ -367,6 +367,7 @@ const PATCH_TECH = {
   "2026-11-05": [
     "migration-29-supra-admin.sql : profiles.banned_at / ban_reason / banned_by (my_approved_server et my_role ignorent les comptes bannis ; trigger profiles_protect_ban : seule la clé de service peut bannir ou débannir), tables platform_settings (alertes email du propriétaire) et platform_log (journal du Supra Admin, lecture réservée à is_platform_admin()).",
     "public/supra/index.html : nouveau site « Supra Admin » (patch notes, annonces et maintenance déplacés depuis l'espace administrateur, comptes et bannissement, emails, journal). Les actions supra-* passent par /api/admin-tools (api/_supra.js), après vérification de platform_admins ; aucune nouvelle fonction Vercel.",
+    "Supra Admin, suite : liens de nouveau mot de passe (supra-reset-password : generateLink côté serveur, le lien n'est jamais renvoyé au navigateur ; les mots de passe restent illisibles), suspension / réactivation d'un serveur entier (supra-server-ban), dernière connexion et filtres (inactifs 30 jours, bannis, en attente, administrateurs), export CSV, statistiques sur 12 semaines (supra-stats, depuis auth.users).",
     "api/_platform.js : notifyOwner envoie un email au propriétaire (inscription, nouveau serveur, bannissement) selon platform_settings ; les comptes bannis sont exclus de tous les envois (notify-*, cron-reminders, admin-tools)."
   ],
   "2026-11-04": [
@@ -655,8 +656,38 @@ function useSupraApi(session, action, deps = []) {
   }, [tick, JSON.stringify(deps)]);
   return [state, () => setTick(t => t + 1)];
 }
-function SupraOverview({ session, go }) {
-  const [st] = useSupraApi(session, "supra-overview");
+function Bars({ labels, values, color, id }) {
+  const max = Math.max(1, ...values);
+  return (<div data-bars={id} style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 80 }} role="img" aria-label={values.join(", ")}>
+    {values.map((v, i) => (<div key={i} title={`Semaine du ${new Date(labels[i] + "T12:00:00Z").toLocaleDateString("fr-FR", { timeZone: "UTC", day: "numeric", month: "short" })} : ${v}`} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%" }}>
+      <div style={{ height: Math.max(2, Math.round((v / max) * 70)) + "px", background: color, borderRadius: 3, opacity: v ? 1 : 0.25 }} />
+    </div>))}
+  </div>);
+}
+function SupraStats({ session }) {
+  const [st] = useSupraApi(session, "supra-stats");
+  if (st.loading && !st.data) return null;
+  if (st.error || !st.data) return null;
+  const d = st.data, sum = (a) => a.reduce((x, y) => x + y, 0);
+  return (
+    <Panel title="Activité des 12 dernières semaines" id="stats">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 18 }}>
+        <div><div style={{ fontSize: 13, marginBottom: 6 }}><strong data-stat-signups>{sum(d.signups)}</strong> inscriptions</div><Bars id="signups" labels={d.labels} values={d.signups} color="var(--accent)" /></div>
+        <div><div style={{ fontSize: 13, marginBottom: 6 }}><strong data-stat-tasks>{sum(d.tasks)}</strong> tâches créées</div><Bars id="tasks" labels={d.labels} values={d.tasks} color="#5FBF8B" /></div>
+      </div>
+      <p data-stat-active style={{ fontSize: 13, color: "var(--text-dim)", margin: "14px 0 0" }}>Connectés ces 7 derniers jours : <strong>{d.active7}</strong> · ces 30 derniers jours : <strong>{d.active30}</strong> (sur {d.known} comptes).</p>
+    </Panel>
+  );
+}
+function SupraOverview({ session, go, notify }) {
+  const [st, reload] = useSupraApi(session, "supra-overview");
+  const suspend = async (s) => {
+    const on = !s.suspended;
+    const reason = on ? window.prompt(`Suspendre « ${s.name} » ? Tous ses comptes (sauf le vôtre) seront bannis. Motif (facultatif) :`, "") : "";
+    if (on && reason === null) return;
+    if (!on && !window.confirm(`Réactiver « ${s.name} » ? Tous ses comptes bannis seront débannis.`)) return;
+    try { const r = await callApi("/api/admin-tools", { action: "supra-server-ban", serverId: s.id, banned: on, reason: (reason || "").trim() }, session); notify(on ? `Serveur suspendu (${r.count} compte${r.count > 1 ? "s" : ""}).` : `Serveur réactivé (${r.count} compte${r.count > 1 ? "s" : ""}).`); reload(); } catch (e) { notify(e.message, "err"); }
+  };
   if (st.loading && !st.data) return <div style={{ display: "grid", placeItems: "center", padding: 30 }}><Spinner /></div>;
   if (st.error) return <EmptyState text={st.error} />;
   const t = st.data.totals;
@@ -674,19 +705,21 @@ function SupraOverview({ session, go }) {
         {st.data.servers.length === 0 && <EmptyState text="Aucun serveur." />}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
-            <thead><tr style={{ textAlign: "left", color: "var(--text-dimmer)", fontSize: 12 }}><th style={{ padding: "6px 8px" }}>Serveur</th><th style={{ padding: "6px 8px" }}>Administrateur</th><th style={{ padding: "6px 8px" }}>Membres</th><th style={{ padding: "6px 8px" }}>En attente</th><th style={{ padding: "6px 8px" }}>Bannis</th><th style={{ padding: "6px 8px" }}>Créé le</th></tr></thead>
+            <thead><tr style={{ textAlign: "left", color: "var(--text-dimmer)", fontSize: 12 }}><th style={{ padding: "6px 8px" }}>Serveur</th><th style={{ padding: "6px 8px" }}>Administrateur</th><th style={{ padding: "6px 8px" }}>Membres</th><th style={{ padding: "6px 8px" }}>En attente</th><th style={{ padding: "6px 8px" }}>Bannis</th><th style={{ padding: "6px 8px" }}>Créé le</th><th style={{ padding: "6px 8px" }}></th></tr></thead>
             <tbody>{st.data.servers.map(s => (
               <tr key={s.id} data-supra-server={s.name} style={{ borderTop: "1px solid var(--border-soft)" }}>
-                <td style={{ padding: "9px 8px", fontWeight: 600 }}>{s.name}</td>
+                <td style={{ padding: "9px 8px", fontWeight: 600 }}>{s.name}{s.suspended && <span data-suspended style={{ marginLeft: 8, fontSize: 11.5, fontWeight: 600, color: "var(--late)", border: "1px solid var(--late)", borderRadius: 8, padding: "1px 7px" }}>Suspendu</span>}</td>
                 <td style={{ padding: "9px 8px", color: "var(--text-dim)" }}>{s.admins.join(", ") || "—"}</td>
                 <td style={{ padding: "9px 8px" }}>{s.members}</td>
                 <td style={{ padding: "9px 8px", color: s.pending ? "#FFB648" : "var(--text-dim)" }}>{s.pending}</td>
                 <td style={{ padding: "9px 8px", color: s.banned ? "var(--late)" : "var(--text-dim)" }}>{s.banned}</td>
                 <td style={{ padding: "9px 8px", color: "var(--text-dim)" }}>{new Date(s.created_at).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })}</td>
+                <td style={{ padding: "9px 8px", textAlign: "right" }}><button type="button" data-server-suspend onClick={() => suspend(s)} style={{ ...chipBtn, color: s.suspended ? undefined : "var(--late)" }}>{s.suspended ? "Réactiver" : "Suspendre"}</button></td>
               </tr>))}</tbody>
           </table>
         </div>
       </Panel>
+      <SupraStats session={session} />
     </div>
   );
 }
@@ -716,20 +749,44 @@ function BanModal({ user, onClose, onDone, session, notify }) {
     </div>
   );
 }
+const csvQ = (v) => { const t = String(v == null ? "" : v); return /[;"\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
 function SupraAccounts({ session, notify }) {
   const [q, setQ] = useState("");
   const [dq, setDq] = useState("");
+  const [filter, setFilter] = useState("all");
   const [ban, setBan] = useState(null);
   useEffect(() => { const id = setTimeout(() => setDq(q.trim()), 250); return () => clearTimeout(id); }, [q]);
-  const [st, reload] = useSupraApi(session, "supra-users", [{ q: dq }]);
+  const [st, reload] = useSupraApi(session, "supra-users", [{ q: dq, filter }]);
   const unban = async (u) => {
     if (!window.confirm(`Débannir ${u.display_name} ?`)) return;
     try { await callApi("/api/admin-tools", { action: "supra-ban", userId: u.id, banned: false, alsoLinked: false }, session); notify("Compte débanni."); reload(); } catch (e) { notify(e.message, "err"); }
   };
+  const resetPw = async (u) => {
+    if (!window.confirm(`Envoyer à ${u.display_name} un lien pour choisir un nouveau mot de passe ?`)) return;
+    try { const r = await callApi("/api/admin-tools", { action: "supra-reset-password", userId: u.id }, session); notify(`Lien envoyé à ${r.to}.`); } catch (e) { notify(e.message, "err"); }
+  };
+  const exportCsv = async () => {
+    try {
+      const r = await callApi("/api/admin-tools", { action: "supra-users", q: dq, filter, all: true }, session);
+      const head = ["Nom", "Identifiant", "Email", "Serveur", "Rôle", "Statut", "Créé le", "Dernière connexion", "Banni le", "Motif"];
+      const day = (iso) => iso ? new Date(iso).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : "";
+      const rows = r.users.map(u => [u.display_name, u.username, u.email, u.server, u.role, u.banned_at ? "banni" : u.status, day(u.created_at), day(u.last_sign_in_at), day(u.banned_at), u.ban_reason]);
+      const csv = "\uFEFF" + [head, ...rows].map(row => row.map(csvQ).join(";")).join("\r\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "comptes-le-carnet-" + new Date().toISOString().slice(0, 10) + ".csv"; document.body.appendChild(a); a.click(); a.remove();
+      notify(`${rows.length} compte${rows.length > 1 ? "s" : ""} exporté${rows.length > 1 ? "s" : ""}.`);
+    } catch (e) { notify(e.message, "err"); }
+  };
   const users = (st.data && st.data.users) || [];
+  const seen = (u) => u.last_sign_in_at ? "dernière connexion " + new Date(u.last_sign_in_at).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "short", year: "numeric" }) : "jamais connecté";
+  const fb = (id, label) => <button key={id} type="button" data-supra-filter={id} aria-pressed={filter === id} onClick={() => setFilter(id)} style={{ ...chipBtn, background: filter === id ? "var(--panel-2)" : "transparent", fontWeight: filter === id ? 600 : 500, borderColor: filter === id ? "var(--accent)" : "var(--border-soft)" }}>{label}</button>;
   return (
     <div data-supra-accounts>
-      <input data-supra-search value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher par nom, identifiant, email ou serveur…" aria-label="Rechercher un compte" style={{ ...inputStyle, maxWidth: 460, marginBottom: 14 }} />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        <input data-supra-search value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher par nom, identifiant, email ou serveur…" aria-label="Rechercher un compte" style={{ ...inputStyle, maxWidth: 420, flex: "1 1 260px" }} />
+        <button type="button" data-supra-export onClick={exportCsv} style={chipBtn}>⬇ Exporter en CSV</button>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>{fb("all", "Tous")}{fb("banned", "Bannis")}{fb("pending", "En attente")}{fb("admins", "Administrateurs")}{fb("inactive", "Inactifs (30 jours)")}</div>
       {st.error && <EmptyState text={st.error} />}
       {!st.error && users.length === 0 && !st.loading && <EmptyState text="Aucun compte ne correspond." />}
       <div style={{ display: "grid", gap: 8 }}>
@@ -738,14 +795,17 @@ function SupraAccounts({ session, notify }) {
             <div style={{ flex: "1 1 220px", minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{u.display_name} <span style={{ fontWeight: 400, color: "var(--text-dimmer)", fontSize: 12.5 }}>@{u.username}</span></div>
               <div style={{ fontSize: 12.5, color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis" }}>{u.email} · {u.server} · {u.role === "admin" ? "administrateur" : u.role === "moderator" ? "modérateur" : u.role === "guest" ? "invité" : "membre"}{u.status === "pending" ? " · en attente" : ""}</div>
+              <div data-supra-seen style={{ fontSize: 12, color: "var(--text-dimmer)" }}>{seen(u)}</div>
               {u.banned_at && <div style={{ fontSize: 12.5, color: "var(--late)", marginTop: 2 }}>Banni le {supraDate(u.banned_at)}{u.ban_reason ? " — " + u.ban_reason : ""}</div>}
             </div>
+            {!u.banned_at && <button type="button" data-reset-password onClick={() => resetPw(u)} title="Envoie un email avec un lien pour choisir un nouveau mot de passe" style={chipBtn}>🔑 Lien de mot de passe</button>}
             {u.banned_at
               ? <button type="button" data-unban onClick={() => unban(u)} style={chipBtn}>Débannir</button>
               : <button type="button" data-ban-open onClick={() => setBan(u)} style={{ ...chipBtn, color: "var(--late)" }}>Bannir</button>}
           </div>))}
       </div>
-      {st.data && st.data.total > users.length && !dq && <p style={{ fontSize: 12.5, color: "var(--text-dimmer)", marginTop: 10 }}>{users.length} comptes affichés sur {st.data.total} : utilisez la recherche pour affiner.</p>}
+      {st.data && st.data.matched > users.length && <p style={{ fontSize: 12.5, color: "var(--text-dimmer)", marginTop: 10 }}>{users.length} comptes affichés sur {st.data.matched} : utilisez la recherche ou un filtre pour affiner (l'export CSV contient tout).</p>}
+      <p style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 16, lineHeight: 1.5 }}>Les mots de passe ne sont stockés que sous forme chiffrée irréversible : personne ne peut les lire. Pour aider quelqu'un, envoyez-lui un lien de nouveau mot de passe.</p>
       {ban && <BanModal user={ban} session={session} notify={notify} onClose={() => setBan(null)} onDone={() => { setBan(null); reload(); }} />}
     </div>
   );
@@ -809,7 +869,7 @@ function SupraEmails({ session, notify }) {
     </div>
   );
 }
-const SUPRA_LOG_LABEL = { ban: "Bannissement", unban: "Fin de bannissement", broadcast: "Envoi groupé" };
+const SUPRA_LOG_LABEL = { ban: "Bannissement", unban: "Fin de bannissement", broadcast: "Envoi groupé", reset_link: "Lien de mot de passe", server_ban: "Serveur suspendu", server_unban: "Serveur réactivé" };
 function SupraLog({ session }) {
   const [st] = useSupraApi(session, "supra-log");
   if (st.loading && !st.data) return <div style={{ display: "grid", placeItems: "center", padding: 30 }}><Spinner /></div>;
@@ -852,7 +912,7 @@ function SupraWorkspace({ me, session, notify, onLogout }) {
         </nav>
         <main className="adm-main">
           <div style={{ marginBottom: 18 }}><h1 data-supra-title style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>{title ? title[1] : ""}</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>Réservé au propriétaire de la plateforme.</p></div>
-          {page === "overview" && <SupraOverview session={session} go={go} />}
+          {page === "overview" && <SupraOverview session={session} go={go} notify={notify} />}
           {page === "accounts" && <SupraAccounts session={session} notify={notify} />}
           {page === "emails" && <SupraEmails session={session} notify={notify} />}
           {page === "site" && <AdminSite notify={notify} />}
