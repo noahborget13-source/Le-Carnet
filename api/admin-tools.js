@@ -4,6 +4,8 @@
 //   { action: 'send-mail', subject, message, all | userIds[], copyToMe } → écrit aux membres du serveur de l'administrateur
 import { createClient } from '@supabase/supabase-js';
 import { esc, siteUrl, layout, sendMail, mailConfigured, via } from './_mail.js';
+import { isPlatformAdmin } from './_platform.js';
+import { handleSupra } from './_supra.js';
 
 const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -14,6 +16,12 @@ export default async function handler(req, res) {
     if (!token) return res.status(401).json({ error: 'Non authentifié' });
     const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(token);
     if (userErr || !userData?.user) return res.status(401).json({ error: 'Session invalide' });
+    // Supra Admin : réservé au propriétaire de la plateforme (table platform_admins), quel que soit son rôle dans un serveur
+    const rawAction = (req.body || {}).action;
+    if (typeof rawAction === 'string' && rawAction.startsWith('supra-')) {
+      if (!(await isPlatformAdmin(supabaseAdmin, userData.user.id))) return res.status(403).json({ error: 'Réservé au propriétaire de la plateforme.' });
+      return await handleSupra({ req, res, sb: supabaseAdmin, user: userData.user, action: rawAction });
+    }
     const { data: me } = await supabaseAdmin.from('profiles')
       .select('id, role, status, server_id, email, display_name').eq('id', userData.user.id).single();
     if (!me || me.status !== 'approved' || me.role !== 'admin') return res.status(403).json({ error: "Réservé à l'administrateur." });
@@ -95,13 +103,13 @@ export default async function handler(req, res) {
       const hourAgo = new Date(Date.now() - 3600000).toISOString();
       const { count: recent } = await supabaseAdmin.from('activity').select('id', { count: 'exact', head: true })
         .eq('server_id', me.server_id).eq('action', 'mail.sent').gte('created_at', hourAgo);
-      if ((recent || 0) >= 10) return res.status(429).json({ error: "Trop d'envois en peu de temps : réessaie dans une heure." });
+      if ((recent || 0) >= 10) return res.status(429).json({ error: "Trop d'envois en peu de temps : réessayez dans une heure." });
 
       // Destinataires : uniquement des membres approuvés de VOTRE serveur (jamais d'adresse libre).
       const { data: members } = await supabaseAdmin.from('profiles')
-        .select('id, email, display_name').eq('server_id', me.server_id).eq('status', 'approved');
+        .select('id, email, display_name, banned_at').eq('server_id', me.server_id).eq('status', 'approved');
       const wanted = (req.body || {}).all === true ? null : new Set(Array.isArray((req.body || {}).userIds) ? req.body.userIds : []);
-      let targets = (members || []).filter(m => m.email && (wanted === null || wanted.has(m.id)));
+      let targets = (members || []).filter(m => !m.banned_at && m.email && (wanted === null || wanted.has(m.id)));
       if (!(req.body || {}).copyToMe) targets = targets.filter(m => m.id !== me.id);
       else if (!targets.some(m => m.id === me.id)) targets.push({ id: me.id, email: me.email, display_name: me.display_name });
       if (!targets.length) return res.status(400).json({ error: 'Aucun destinataire sélectionné.' });

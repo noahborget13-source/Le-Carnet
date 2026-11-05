@@ -21,8 +21,8 @@ export default async function handler(req, res) {
     if (!msg || msg.from_id !== caller.id) return res.status(404).json({ error: 'Message introuvable.' });
     if (!mailConfigured()) return res.status(200).json({ ok: true, sent: 0 });
 
-    const { data: to } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, server_id, notify_dm').eq('id', msg.to_id).single();
-    if (!to || to.status !== 'approved' || to.server_id !== caller.server_id || !to.email || !wants(to, 'notify_dm')) return res.status(200).json({ ok: true, sent: 0 });
+    const { data: to } = await supabaseAdmin.from('profiles').select('id, email, display_name, status, server_id, notify_dm, banned_at').eq('id', msg.to_id).single();
+    if (!to || to.status !== 'approved' || to.banned_at || to.server_id !== caller.server_id || !to.email || !wants(to, 'notify_dm')) return res.status(200).json({ ok: true, sent: 0 });
 
     const { data: last } = await supabaseAdmin.from('event_notifications').select('sent_at').eq('kind', 'dm').eq('item_id', caller.id).eq('user_id', to.id).maybeSingle();
     if (last && Date.now() - Date.parse(last.sent_at) < QUIET_MS) return res.status(200).json({ ok: true, sent: 0, throttled: true });

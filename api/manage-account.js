@@ -2,6 +2,7 @@
 //  • Actions de l'admin : delete, update, transfer-admin (même serveur uniquement).
 //  • Actions de chacun sur son propre compte : update-self, delete-self.
 import { createClient } from '@supabase/supabase-js';
+import { notifyOwner } from './_platform.js';
 import crypto from 'crypto';
 import { validateWorkHours } from './_availability.js';
 
@@ -111,7 +112,7 @@ async function handleServers(req, res, body) {
   const displayName = String(body.displayName || '').trim();
   if (!USERNAME_RE.test(username)) return res.status(400).json({ error: 'Identifiant : 3 à 30 caractères (lettres, chiffres, . _ -).' });
   if (!displayName || displayName.length > 60) return res.status(400).json({ error: 'Nom affiché : 1 à 60 caractères.' });
-  if (await usernameTaken(username)) return res.status(400).json({ error: 'Cet identifiant est déjà pris, choisis-en un autre (il doit être différent dans chaque serveur).' });
+  if (await usernameTaken(username)) return res.status(400).json({ error: 'Cet identifiant est déjà pris, choisissez-en un autre (il doit être différent dans chaque serveur).' });
   const color = COLORS[Math.floor(Math.random() * COLORS.length)];
 
   if (action === 'servers-create') {
@@ -131,6 +132,7 @@ async function handleServers(req, res, body) {
       await supabaseAdmin.auth.admin.deleteUser(shadow.id);
       return res.status(400).json({ error: e.message });
     }
+    await notifyOwner(supabaseAdmin, req, 'notify_server', 'Nouveau serveur', [`${displayName} (${myProfile.email}) a créé le serveur « ${serverName} ».`]);
     return res.status(200).json({ ok: true, userId: shadow.id, status: 'approved' });
   }
 
@@ -160,6 +162,7 @@ async function handleServers(req, res, body) {
     try { await ensureLinked(meId, shadow.id); }
     catch (e) { await supabaseAdmin.from('profiles').delete().eq('id', shadow.id); await supabaseAdmin.auth.admin.deleteUser(shadow.id); return res.status(400).json({ error: e.message }); }
     if (inviteId) await supabaseAdmin.from('invites').update({ used_at: new Date().toISOString() }).eq('id', inviteId);
+    await notifyOwner(supabaseAdmin, req, 'notify_signup', status === 'pending' ? "Demande d'adhésion" : 'Nouveau membre', [`${displayName} (${myProfile.email}) ${status === 'pending' ? 'demande à rejoindre' : 'a rejoint'} un serveur (${serverId}).`]);
     return res.status(200).json({ ok: true, userId: shadow.id, status });
   }
   return res.status(400).json({ error: 'Action inconnue' });
@@ -211,7 +214,7 @@ async function updateSelf(me, body, res) {
     if (!USERNAME_RE.test(v)) return res.status(400).json({ error: 'Identifiant : 3 à 30 caractères (lettres, chiffres, . _ -).' });
     if (v.toLowerCase() !== (me.username || '').toLowerCase()) {
       const { data: taken } = await supabaseAdmin.from('profiles').select('id').ilike('username', v).neq('id', me.id).limit(1);
-      if (taken && taken.length) return res.status(400).json({ error: 'Cet identifiant est déjà pris, choisis-en un autre.' });
+      if (taken && taken.length) return res.status(400).json({ error: 'Cet identifiant est déjà pris, choisissez-en un autre.' });
     }
     update.username = v;
   }
@@ -267,7 +270,7 @@ async function updateSelf(me, body, res) {
   if (!Object.keys(update).length) return res.status(400).json({ error: 'Rien à modifier.' });
   const { error } = await supabaseAdmin.from('profiles').update(update).eq('id', me.id);
   if (error) {
-    const msg = /duplicate|unique/i.test(error.message) ? 'Cet identifiant est déjà pris, choisis-en un autre.' : error.message;
+    const msg = /duplicate|unique/i.test(error.message) ? 'Cet identifiant est déjà pris, choisissez-en un autre.' : error.message;
     return res.status(400).json({ error: msg });
   }
   return res.status(200).json({ ok: true });

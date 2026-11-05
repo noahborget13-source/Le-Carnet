@@ -2,6 +2,7 @@
 // { action: 'check', token } -> { serverName, email, role }
 // { action: 'accept', token, username, displayName, password, color } -> { ok, email }
 import { createClient } from '@supabase/supabase-js';
+import { notifyOwner } from './_platform.js';
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
@@ -67,6 +68,7 @@ async function handleGoogle(req, res, action) {
     return res.status(400).json({ error: msg });
   }
   await supabaseAdmin.from('invites').update({ used_at: nowIso }).eq('id', invite.id);
+  await notifyOwner(supabaseAdmin, req, 'notify_signup', 'Nouveau compte', [`${displayName} (${email}) a rejoint un serveur avec son compte Google.`]);
   return res.status(200).json({ ok: true });
 }
 
@@ -131,6 +133,7 @@ export default async function handler(req, res) {
     }
 
     await supabaseAdmin.from('invites').update({ used_at: new Date().toISOString() }).eq('id', invite.id);
+    await notifyOwner(supabaseAdmin, req, 'notify_signup', 'Nouveau compte', [`${displayName} (${invite.email}) a rejoint le serveur « ${serverName} ».`]);
     return res.status(200).json({ ok: true, email: invite.email });
   } catch (e) {
     return res.status(500).json({ error: e.message || 'Erreur serveur' });

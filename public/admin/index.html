@@ -201,12 +201,6 @@ const PERM_LABELS = [
   { key: "deleteAnyTask", label: "Supprimer toutes les tâches" },
   { key: "sendMessages", label: "Envoyer des messages" },
 ];
-function effectivePerms(account) {
-  if (!account) return {};
-  if (account.role === "admin") return { createTasks: true, editAnyTask: true, editOwnTask: true, deleteAnyTask: true, deleteOwnTask: true, sendMessages: true };
-  const base = ROLE_DEFAULT_PERMS[account.role] || ROLE_DEFAULT_PERMS.member;
-  return { ...base, ...(account.permissions || {}) };
-}
 const uid = () => Math.random().toString(36).slice(2, 10);
 const todayISO = () => isoLocal(new Date()); // date locale (et non UTC : sinon « aujourd'hui » est faux après minuit)
 function daysUntil(dateStr) {
@@ -230,7 +224,6 @@ const durationLabel = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); i
 const dueMoment = (t) => new Date(t.due + "T" + (t.due_time ? hhmm(t.due_time) + ":00" : "23:59:59")).getTime();
 // Clé de tri : date puis heure (les tâches « toute la journée » comptent pour 23h59).
 /** Changement d'échéance : le début éventuel suit s'il se retrouve après la nouvelle échéance (ou si la date disparaît). */
-const duePatch = (t, newDue) => ({ due: newDue, ...(t.start_date && (!newDue || t.start_date > newDue) ? { start_date: newDue || null } : {}) });
 const dueKey = (t) => (t.due ? t.due + " " + (t.due_time ? hhmm(t.due_time) : "23:59") : "9999-99-99 99:99");
 function dueInfo(t) {
   if (!t.due) return null;
@@ -242,39 +235,8 @@ function dueInfo(t) {
   const soon = !t.done && !late && (timed && dleft === 0 ? msLeft <= 2 * 3600000 : dleft <= 2);
   return { dleft, timed, late, soon, label, msLeft };
 }
-const RECURRENCES = [
-  { value: "", label: "Ne se répète pas" },
-  { value: "daily", label: "Tous les jours" },
-  { value: "weekly", label: "Toutes les semaines" },
-  { value: "monthly", label: "Tous les mois" },
-];
 const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-function addPeriod(iso, rec) {
-  const d = new Date(iso + "T12:00:00");
-  if (rec === "daily") d.setDate(d.getDate() + 1);
-  else if (rec === "weekly") d.setDate(d.getDate() + 7);
-  else if (rec === "monthly") { const day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + 1); d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); }
-  return isoLocal(d);
-}
-function nextOccurrence(due, rec) {
-  let next = addPeriod(due || todayISO(), rec);
-  let guard = 0;
-  while (next < todayISO() && guard++ < 400) next = addPeriod(next, rec);
-  return next;
-}
-function parseTags(text) {
-  const out = [];
-  for (const raw of String(text || "").split(",")) {
-    const t = raw.trim().replace(/^#/, "").slice(0, 24);
-    if (t && !out.some(x => x.toLowerCase() === t.toLowerCase())) out.push(t);
-  }
-  return out.slice(0, 8);
-}
 const assigneeIds = (t) => (t.assignees && t.assignees.length ? t.assignees : (t.assignee ? [t.assignee] : []));
-const fileSizeLabel = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " Mo" : Math.max(1, Math.round(n / 1024)) + " Ko";
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
-const MAX_FILES_PER_TASK = 10;
-function notifyMention(kind, id, session) { callApi('/api/notify-mention', { kind, id }, session).catch(() => {}); }
 async function callApi(path, body, session) {
   const ctl = typeof AbortController === "function" ? new AbortController() : null;
   const timer = ctl ? setTimeout(() => ctl.abort(), 30000) : null;   // jamais d'attente infinie
@@ -336,17 +298,6 @@ const I = {
   Video: p => <Icon {...p} path={<><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></>} />,
   Copy: p => <Icon {...p} path={<><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>} />,
 };
-function NotebookMark({ size = 22 }) {
-  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <rect x="3" y="2" width="18" height="20" rx="2.5" fill="var(--accent)" opacity="0.14" />
-    <rect x="3" y="2" width="18" height="20" rx="2.5" stroke="var(--accent)" strokeWidth="1.5" />
-    <line x1="9.5" y1="2.5" x2="9.5" y2="21.5" stroke="#E5484D" strokeWidth="1.2" />
-    <line x1="12" y1="7" x2="18" y2="7" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" />
-    <line x1="12" y1="11" x2="18" y2="11" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" />
-    <line x1="12" y1="15" x2="16" y2="15" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" />
-  </svg>);
-}
-
 const inputStyle = { width: "100%", background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 9, padding: "10px 12px", color: "var(--text)", fontSize: 14, outline: "none", boxSizing: "border-box" };
 const primaryBtn = { background: "var(--accent)", border: "none", color: "#fff", fontWeight: 600, fontSize: 14, padding: "10px 0", borderRadius: 9, cursor: "pointer", boxShadow: "0 6px 16px var(--accent-glow)" };
 const secondaryBtn = { background: "transparent", border: "1px solid var(--border-soft)", color: "var(--text-dim)", fontWeight: 600, fontSize: 14, padding: "10px 0", borderRadius: 9, cursor: "pointer" };
@@ -354,52 +305,12 @@ const iconBtn = { background: "transparent", border: "1px solid var(--border-sof
 const chipBtn = { background: "var(--bg-2)", border: "1px solid var(--border-soft)", color: "var(--text-dim)", fontSize: 13, padding: "8px 12px", borderRadius: 8, cursor: "pointer", position: "relative" };
 const overlayStyle = { position: "fixed", inset: 0, background: "rgba(10,12,16,.6)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", zIndex: 40, padding: 20 };
 const modalStyle = { width: 440, maxWidth: "100%", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "26px 26px 24px", boxShadow: "0 30px 60px rgba(0,0,0,.5)", maxHeight: "88vh", overflowY: "auto" };
-const eyeBtn = { position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "var(--text-dimmer)", cursor: "pointer", padding: 4 };
-
 function Field({ label, children }) { return (<label style={{ display: "block", marginBottom: 14 }}><div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 6, fontWeight: 500 }}>{label}</div>{children}</label>); }
 function EmptyState({ text }) { return (<div style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "40px 20px", textAlign: "center", color: "var(--text-dimmer)", fontSize: 14 }}>{text}</div>); }
 function GrainOverlay() { return (<svg style={{ position: "fixed", inset: 0, width: "100%", height: "100%", opacity: 0.03, pointerEvents: "none", zIndex: 0 }}><filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" /></filter><rect width="100%" height="100%" filter="url(#grain)" /></svg>); }
 function Avatar({ user, size = 28 }) {
   const initials = ((user && (user.display_name || user.username)) || "?").slice(0, 2).toUpperCase();
   return (<div style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: (user && user.color) || "#3B5BDB", display: "grid", placeItems: "center", fontSize: size * 0.38, fontWeight: 700, color: "#14171C" }}>{initials}</div>);
-}
-function RichText({ text, accounts }) {
-  const segs = String(text).split(/(https:\/\/meet\.jit\.si\/LeCarnet-[A-Za-z0-9-]+)/);
-  if (segs.length > 1) return <>{segs.map((sg, i) => i % 2 ? <a key={i} href={sg} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", background: "var(--accent)", color: "#fff", fontWeight: 600, borderRadius: 8, padding: "5px 12px", textDecoration: "none", margin: "2px 0" }}>📹 Rejoindre l'appel</a> : <RichText key={i} text={sg} accounts={accounts} />)}</>;
-  const parts = [];
-  const re = /(^|[^A-Za-z0-9._-])@([A-Za-z0-9._-]{3,30})/g;
-  let last = 0, m;
-  while ((m = re.exec(text))) {
-    const name = m[2].replace(/[._-]+$/, "");
-    if (!accounts.some(a => a.username && a.username.toLowerCase() === name.toLowerCase())) continue;
-    const start = m.index + m[1].length;
-    parts.push(text.slice(last, start));
-    parts.push(<span key={start} style={{ color: "var(--accent-2)", fontWeight: 600, background: "color-mix(in srgb, var(--accent) 12%, transparent)", borderRadius: 4, padding: "0 3px" }}>@{name}</span>);
-    last = start + 1 + name.length;
-  }
-  parts.push(text.slice(last));
-  return <>{parts}</>;
-}
-function MentionInput({ value, onChange, onSubmit, placeholder, people, disabled, style }) {
-  const m = /(^|\s)@([A-Za-z0-9._-]*)$/.exec(value);
-  const q = m ? m[2].toLowerCase() : null;
-  const options = q === null ? [] : people.filter(p => (p.username || "").toLowerCase().startsWith(q) || (p.display_name || "").toLowerCase().startsWith(q)).slice(0, 5);
-  const pick = (p) => onChange(value.replace(/@([A-Za-z0-9._-]*)$/, "@" + p.username + " "));
-  return (
-    <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
-      {options.length > 0 && (
-        <div style={{ position: "absolute", bottom: "100%", left: 0, marginBottom: 6, background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 10, overflow: "hidden", zIndex: 5, minWidth: 210, boxShadow: "0 12px 30px rgba(0,0,0,.4)" }}>
-          {options.map(p => (
-            <button key={p.id} type="button" onMouseDown={e => { e.preventDefault(); pick(p); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", background: "transparent", border: "none", color: "var(--text)", cursor: "pointer", fontSize: 13, textAlign: "left" }}>
-              <Avatar user={p} size={20} /> <span>{p.display_name}</span> <span style={{ color: "var(--text-dimmer)" }}>@{p.username}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      <input value={value} disabled={disabled} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={style || inputStyle}
-        onKeyDown={e => { if (options.length && (e.key === "Tab" || e.key === "Enter")) { e.preventDefault(); pick(options[0]); return; } if (e.key === "Enter") onSubmit(); }} />
-    </div>
-  );
 }
 function AvatarStack({ users, size = 24, max = 3 }) {
   return (
@@ -519,84 +430,6 @@ const fmtWhen = (m) => {
   return ds === de ? `${fmtDay(ds)}, ${fmtHM(s)} – ${fmtHM(e)}` : `${fmtDay(ds)} ${fmtHM(s)} → ${fmtDay(de)} ${fmtHM(e)}`;
 };
 const fmtLeave = (l) => (l.start_date === l.end_date ? fmtDay(l.start_date) : `du ${fmtDay(l.start_date, { day: "numeric", month: "long" })} au ${fmtDay(l.end_date, { day: "numeric", month: "long", year: "numeric" })}`);
-const JITSI = "https://meet.jit.si/LeCarnet-";
-const callLink = (room) => JITSI + room;
-/** Lien d'appel d'une réunion : lien personnalisé (Meet, Zoom, Teams…) sinon appel Jitsi du Carnet. */
-const customCallUrl = (m) => (m && typeof m.call_url === "string" && /^https:\/\/\S+$/.test(m.call_url) ? m.call_url : "");
-const meetLink = (m) => customCallUrl(m) || callLink(m.room);
-const meetJoin = (m, name) => customCallUrl(m) || joinLink(m.room, name);
-const joinLink = (room, name) => JITSI + room + (name ? "#userInfo.displayName=" + encodeURIComponent('"' + name + '"') : "");
-const copyText = async (text) => { try { await navigator.clipboard.writeText(text); return true; } catch (_) { return false; } };
-
-function outsideHoursC(wh, s, e) {
-  if (!wh) return false;
-  const point = e <= s; let cur = s;
-  for (let g = 0; g < 14 && (cur < e || (point && g === 0)); g++) {
-    const day = parisDay(cur); const next = parisInstant(shiftDay(day, 1));
-    const segEnd = point ? cur : Math.min(e, next);
-    const ranges = wh[String(isoWd(day))] || [];
-    if (!ranges.some(([a, b]) => parisInstant(day, a) <= cur && segEnd <= parisInstant(day, b))) return true;
-    cur = next;
-  }
-  return false;
-}
-/** Raisons pour lesquelles `user` n'est pas disponible. busy : lignes de busy_for pour cette personne. */
-function conflictsC({ s, e, user, busy = [], tasks = [], allDay = false, ignoreTaskId = null }) {
-  const out = []; const point = e <= s;
-  const ov = (b) => (point ? Date.parse(b.starts_at) <= s && s < Date.parse(b.ends_at) : s < Date.parse(b.ends_at) && e > Date.parse(b.starts_at));
-  if (allDay) {
-    const day = parisDay(s); const d0 = parisInstant(day), d1 = parisInstant(shiftDay(day, 1));
-    if (busy.some(b => b.kind === "leave" && d0 < Date.parse(b.ends_at) && d1 > Date.parse(b.starts_at))) out.push({ kind: "leave" });
-    return out;
-  }
-  if (busy.some(b => b.kind === "leave" && ov(b))) out.push({ kind: "leave" });
-  else if (outsideHoursC(user && user.work_hours, s, e)) out.push({ kind: "hours" });
-  if (busy.some(b => b.kind === "meeting" && ov(b))) out.push({ kind: "meeting" });
-  if (busy.some(b => b.kind === "google" && ov(b))) out.push({ kind: "google" });
-  if (point) {
-    const same = tasks.find(t => t.id !== ignoreTaskId && !t.done && t.due && t.due_time && assigneeIds(t).includes(user.id) && Math.abs(parisInstant(t.due, t.due_time) - s) < 60000);
-    if (same) out.push({ kind: "task", label: same.title });
-  }
-  return out;
-}
-const reasonLine = (r, name, you) => {
-  const who = you ? "Vous" : name;
-  switch (r.kind) {
-    case "leave": return you ? "Vous êtes en congé à cette date" : `${name} est en congé à cette date`;
-    case "hours": return you ? "C'est en dehors de vos horaires de disponibilité" : `C'est en dehors des horaires de ${name}`;
-    case "meeting": return `${who} ${you ? "as" : "a"} déjà une réunion à ce moment-là`;
-    case "google": return you ? "Votre agenda externe est occupé à ce moment-là" : `L'agenda externe de ${name} est occupé à ce moment-là`;
-    case "task": return `${who} ${you ? "as" : "a"} déjà une tâche à la même heure (« ${r.label} »)`;
-    default: return "";
-  }
-};
-/** Créneaux occupés (rpc busy_for) d'un groupe de personnes sur une période. */
-function useBusy(userIds, fromMs, toMs, ignoreMeetingId) {
-  const [rows, setRows] = useState([]);
-  const key = JSON.stringify([[...userIds].sort(), fromMs, toMs, ignoreMeetingId || null]);
-  useEffect(() => {
-    if (!userIds.length || !fromMs || !toMs) { setRows([]); return; }
-    let alive = true;
-    const t = setTimeout(() => {
-      supabase.rpc("busy_for", { p_users: userIds, p_from: new Date(fromMs).toISOString(), p_to: new Date(toMs).toISOString(), p_ignore_meeting: ignoreMeetingId || null })
-        .then(({ data, error }) => { if (alive) setRows(error ? [] : (data || [])); });
-    }, 250);
-    return () => { alive = false; clearTimeout(t); };
-  }, [key]);
-  return rows;
-}
-function ConflictBox({ lines }) {
-  if (!lines.length) return null;
-  return (
-    <div role="alert" data-testid="conflict-box" style={{ border: "1px solid #6A4A1C", borderLeft: "4px solid #FFB648", background: "#2A2111", borderRadius: 10, padding: "10px 12px", margin: "0 0 14px", fontSize: 13 }}>
-      <div style={{ fontWeight: 700, color: "#FFC97A", marginBottom: 4 }}>⚠️ Conflit d'horaire</div>
-      <ul style={{ margin: 0, paddingLeft: 18, color: "var(--text)" }}>{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
-      <div style={{ fontSize: 11.5, color: "var(--text-dimmer)", marginTop: 6 }}>Vous pouvez enregistrer quand même : les personnes concernées seront prévenues par email.</div>
-    </div>
-  );
-}
-const statusBadge = (s) => ({ pending: ["En attente", "#FFB648"], approved: ["Accepté", "#5FBF8B"], refused: ["Refusé", "#FF6B5E"] }[s] || [s, "#9098A8"]);
-function Badge({ s }) { const [l, c] = statusBadge(s); return <span style={{ fontSize: 11.5, fontWeight: 700, color: c, background: c + "22", borderRadius: 10, padding: "2px 9px", whiteSpace: "nowrap" }}>{l}</span>; }
 const dateInputs = (a, setA, b, setB, min) => (
   <div style={{ display: "flex", gap: 12 }}>
     <div style={{ flex: 1 }}><Field label="Du"><input type="date" value={a} min={min} onChange={e => { setA(e.target.value); if (!b || b < e.target.value) setB(e.target.value); }} style={inputStyle} aria-label="Premier jour" /></Field></div>
@@ -606,73 +439,8 @@ const dateInputs = (a, setA, b, setB, min) => (
 
 /* ---------------- Profil : mes congés ---------------- */
 /* ---------------- Profil : horaires de disponibilité ---------------- */
-const WEEKDAYS = [[1, "Lundi"], [2, "Mardi"], [3, "Mercredi"], [4, "Jeudi"], [5, "Vendredi"], [6, "Samedi"], [7, "Dimanche"]];
-/* ---------------- Profil : agenda Google (lien secret iCal) ---------------- */
-/* ---------------- Réunions ---------------- */
 const RECUR = { daily: "chaque jour", weekly: "chaque semaine", biweekly: "toutes les deux semaines", monthly: "chaque mois" };
-const MAX_OCC = 52;
-/** Jours (AAAA-MM-JJ) des occurrences d'une série, du premier jour jusqu'au jour de fin inclus ; au plus 52. */
-function occurrenceDays(start, rule, until) {
-  const out = [];
-  if (!start || !until || !RECUR[rule] || until < start) return start ? [start] : [];
-  const [y0, m0, d0] = start.split("-").map(Number);
-  for (let k = 0; out.length < MAX_OCC; k++) {
-    let day;
-    if (rule === "monthly") {
-      const t = (m0 - 1) + k, y = y0 + Math.floor(t / 12), m = (t % 12) + 1;
-      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-      if (d0 > last) { if (y > Number(until.slice(0, 4)) + 1) break; continue; }   // pas de 31 en avril : on saute ce mois
-      day = `${y}-${String(m).padStart(2, "0")}-${String(d0).padStart(2, "0")}`;
-    } else day = shiftDay(start, k * (rule === "daily" ? 1 : rule === "weekly" ? 7 : 14));
-    if (day > until) break;
-    out.push(day);
-  }
-  return out;
-}
 const daysBetween = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5);
-const RESP = { accepted: ["✓", "#5FBF8B", "a accepté"], declined: ["✗", "#FF6B5E", "a refusé"], invited: ["?", "#9098A8", "n'a pas répondu"] };
-/* ============================================================
-   Thème, raccourcis, anniversaires, événements d'équipe, charge, créneaux
-   ============================================================ */
-const THEME_KEY = "carnet-theme";
-function getThemeMode() { try { const v = localStorage.getItem(THEME_KEY); return v === "light" || v === "dark" ? v : "auto"; } catch (_) { return "auto"; } }
-function applyTheme(mode) {
-  let t = mode;
-  if (t !== "light" && t !== "dark") t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", t);
-}
-const isLeapY = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
-/** Événements d'équipe et anniversaires d'un jour (iso = AAAA-MM-JJ). */
-function dayExtras(iso, events = [], accounts = []) {
-  const md = iso.slice(5), y = Number(iso.slice(0, 4));
-  return {
-    events: events.filter(e => e.start_date <= iso && e.end_date >= iso),
-    birthdays: accounts.filter(a => a.status !== "pending" && a.birthday && (a.birthday === md || (a.birthday === "02-29" && md === "02-28" && !isLeapY(y)))),
-  };
-}
-
-const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
-function ShortcutsHelp({ onClose, isAdmin }) {
-  return (
-    <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
-      <div className="modal-card" data-testid="shortcuts-help" style={{ ...modalStyle, width: 400 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}><h2 style={{ fontFamily: "Literata, serif", fontSize: 19, fontWeight: 600, margin: 0 }}>Raccourcis clavier</h2><button type="button" onClick={onClose} aria-label="Fermer" style={{ ...iconBtn, border: "none" }}><I.X size={18} /></button></div>
-        {SHORTCUTS.filter(([k]) => isAdmin || k !== "G puis A").map(([k, l]) => (
-          <div key={k} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", fontSize: 13.5 }}>
-            <span>{l}</span><kbd style={{ background: "var(--bg-2)", border: "1px solid var(--border-soft)", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontFamily: "inherit", color: "var(--text-dim)" }}>{k}</kbd>
-          </div>
-        ))}
-        <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 10 }}>Ils ne fonctionnent pas pendant que vous écrivez dans un champ.</div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Profil : anniversaire + apparence ---------------- */
-const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-const MONTH_DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-/* ---------------- Événements d'équipe (calendrier) ---------------- */
-/* ---------------- Admin : charge de travail ---------------- */
 function AdminWorkload({ accounts, tasks, meetings, attendees, leaves }) {
   const [wk, setWk] = useState(0);
   const today = parisDay();
@@ -738,27 +506,6 @@ function AdminWorkload({ accounts, tasks, meetings, attendees, leaves }) {
 /* ============================================================
    Réactions, historique, statut, notifications du navigateur, vue semaine
    ============================================================ */
-const REACTION_EMOJIS = ["👍", "✅", "❤️", "😂", "🎉", "👀"];
-/* ---------------- Historique d'une tâche (administrateur) ---------------- */
-const HIST_LABELS = { title: "Titre", notes: "Description", label: "Étiquette", priority: "Priorité", due: "Échéance", due_time: "Heure", done: "Terminée", assignees: "Assignés", tags: "Étiquettes #", recurrence: "Répétition", deleted_at: "Corbeille", subtasks: "Sous-tâches" };
-function describeChange(k, [o, n], accounts) {
-  const nm = (ids) => (ids || []).map(id => (accounts.find(a => a.id === id) || {}).display_name || "?").join(", ") || "personne";
-  const short = (v) => { const t = v == null || v === "" ? "—" : String(v); return t.length > 60 ? t.slice(0, 60) + "…" : t; };
-  switch (k) {
-    case "done": return n ? "a marqué la tâche comme terminée" : "a rouvert la tâche";
-    case "deleted_at": return n ? "a mis la tâche à la corbeille" : "a restauré la tâche";
-    case "assignees": return `Assignés : ${nm(o)} → ${nm(n)}`;
-    case "priority": return `Priorité : ${(PRIORITIES.find(x => x.id === o) || {}).label || o} → ${(PRIORITIES.find(x => x.id === n) || {}).label || n}`;
-    case "label": return `Étiquette : ${(LABELS.find(x => x.id === o) || {}).name || o} → ${(LABELS.find(x => x.id === n) || {}).name || n}`;
-    case "due": return `Échéance : ${o ? fmtDay(o, { day: "numeric", month: "short" }) : "—"} → ${n ? fmtDay(n, { day: "numeric", month: "short" }) : "—"}`;
-    case "due_time": return `Heure : ${o ? hhmm(o) : "toute la journée"} → ${n ? hhmm(n) : "toute la journée"}`;
-    case "tags": return `Étiquettes # : ${(o || []).join(", ") || "—"} → ${(n || []).join(", ") || "—"}`;
-    case "subtasks": return `Sous-tâches : ${o} → ${n}`;
-    case "notes": return "Description modifiée";
-    default: return `${HIST_LABELS[k] || k} : ${short(o)} → ${short(n)}`;
-  }
-}
-/* ---------------- Admin : statut du site ---------------- */
 const agoText = (iso) => {
   if (!iso) return "jamais";
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
@@ -829,57 +576,6 @@ function AdminStatus({ session, notify, go }) {
 }
 
 /* ---------------- Notifications du navigateur ---------------- */
-const BN_KEY = "carnet-bn";
-const bnSupported = () => typeof window !== "undefined" && "Notification" in window;
-const bnOn = () => { try { return localStorage.getItem(BN_KEY) === "on"; } catch (_) { return false; } };
-function showNotif(title, body, tag) {
-  if (!bnSupported() || Notification.permission !== "granted" || !bnOn()) return;
-  if (!window.__forceNotif && document.visibilityState === "visible" && document.hasFocus()) return;   // vous regardez déjà l'appli
-  const opts = { body, tag, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", data: { url: "/app/" } };
-  const fallback = () => { try { new Notification(title, opts); } catch (_) {} };
-  try {
-    if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(reg => (reg && reg.showNotification ? reg.showNotification(title, opts) : fallback())).catch(fallback);
-    else fallback();
-  } catch (_) { fallback(); }
-}
-/** Surveille les données en direct et prévient (si autorisé) : tâche assignée, réunion qui commence, message privé, mention, congé traité. */
-function useDesktopNotifications({ me, tasks, meetings, attendees, messages, channelMsgs, leaves, accounts }) {
-  const [ready, setReady] = useState(false);
-  const known = useRef({ tasks: new Set(), dm: new Set(), ch: new Set(), leaves: new Map(), meet: new Set() });
-  useEffect(() => { const t = setTimeout(() => setReady(true), 3500); return () => clearTimeout(t); }, []);
-  const nameOf = (id) => (accounts.find(a => a.id === id) || {}).display_name || "Quelqu'un";
-  useEffect(() => {
-    const k = known.current;
-    const mineTasks = tasks.filter(t => assigneeIds(t).includes(me.id));
-    const dms = messages.filter(m => m.to_id === me.id);
-    const re = new RegExp("(^|[^A-Za-z0-9._-])@" + (me.username || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![A-Za-z0-9_-])", "i");
-    const ments = channelMsgs.filter(m => m.from_id !== me.id && me.username && re.test(m.text));
-    const mine = leaves.filter(l => l.user_id === me.id);
-    if (!ready) {
-      mineTasks.forEach(t => k.tasks.add(t.id)); dms.forEach(m => k.dm.add(m.id)); ments.forEach(m => k.ch.add(m.id)); mine.forEach(l => k.leaves.set(l.id, l.status));
-      return;
-    }
-    for (const t of mineTasks) if (!k.tasks.has(t.id)) { k.tasks.add(t.id); if (t.created_by !== me.id) showNotif("Nouvelle tâche", `${nameOf(t.created_by)} vous a assigné « ${t.title} »`, "task-" + t.id); }
-    for (const m of dms) if (!k.dm.has(m.id)) { k.dm.add(m.id); showNotif(`Message de ${nameOf(m.from_id)}`, m.poll ? "📊 Sondage" : String(m.text).slice(0, 120), "dm-" + m.id); }
-    for (const m of ments) if (!k.ch.has(m.id)) { k.ch.add(m.id); showNotif(`${nameOf(m.from_id)} vous a mentionné`, String(m.text).slice(0, 120), "ch-" + m.id); }
-    for (const l of mine) { const before = k.leaves.get(l.id); k.leaves.set(l.id, l.status); if (before === "pending" && l.status !== "pending") showNotif(l.status === "approved" ? "Congé accepté ✅" : "Demande de congé refusée", l.admin_note || "", "leave-" + l.id); }
-  }, [ready, tasks, messages, channelMsgs, leaves, me.id]);
-  useEffect(() => {
-    const tick = () => {
-      const now = Date.now(), k = known.current;
-      for (const m of meetings) {
-        const going = m.created_by === me.id || attendees.some(a => a.meeting_id === m.id && a.user_id === me.id && a.response !== "declined");
-        if (!going) continue;
-        const dt = Date.parse(m.starts_at) - now;
-        if (dt > 0 && dt <= 10 * 60000 && !k.meet.has(m.id + "s")) { k.meet.add(m.id + "s"); showNotif("Réunion dans " + Math.max(1, Math.round(dt / 60000)) + " min", m.title, "meet-" + m.id); }
-        else if (dt <= 0 && dt > -5 * 60000 && !k.meet.has(m.id + "n")) { k.meet.add(m.id + "n"); showNotif("La réunion commence", m.title, "meet-" + m.id); }
-      }
-    };
-    tick(); const id = setInterval(tick, 20000); return () => clearInterval(id);
-  }, [meetings, attendees, me.id]);
-}
-/* ---------------- Tâches : vue Semaine (glisser-déposer pour replanifier) ---------------- */
-/* ---------------- Rapports ---------------- */
 const REPORT_PERIODS = [[7, "7 jours"], [30, "30 jours"], [90, "90 jours"]];
 /** Calcule tous les indicateurs d'un rapport (fonction pure, testable). */
 function computeReport({ tasks, meetings, attendees, accounts, projects, days, projectId, today }) {
@@ -925,8 +621,6 @@ function BarRow({ label, value, max, color, extra, avatar }) {
   );
 }
 /* ---------------- Chronologie (Gantt) ---------------- */
-const GANTT_SPANS = [[14, "2 semaines"], [28, "4 semaines"], [84, "12 semaines"]];
-/* ---------------- Admin : congés ---------------- */
 function AdminLeaves({ me, session, accounts, leaves, notify }) {
   const today = parisDay();
   const [notes, setNotes] = useState({});
@@ -1007,26 +701,6 @@ function AdminLeaves({ me, session, accounts, leaves, notify }) {
 
 /* ---------------- Accueil : ma journée ---------------- */
 /* ---------------- Photos : réduction avant envoi (limite de 5 Mo) ---------------- */
-async function shrinkImage(file, maxSide = 1600) {
-  if (!file || !(file.type || "").startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
-  try {
-    const url = URL.createObjectURL(file);
-    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-    URL.revokeObjectURL(url);
-    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-    if (scale === 1 && file.size <= 1.5 * 1024 * 1024) return file;
-    const c = document.createElement("canvas"); c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
-    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-    const blob = await new Promise(res => c.toBlob(res, "image/jpeg", 0.82));
-    if (!blob || blob.size >= file.size) return file;
-    const base = (file.name || "photo").replace(/\.[^.]+$/, "");
-    return new File([blob], base + ".jpg", { type: "image/jpeg", lastModified: Date.now() });
-  } catch (_) { return file; }
-}
-
-/* ============================================================
-   Accueil : tableau de bord personnel
-   ============================================================ */
 function StatCard({ value, label, hex, onClick }) {
   return (
     <button type="button" onClick={onClick} style={{ flex: "1 1 140px", textAlign: "left", background: "var(--panel)", border: "1px solid var(--border)", borderTop: `3px solid ${hex}`, borderRadius: 12, padding: "14px 16px", cursor: onClick ? "pointer" : "default", color: "var(--text)" }}>
@@ -1036,348 +710,13 @@ function StatCard({ value, label, hex, onClick }) {
   );
 }
 /** Calcule mes statistiques personnelles à partir des tâches qui me sont assignées. */
-function computeStats(tasks, meId, now = Date.now()) {
-  const today = parisDay(now);
-  const monday = shiftDay(today, -(isoWd(today) - 1)), lastMonday = shiftDay(monday, -7);
-  const mine = tasks.filter(t => assigneeIds(t).includes(meId));
-  const done = mine.filter(t => t.done && t.done_at).map(t => ({ t, day: parisDay(Date.parse(t.done_at)) }));
-  const thisWeek = done.filter(x => x.day >= monday && x.day <= today);
-  const lastWeek = done.filter(x => x.day >= lastMonday && x.day < monday);
-  const days = [];
-  for (let i = 13; i >= 0; i--) { const d = shiftDay(today, -i); days.push({ day: d, n: done.filter(x => x.day === d).length }); }
-  const since30 = shiftDay(today, -29);
-  const dueDone = done.filter(x => x.day >= since30 && x.t.due);
-  const onTime = dueDone.filter(x => x.day <= x.t.due).length;
-  let streak = 0;
-  for (let i = 0; i < 365; i++) {
-    const d = shiftDay(today, -i);
-    if (done.some(x => x.day === d)) streak++; else if (i > 0) break;
-  }
-  const overdue = mine.filter(t => !t.done && t.due && t.due < today).length;
-  const perProject = new Map();
-  for (const x of thisWeek) perProject.set(x.t.project_id || "", (perProject.get(x.t.project_id || "") || 0) + 1);
-  return { thisWeek: thisWeek.length, lastWeek: lastWeek.length, days, rate: dueDone.length ? Math.round(100 * onTime / dueDone.length) : null, dueDone: dueDone.length, streak, overdue, perProject: [...perProject.entries()].sort((a, b) => b[1] - a[1]) };
-}
-/* ---------------- Patch notes ----------------
-   Les nouveautés visibles de tous sont dans /patchnotes.json (affichées sur la page d'accueil du site).
-   Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
-const PATCH_TECH = {
-  "2026-11-04": [
-    "migration-28-rendez-vous.sql : tables availabilities (plages hebdomadaires par hôte : jour ISO, minutes de début et de fin, durée de créneau, modes présentiel / appel, lieu) et appointments (lecture limitée à l'hôte, l'invité et l'administrateur) ; la fonction busy_slots (security definer) révèle uniquement les créneaux occupés ; le trigger appointments_guard impose que le créneau corresponde à une plage publiée, soit à venir, libre (verrou consultatif) et sans conflit pour l'invité.",
-    "Interface : AppointmentsView (réservation par semaine, mode, confirmation avec objet), MyAvailabilities (publication des plages), liste « Mes rendez-vous » avec annulation. Raccourci G puis V."
-  ],
-  "2026-11-03": [
-    "migration-23-dependances.sql : colonne tasks.blocked_by uuid[] (10 maximum, jamais soi-même) ; badge « bloquée » et confirmation avant de terminer une tâche dont un prérequis est ouvert.",
-    "migration-24-vues-enregistrees.sql : table saved_views (privée par utilisateur, 20 maximum, noms uniques) ; SavedViewsBar.",
-    "migration-25-points-quotidiens.sql : table checkins (un point par personne et par jour, lecture par serveur, écriture par soi-même hors invités) ; CheckinsPanel dans Équipe.",
-    "migration-26-habitudes.sql : tables habits et habit_logs, strictement privées (RLS propriétaire uniquement), 20 habitudes actives maximum ; HabitsView.",
-    "migration-27-reservations.sql : tables resources et bookings ; le trigger bookings_guard refuse tout chevauchement (verrou consultatif) ; BookingsView, ResourcesManager.",
-    "Côté client uniquement : ajout rapide en langage naturel (parseQuickAdd), matrice de priorités, mode concentration (FocusSession, état en localStorage, entrée time_entries), fil d'activité (ActivityView, calculé depuis les tables existantes), revue hebdomadaire (WeeklyReview).",
-    "La sauvegarde JSON de l'espace admin inclut désormais checkins, resources et bookings ; les vues enregistrées et les habitudes, privées, en sont exclues."
-  ],
-  "2026-10-31": [
-    "migration-20-notifications.sql : table notifications (lecture/lecture seule de read_at par la personne concernée, aucune insertion côté client) alimentée par des triggers security definer (assignation, commentaires, mentions @, messages, réunions, congés, annonces) ; NotificationBell.",
-    "migration-21-objectifs.sql : tables objectives et key_results (résultats « valeur » ou « tâches liées », politiques de lecture par serveur, écriture par le responsable, le créateur ou l'admin) ; ObjectivesView.",
-    "migration-22-statuts.sql : colonnes profiles.status_text / status_emoji / status_until, modifiées via /api/manage-account (update-self) ; TeamView, presenceOf (congé, réunion, horaires).",
-    "Import CSV : parseCsv, guessMapping, normalizeImportRow, ImportTasksModal (500 lignes maximum, insertion par lots de 100). Vue Tableau : TableBoard / TableRow.",
-    "Identité visuelle « papier quadrillé » : jetons CSS (--bg, --accent, --margin-line, --grid…), polices Literata et Figtree, icônes PWA régénérées ; appliquée à l'application, à l'espace admin, à l'accueil, à la maintenance et à la confidentialité.",
-  ],
-  "2026-10-30": [
-    "migration-18-suivi-temps.sql : table time_entries (une seule minuterie en cours par personne, durée ≤ 24 h, lecture selon les droits sur la tâche) ; TimeTracker, RunningTimer, computeReport(timeEntries).",
-    "migration-19-notes.sql : table notes (lecture/modification par tous sauf invités, suppression par l'auteur ou l'admin, lien projet) ; NotesView.",
-    "CommandPalette (Ctrl/⌘ + K) : recherche locale sur les données déjà chargées.",
-    "public/admin/index.html : nouveau site « Le Carnet — Espace Administrateur » (même connexion que /app/, accès réservé aux administrateurs, sans redirection de maintenance).",
-    "Composants d'administration déplacés de public/app/index.html vers public/admin/index.html ; l'onglet Admin de l'application redirige vers /admin/.",
-    "migration-17-annonces.sql : table announcements (RLS : lecture par le serveur, écriture par l'admin) ; AnnouncementBanner dans l'application.",
-    "Nouvelles pages : Tableau de bord, Rapports, Annonces, Tâches (actions en masse, corbeille), Projets, Réunions, Données (sauvegarde JSON, exports CSV).",
-  ],
-  "2026-10-29": [
-    "Onglet Rapports : ReportsView + computeReport() (fonction pure), graphique SVG, export CSV ; raccourci G puis S ; utilise tasks.done_at (migration 05), aucune nouvelle migration.",
-    "Réunions récurrentes : colonnes series_id / recurrence / recurrence_until (migration 15), une réunion réelle par occurrence, un seul e-mail avec .ics multi-événements (notify-meeting, scope series).",
-    "Chronologie : GanttBoard, tasks.start_date (migration 16) avec contrainte start_date <= due ; duePatch() garde le début cohérent lors des reports.","Filtre d'échéance et duplication de réunion : uniquement côté interface, sans migration ni nouvelle fonction serveur."],
-  "2026-10-28": ["Fermeture immédiate des fenêtres : e-mails et fichiers partent en arrière-plan ; callApi() abandonne après 30 s ; bouton de création désactivé pendant l'enregistrement.", "Messages non lus : état « lu » mémorisé par appareil (localStorage carnet-read-<id>), sans table ni migration. Sélection multiple : mises à jour tâche par tâche, soumises aux politiques RLS existantes.", "Expéditeur des e-mails : toujours « Le Carnet » (api/_mail.js, via() et fromLabel()) ; le Reply-To reste l\'adresse de la personne concernée. Variable facultative MAIL_FROM_NAME pour changer le nom affiché.", "Vouvoiement : textes de public/, de l'appli et des e-mails (api/*.js). Les tests ont été mis à jour en conséquence."],
-  "2026-10-27": ["Export .docx : ZIP minimal écrit à la main (aucune bibliothèque ajoutée, aucun fichier dans api/), vérifié avec python-docx et LibreOffice.", "Dupliquer / Reporter : simples insert / update sur tasks, soumis aux politiques RLS existantes (aucune migration)."],
-  "2026-10-26": [
-    "migration-13-lien-appel.sql : colonne meetings.call_url (https uniquement, 300 caractères max).",
-    "migration-14-pj-messages-taches.sql : table message_attachments (RLS : lecture selon les règles des messages, ajout seulement sur ses propres messages) ; politique d'ajout des pièces jointes de tâche élargie à tout membre non invité qui voit la tâche. Les fichiers partagent le seau task-files (chemin serveur/messages/…).",
-    "migration-12-comptes-multi-serveurs.sql : table account_links ; changement de serveur via lien magique + verifyOtp (à tester une fois sur le vrai Supabase).",
-    "api/_meeting.js : meetingLink() utilisé par notify-meeting et cron-reminders.",
-    "Toujours 12 fonctions serverless (limite Vercel Hobby) : ne pas ajouter de fichier dans api/ sans en fusionner un autre."],
-  "2026-10-24": ["migration-09-notes-evenements.sql (comptes-rendus, anniversaires, événements d'équipe) et migration-10-reactions-historique-statut.sql (réactions, historique, résumé du lundi, journal des e-mails)."],
-  "2026-10-22": ["migration-08-conges-reunions.sql : horaires, congés, réunions, invités, flux d'agenda (lien secret côté serveur), fonction de créneaux occupés."],
-  "2026-10-21": ["migration-07-maintenance-programmee.sql : réparation de system_alerts.id, maintenance_active ; PWA : manifest.webmanifest + sw.js."],
-  "2026-10-20": ["api/cron-reminders.js + api/admin-tools.js ; planification pg_cron (planifier-rappels.sql) avec CRON_SECRET."],
-  "2026-10-19": ["migration-06-emails-sondages.sql : heure d'échéance, préférences e-mail, suivi des envois, sondages, administrateur du site."],
-  "2026-10-17": ["migration-05-plus.sql : salon, assignés multiples, pièces jointes (seau task-files), modèles, corbeille, journal d'activité."],
-  "2026-10-14": ["migration-02-servers.sql, migration-03-invites.sql, migration-04-tasks-plus.sql."],
-  "2026-10-25": [
-    "migration-11-projets-pj-reunions.sql : projects, project_members, meeting_attachments, fonctions can_see_project / can_manage_project, trigger tasks_project_guard.",
-    "Fusion de create-account dans manage-account (limite des 12 fonctions)."],
-};
-const frDate = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-/** Onglet réservé à l'administrateur du site : historique complet, avec les détails techniques. */
-function AdminPatchNotes() {
-  const [days, setDays] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    fetch("/patchnotes.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : [])).then(d => { if (alive) setDays(d || []); }).catch(() => { if (alive) setDays([]); });
-    return () => { alive = false; };
-  }, []);
-  return (
-    <div data-admin-patchnotes>
-      <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "0 0 16px" }}>Historique complet, jour par jour. Le texte « vu par les membres » est celui de la page d'accueil du site (fichier <code>public/patchnotes.json</code>) ; les détails techniques ne sont visibles que par vous.</p>
-      {!days && <div style={{ display: "grid", placeItems: "center", padding: 20 }}><Spinner /></div>}
-      {days && days.length === 0 && <EmptyState text="Impossible de charger les nouveautés." />}
-      {(days || []).map(n => (
-        <div key={n.date} style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 14 }}>
-          <div style={{ fontFamily: "Literata, serif", fontSize: 17, fontWeight: 600, textTransform: "capitalize", marginBottom: 8 }}>{frDate(n.date)}</div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dimmer)", marginBottom: 4 }}>Vu par les membres (page d'accueil)</div>
-          <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.55 }}>{n.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin)", marginBottom: 4 }}>Détails techniques (admin)</div>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>{(PATCH_TECH[n.date] || ["Aucun détail technique."]).map((x, i) => <li key={i}>{x}</li>)}</ul>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ============================================================
-   Mon profil : nom, couleur, mot de passe, suppression du compte
-   ============================================================ */
-/* ---------------- Installer l'application (écran d'accueil du téléphone / de l'ordinateur) ---------------- */
-/* ---------------- Export : tâches en CSV, agenda en .ics ---------------- */
 const csvCell = (v) => { const t = String(v ?? ""); return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
-function buildTasksCsv(tasks, accounts, projects) {
-  const head = ["Titre", "Statut", "Priorité", "Échéance", "Heure", "Assignés", "Projet", "Étiquettes", "Récurrence", "Notes", "Sous-tâches faites", "Créée le"];
-  const rows = tasks.map(t => {
-    const who = assigneeIds(t).map(id => (accounts.find(a => a.id === id) || {}).display_name).filter(Boolean).join(", ");
-    const proj = (projects.find(p => p.id === t.project_id) || {}).name || "";
-    const subs = t.subtasks || [];
-    return [t.title, t.done ? "Terminée" : t.doing ? "En cours" : "À faire", (PRIORITIES.find(p => p.id === t.priority) || {}).label || "", t.due || "", t.due_time ? hhmm(t.due_time) : "", who, proj, [t.label, ...(t.tags || [])].filter(Boolean).join(" "), t.recurrence ? ((RECURRENCES.find(r => r.value === t.recurrence) || {}).label || t.recurrence) : "", t.notes || "", subs.length ? `${subs.filter(x => x.done).length}/${subs.length}` : "", t.created_at ? parisDay(Date.parse(t.created_at)) : ""];
-  });
-  // Point-virgule + BOM : s'ouvre correctement dans Excel en français
-  return "\ufeff" + [head, ...rows].map(r => r.map(csvCell).join(";")).join("\r\n") + "\r\n";
-}
-const icsEsc = (v) => String(v || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
-const icsFoldLine = (line) => { const out = []; let cur = line; while (cur.length > 73) { out.push(cur.slice(0, 73)); cur = " " + cur.slice(73); } out.push(cur); return out.join("\r\n"); };
-const icsUtc = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-function buildCalendarIcs({ me, tasks, meetings, attendees }) {
-  const stamp = icsUtc(Date.now());
-  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Le Carnet//FR", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Le Carnet"];
-  for (const m of meetings) {
-    if (m.created_by !== me.id && !attendees.some(a => a.meeting_id === m.id && a.user_id === me.id)) continue;
-    L.push("BEGIN:VEVENT", `UID:meeting-${m.id}@le-carnet`, `DTSTAMP:${stamp}`, `DTSTART:${icsUtc(Date.parse(m.starts_at))}`, `DTEND:${icsUtc(Date.parse(m.ends_at))}`, `SUMMARY:${icsEsc("📹 " + m.title)}`, `DESCRIPTION:${icsEsc((m.notes ? m.notes + "\n" : "") + "Appel : " + meetLink(m))}`, `URL:${meetLink(m)}`, "END:VEVENT");
-  }
-  for (const t of tasks) {
-    if (t.done || !t.due || !assigneeIds(t).includes(me.id)) continue;
-    L.push("BEGIN:VEVENT", `UID:task-${t.id}@le-carnet`, `DTSTAMP:${stamp}`);
-    if (t.due_time) { const a = parisInstant(t.due, hhmm(t.due_time)); L.push(`DTSTART:${icsUtc(a)}`, `DTEND:${icsUtc(a + 30 * 60000)}`); }
-    else L.push(`DTSTART;VALUE=DATE:${t.due.replace(/-/g, "")}`, `DTEND;VALUE=DATE:${shiftDay(t.due, 1).replace(/-/g, "")}`);
-    L.push(`SUMMARY:${icsEsc("☑ " + t.title)}`, ...(t.notes ? [`DESCRIPTION:${icsEsc(t.notes)}`] : []), "END:VEVENT");
-  }
-  L.push("END:VCALENDAR");
-  return L.map(icsFoldLine).join("\r\n") + "\r\n";
-}
-/* ---- Export Word (.docx) : fichier ZIP minimal écrit à la main, sans bibliothèque ---- */
-const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
-const crc32 = (bytes) => { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
-function zipStore(files) {
-  const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
-  const u16 = (n) => [n & 255, (n >>> 8) & 255], u32 = (n) => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
-  for (const [name, text] of files) {
-    const nameB = enc.encode(name), data = enc.encode(text), crc = crc32(data);
-    const head = new Uint8Array([0x50, 0x4b, 3, 4, ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(nameB.length), ...u16(0)]);
-    parts.push(head, nameB, data);
-    central.push(new Uint8Array([0x50, 0x4b, 1, 2, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(nameB.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), nameB);
-    offset += head.length + nameB.length + data.length;
-  }
-  const cdSize = central.reduce((n, p) => n + p.length, 0);
-  const end = new Uint8Array([0x50, 0x4b, 5, 6, ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cdSize), ...u32(offset), ...u16(0)]);
-  return new Blob([...parts, ...central, end], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-}
-const xmlEsc = (v) => String(v ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-/** Paragraphes d'une cellule : chaque ligne de `lines` = { t, b?, sz?, color? } */
-const docxCell = (w, lines, shade) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${shade ? `<w:shd w:val="clear" w:color="auto" w:fill="${shade}"/>` : ""}</w:tcPr>${(lines.length ? lines : [{ t: "" }]).map(l => `<w:p><w:pPr><w:spacing w:before="0" w:after="40"/></w:pPr><w:r><w:rPr>${l.b ? "<w:b/>" : ""}${l.color ? `<w:color w:val="${l.color}"/>` : ""}<w:sz w:val="${l.sz || 20}"/></w:rPr><w:t xml:space="preserve">${xmlEsc(l.t)}</w:t></w:r></w:p>`).join("")}</w:tc>`;
-function buildTasksDocx({ title, subtitle, tasks, accounts, projects }) {
-  const cols = [["Tâche", 5200], ["Statut", 1300], ["Priorité", 1200], ["Échéance", 1900], ["Assignés", 2200], ["Projet", 1800]];
-  const border = ["top", "left", "bottom", "right", "insideH", "insideV"].map(b => `<w:${b} w:val="single" w:sz="4" w:space="0" w:color="BFC5D2"/>`).join("");
-  const head = `<w:tr><w:trPr><w:tblHeader/></w:trPr>${cols.map(([n, w]) => docxCell(w, [{ t: n, b: true, sz: 20 }], "E8EBF5")).join("")}</w:tr>`;
-  const rows = tasks.map(t => {
-    const who = assigneeIds(t).map(id => (accounts.find(a => a.id === id) || {}).display_name).filter(Boolean).join(", ");
-    const proj = (projects.find(p => p.id === t.project_id) || {}).name || "";
-    const subs = t.subtasks || [];
-    const main = [{ t: t.title, b: true }];
-    if ((t.tags || []).length) main.push({ t: t.tags.map(x => "#" + x).join(" "), sz: 16, color: "6B7385" });
-    if (t.notes) t.notes.split(/\r?\n/).slice(0, 12).forEach(l => main.push({ t: l, sz: 18, color: "444B5C" }));
-    subs.forEach(x => main.push({ t: (x.done ? "☑ " : "☐ ") + x.text, sz: 18 }));
-    const due = t.due ? formatDue(t.due, daysUntil(t.due)) + (t.due_time ? " · " + hhmm(t.due_time) : "") : "";
-    const status = t.done ? "Terminée" : t.doing ? "En cours" : "À faire";
-    return `<w:tr><w:trPr><w:cantSplit/></w:trPr>${[main, [{ t: status, color: t.done ? "2E8B57" : undefined }], [{ t: (PRIORITIES.find(p => p.id === t.priority) || {}).label || "" }], [{ t: due, color: !t.done && t.due && dueInfo(t).late ? "C0392B" : undefined }], [{ t: who }], [{ t: proj }]].map((l, i) => docxCell(cols[i][1], l)).join("")}</w:tr>`;
-  }).join("");
-  const body = `<w:p><w:pPr><w:spacing w:after="60"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="40"/></w:rPr><w:t>${xmlEsc(title)}</w:t></w:r></w:p><w:p><w:pPr><w:spacing w:after="240"/></w:pPr><w:r><w:rPr><w:color w:val="6B7385"/><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">${xmlEsc(subtitle)}</w:t></w:r></w:p>`
-    + (tasks.length ? `<w:tbl><w:tblPr><w:tblW w:w="${cols.reduce((n, c) => n + c[1], 0)}" w:type="dxa"/><w:tblBorders>${border}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${cols.map(c => `<w:gridCol w:w="${c[1]}"/>`).join("")}</w:tblGrid>${head}${rows}</w:tbl>` : `<w:p><w:r><w:t>Aucune tâche.</w:t></w:r></w:p>`)
-    + `<w:p/><w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="900" w:right="900" w:bottom="900" w:left="900" w:header="400" w:footer="400" w:gutter="0"/></w:sectPr>`;
-  return zipStore([
-    ["[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'],
-    ["_rels/.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'],
-    ["word/document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`],
-  ]);
-}
-function downloadBlob(name, blob) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-}
 function downloadText(name, mime, content) {
   const url = URL.createObjectURL(new Blob([content], { type: mime + ";charset=utf-8" }));
   const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 /* ---------------- Notifications par email : une case par type ---------------- */
-const NOTIF_OPTIONS = [
-  { key: "notify_assigned", label: "Quand une tâche m'est assignée" },
-  { key: "notify_soon", label: "Quand il me reste peu de temps avant l'heure limite d'une tâche" },
-  { key: "notify_overdue", label: "Quand une de mes tâches est en retard" },
-  { key: "notify_digest", label: "Chaque matin : récapitulatif d'aujourd'hui et de demain" },
-  { key: "notify_meetings", label: "Invitations et rappels de réunion" },
-  { key: "notify_weekly", label: "Chaque lundi : le résumé de votre semaine (tâches, réunions, absences, anniversaires)" },
-  { key: "notify_dm", label: "Quand quelqu'un vous écrit en message privé (un email au plus toutes les 30 minutes par personne)" },
-  { key: "notify_conflicts", label: "Avertissements quand deux tâches ou réunions se chevauchent (ou tombent pendant un congé)" },
-];
-const LEAD_OPTIONS = [{ v: 15, l: "15 minutes" }, { v: 30, l: "30 minutes" }, { v: 60, l: "1 heure" }, { v: 120, l: "2 heures" }, { v: 240, l: "4 heures" }, { v: 720, l: "12 heures" }, { v: 1440, l: "1 jour" }];
-/* ============================================================
-   Tasks
-   ============================================================ */
-const statusOf = (t) => t.done ? "done" : t.doing ? "doing" : "todo";
-const COLUMNS = [
-  { id: "todo", label: "À faire", hex: "#9098A8" },
-  { id: "doing", label: "En cours", hex: "#FFB648" },
-  { id: "done", label: "Terminé", hex: "#5FBF8B" },
-];
-
-function SelectPill({ icon: Icon, value, onChange, options }) {
-  return (<div style={{ position: "relative" }}><Icon size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)", pointerEvents: "none" }} /><select value={value} onChange={e => onChange(e.target.value)} style={{ ...chipBtn, paddingLeft: 28, paddingRight: 26, appearance: "none", cursor: "pointer" }}>{options.map(o => <option key={o.value} value={o.value} style={{ background: "var(--bg-2)" }}>{o.label}</option>)}</select><I.Chevron size={12} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)", pointerEvents: "none" }} /></div>);
-}
-
-/* ---------------- Vue Kanban ---------------- */
-/* ---------------- Corbeille ---------------- */
-/** « Mes serveurs » : changer de serveur avec le même compte, en créer un nouveau, ou en rejoindre un autre. */
-function ProjectChip({ project }) {
-  if (!project) return null;
-  const l = LABELS.find(x => x.id === project.color) || LABELS[0];
-  return <span data-project-chip title={project.is_private ? "Projet privé" : "Projet"} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "var(--text-dim)", background: l.hex + "1F", border: `1px solid ${l.hex}55`, padding: "1px 8px", borderRadius: 6 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: l.hex }} />{project.is_private ? "🔒 " : ""}{project.name}</span>;
-}
-
-/** Gestion des projets : création, accès (public ou privé + membres), suppression. */
-/* ============================================================
-   Détail d'une tâche : sous-tâches + pièces jointes + commentaires
-   ============================================================ */
-/** Envoie des fichiers dans le stockage privé puis enregistre une ligne par fichier. Retourne le nombre envoyé. */
-async function uploadAttachments(files, { me, folder, table, extra, existing = 0, max = MAX_FILES_PER_TASK, noun = "tâche", notify }) {
-  let count = existing, done = 0;
-  for (const f0 of files) {
-    const f = await shrinkImage(f0);
-    if (count >= max) { notify(`Maximum ${max} fichiers par ${noun}.`, "err"); break; }
-    if (f.size > MAX_FILE_BYTES) { notify(`« ${f.name} » dépasse 5 Mo.`, "err"); continue; }
-    const safe = f.name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80) || "fichier";
-    const path = `${me.server_id}/${folder}/${uid()}-${safe}`;
-    const up = await supabase.storage.from('task-files').upload(path, f, { contentType: f.type || undefined, upsert: false });
-    if (up.error) { notify(up.error.message, "err"); continue; }
-    const { error } = await supabase.from(table).insert({ ...extra, server_id: me.server_id, uploader_id: me.id, path, filename: f.name, size: f.size, mime: f.type || null });
-    if (error) { await supabase.storage.from('task-files').remove([path]); notify(error.message, "err"); continue; }
-    count++; done++;
-  }
-  return done;
-}
-/** Sélecteur de fichiers « en attente » (formulaires et messagerie) : les fichiers partent quand on enregistre / envoie. */
-function PendingFiles({ files, setFiles, max = MAX_FILES_PER_TASK, compact, disabled }) {
-  const fileRef = useRef(null), camRef = useRef(null);
-  const add = (list) => { const next = [...files, ...Array.from(list || [])].slice(0, max); setFiles(next); if (fileRef.current) fileRef.current.value = ""; if (camRef.current) camRef.current.value = ""; };
-  return (
-    <div data-pending-files>
-      <input ref={fileRef} data-pending-input type="file" multiple onChange={e => add(e.target.files)} style={{ display: "none" }} />
-      <input ref={camRef} type="file" accept="image/*" capture="environment" aria-label="Prendre une photo" onChange={e => add(e.target.files)} style={{ display: "none" }} />
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-        <button type="button" data-pending-add onClick={() => fileRef.current && fileRef.current.click()} disabled={disabled} title="Joindre un fichier" aria-label="Joindre un fichier" style={compact ? { ...iconBtn, padding: "0 12px" } : { ...chipBtn, fontSize: 12.5 }}>{compact ? "📎" : "📎 Joindre un fichier"}</button>
-        <button type="button" onClick={() => camRef.current && camRef.current.click()} disabled={disabled} title="Prendre une photo" aria-label="Prendre une photo" style={compact ? { ...iconBtn, padding: "0 12px" } : { ...chipBtn, fontSize: 12.5 }}>{compact ? "📷" : "📷 Photo"}</button>
-        {!compact && <span style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>5 Mo max chacun</span>}
-      </div>
-      {files.length > 0 && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-          {files.map((f, i) => (
-            <span key={i} data-pending-chip style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 16, padding: "3px 4px 3px 10px", fontSize: 12.5, maxWidth: 220 }}>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
-              <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} aria-label={"Retirer " + f.name} style={{ ...iconBtn, border: "none", padding: 3 }}><I.X size={12} /></button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-/** Fichiers attachés à un message (salon ou privé). */
-function MessageFiles({ items, me, isAdmin, notify }) {
-  if (!items.length) return null;
-  const remove = async (att) => {
-    const { error } = await supabase.from('message_attachments').delete().eq('id', att.id);
-    if (error) { notify(error.message, "err"); return; }
-    await supabase.storage.from('task-files').remove([att.path]);
-  };
-  return (
-    <div data-message-files style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 6, maxWidth: 340, color: "var(--text)" }}>
-      {items.map(a => <AttachmentRow key={a.id} att={a} notify={notify} canDelete={a.uploader_id === me.id || isAdmin} onDelete={() => remove(a)} />)}
-    </div>
-  );
-}
-
-function AttachmentRow({ att, canDelete, onDelete, notify }) {
-  const [thumb, setThumb] = useState(null);
-  const isImage = (att.mime || "").startsWith("image/");
-  useEffect(() => {
-    let alive = true;
-    if (isImage) supabase.storage.from('task-files').createSignedUrl(att.path, 3600).then(({ data }) => { if (alive && data) setThumb(data.signedUrl); });
-    return () => { alive = false; };
-  }, [att.path]);
-  const open = async () => {
-    const { data, error } = await supabase.storage.from('task-files').createSignedUrl(att.path, 120, { download: isImage ? undefined : att.filename });
-    if (error || !data) { notify("Impossible d'ouvrir ce fichier.", "err"); return; }
-    const a = document.createElement("a");
-    a.href = data.signedUrl; a.target = "_blank"; a.rel = "noopener";
-    document.body.appendChild(a); a.click(); a.remove();
-  };
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 9, padding: "7px 10px" }}>
-      {isImage && thumb ? <img src={thumb} alt="" onClick={open} style={{ width: 38, height: 38, objectFit: "cover", borderRadius: 6, cursor: "pointer", flexShrink: 0 }} /> : <div style={{ width: 38, height: 38, borderRadius: 6, background: "var(--panel-2)", display: "grid", placeItems: "center", color: "var(--text-dim)", flexShrink: 0 }}><I.Paperclip size={16} /></div>}
-      <button type="button" onClick={open} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", color: "var(--text)", cursor: "pointer", padding: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.filename}</div>
-        <div style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>{fileSizeLabel(att.size || 0)}</div>
-      </button>
-      <button type="button" onClick={open} style={{ ...iconBtn, border: "none" }} title="Télécharger"><I.Download size={14} /></button>
-      {canDelete && <button type="button" onClick={onDelete} style={{ ...iconBtn, border: "none", color: "var(--late)" }} title="Retirer"><I.Trash size={14} /></button>}
-    </div>
-  );
-}
-/* ============================================================
-   Calendrier des échéances
-   ============================================================ */
-/* ============================================================
-   Sondages dans la messagerie
-   ============================================================ */
-/* ============================================================
-   Messages : salon du serveur + conversations privées
-   ============================================================ */
-/** Bouton 📎 de la messagerie : ouvre le sélecteur de fichiers. */
-function MsgAttachButton({ onPick }) {
-  const ref = useRef(null);
-  return (<>
-    <input ref={ref} data-msg-input type="file" multiple onChange={e => { onPick(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
-    <button type="button" data-msg-attach onClick={() => ref.current && ref.current.click()} title="Joindre un fichier ou une photo (5 Mo max)" aria-label="Joindre un fichier" style={{ ...iconBtn, padding: "0 12px" }}>📎</button>
-  </>);
-}
-/* ============================================================
-   Admin
-   ============================================================ */
-/* ---------------- Réglages du serveur : nom, code, transfert d'administration ---------------- */
 function ServerSettings({ server, setServer, me, session, approved, notify, onChanged }) {
   const [name, setName] = useState(server.name || "");
   const [savingName, setSavingName] = useState(false);
@@ -1841,149 +1180,6 @@ function AdminMail({ me, session, approved, status, notify }) {
 }
 
 /* ---------------- Site : annonces (réservé à l'administrateur du site) ---------------- */
-function AdminSite({ notify }) {
-  const [rows, setRows] = useState(null);
-  const [msg, setMsg] = useState("");
-  const [when, setWhen] = useState("");
-  const [busy, setBusy] = useState(false);
-  // Maintenance programmée
-  const [mStart, setMStart] = useState("");
-  const [mEnd, setMEnd] = useState("");
-  const [mMsg, setMMsg] = useState("");
-  const [mMsgEdited, setMMsgEdited] = useState(false);
-  const [mConfirm, setMConfirm] = useState(false);
-  const [mBusy, setMBusy] = useState(false);
-  const load = async () => {
-    const q = (cols) => supabase.from('system_alerts').select(cols).order('display_at', { ascending: false }).limit(40);
-    let { data, error } = await q('id,message,display_at,is_maintenance,maint_start,maint_end');
-    if (error) ({ data, error } = await q('id,message,display_at,is_maintenance'));      // migration 07 pas encore lancée
-    if (error) notify(error.message, "err");
-    setRows(data || []);
-  };
-  useEffect(() => { load(); }, []);
-  const fmtDate = (iso) => new Date(iso).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
-  const fmtHour = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
-  const sameDay = (a, b) => new Date(a).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) === new Date(b).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" });
-  const publish = async () => {
-    const text = msg.trim();
-    if (!text || busy) return;
-    setBusy(true);
-    const at = when ? new Date(when).toISOString() : new Date().toISOString();
-    const { error } = await supabase.from('system_alerts').insert({ message: text.slice(0, 300), display_at: at, is_maintenance: false });
-    setBusy(false);
-    if (error) { notify(error.message, "err"); return; }
-    setMsg(""); setWhen("");
-    notify(when ? "Annonce programmée." : "Annonce publiée.");
-    load();
-  };
-  const remove = async (id, label) => {
-    const { error } = await supabase.from('system_alerts').delete().eq('id', id);
-    if (error) { notify(error.message, "err"); return; }
-    notify(label || "Annonce supprimée.");
-    load();
-  };
-
-  // ---- maintenance : validation + message proposé
-  const startD = mStart ? new Date(mStart) : null, endD = mEnd ? new Date(mEnd) : null;
-  const mError = !startD || !endD ? null
-    : startD.getTime() < Date.now() + 60000 ? "Le début doit être dans le futur (au moins une minute)."
-    : endD <= startD ? "La fin doit être après le début."
-    : endD.getTime() - startD.getTime() > 48 * 3600000 ? "Une maintenance programmée dure 48 h au maximum."
-    : null;
-  const mValid = Boolean(startD && endD && !mError);
-  const suggested = mValid ? `Maintenance prévue ${sameDay(startD, endD) ? `le ${startD.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Paris" })} de ${fmtHour(startD)} à ${fmtHour(endD)}` : `du ${fmtDate(startD)} au ${fmtDate(endD)}`}. Le site sera indisponible pendant ce temps.` : "";
-  const shownMsg = mMsgEdited ? mMsg : suggested;
-  const scheduleMaintenance = async () => {
-    if (!mValid || mBusy) return;
-    if (!mConfirm) { setMConfirm(true); return; }
-    setMBusy(true);
-    const text = shownMsg.trim().slice(0, 300);
-    const { error } = await supabase.from('system_alerts').insert({
-      is_maintenance: true, maint_start: startD.toISOString(), maint_end: endD.toISOString(),
-      message: text || null, display_at: new Date().toISOString(),
-    });
-    setMBusy(false); setMConfirm(false);
-    if (error) { notify(/maint_start|maint_end/.test(error.message) ? "Lancez d'abord migration-07-maintenance-programmee.sql dans Supabase." : error.message, "err"); return; }
-    setMStart(""); setMEnd(""); setMMsg(""); setMMsgEdited(false);
-    notify("Maintenance programmée.");
-    load();
-  };
-
-  const ann = (rows || []).filter(r => !r.is_maintenance && r.message && r.message.trim());
-  const maint = (rows || []).filter(r => r.is_maintenance).sort((a, b) => new Date(b.maint_start || b.display_at) - new Date(a.maint_start || a.display_at));
-  const live = ann.find(r => new Date(r.display_at) <= new Date());
-  const status = (r) => new Date(r.display_at) > new Date() ? ["Programmée", "#5B9EF5"] : (live && r.id === live.id) ? ["Affichée", "#5FBF8B"] : ["Remplacée", "var(--text-dimmer)"];
-  const mStatus = (r) => {
-    const now = Date.now(), s = r.maint_start ? new Date(r.maint_start).getTime() : null, e = r.maint_end ? new Date(r.maint_end).getTime() : null;
-    if (s && s > now) return ["Programmée", "#5B9EF5"];
-    if (e && e <= now) return ["Terminée", "var(--text-dimmer)"];
-    return [s || e ? "En cours" : "En cours (manuelle)", "#FFB648"];
-  };
-  const dtInput = (v, set, label) => <div style={{ flex: "1 1 200px" }}><Field label={label}><input type="datetime-local" value={v} onChange={e => { set(e.target.value); setMConfirm(false); }} style={inputStyle} /></Field></div>;
-  return (
-    <div>
-      <div style={adminBox}>
-        <AdminHeading>Programmer une maintenance</AdminHeading>
-        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 10px", lineHeight: 1.5 }}>À l'heure de début, tous les visiteurs (vous compris) sont envoyés sur la page « Maintenance en cours ». À l'heure de fin, le site revient tout seul, sans rien à faire. Un bandeau peut prévenir à l'avance.</p>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {dtInput(mStart, setMStart, "Début (heure de votre appareil)")}
-          {dtInput(mEnd, setMEnd, "Fin (obligatoire)")}
-        </div>
-        <Field label="Bandeau d'avertissement (300 caractères maximum, laissez vide pour ne rien afficher)"><textarea value={shownMsg} maxLength={300} rows={2} onChange={e => { setMMsg(e.target.value); setMMsgEdited(true); setMConfirm(false); }} placeholder="Choisissez un début et une fin : le message est proposé automatiquement" style={{ ...inputStyle, resize: "vertical" }} /></Field>
-        {mError && <div style={{ fontSize: 12.5, color: "var(--late)", marginBottom: 10 }}>{mError}</div>}
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <button type="button" onClick={scheduleMaintenance} disabled={!mValid || mBusy} style={{ ...primaryBtn, width: "auto", padding: "10px 20px", opacity: mValid && !mBusy ? 1 : 0.5, ...(mConfirm ? { background: "#E2574C", boxShadow: "none" } : {}) }}>
-            {mBusy ? "…" : mConfirm ? "Confirmer la programmation" : "Programmer la maintenance"}
-          </button>
-          {mConfirm && !mBusy && <button type="button" onClick={() => setMConfirm(false)} style={{ ...secondaryBtn, width: "auto", padding: "9px 14px" }}>Annuler</button>}
-        </div>
-        {maint.length > 0 && (
-          <div style={{ marginTop: 18 }}>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)", fontWeight: 600, marginBottom: 4 }}>Maintenances</div>
-            {maint.slice(0, 8).map(r => { const [lab, col] = mStatus(r); return (
-              <div key={r.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 0", borderTop: "1px solid var(--border)" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5 }}>{r.maint_start ? <>{fmtDate(r.maint_start)} → {r.maint_end ? fmtDate(r.maint_end) : "sans fin"}</> : "Maintenance manuelle (is_maintenance dans Supabase)"}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 3 }}>heure de Paris{r.message ? " · " + r.message : ""}</div>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: col, border: `1px solid ${col}`, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap" }}>{lab}</span>
-                <button type="button" onClick={() => remove(r.id, lab === "Programmée" ? "Maintenance annulée." : "Maintenance supprimée.")} style={{ ...iconBtn, color: "var(--late)" }} title={lab === "Programmée" ? "Annuler la maintenance" : "Supprimer"} aria-label={lab === "Programmée" ? "Annuler la maintenance" : "Supprimer la maintenance"}><I.Trash size={14} /></button>
-              </div>
-            ); })}
-          </div>
-        )}
-      </div>
-      <div style={adminBox}>
-        <AdminHeading>Nouvelle annonce</AdminHeading>
-        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 10px", lineHeight: 1.5 }}>Un bandeau visible par tous les visiteurs, sur l'accueil et dans l'application. Il apparaît à l'heure choisie ; la plus récente remplace la précédente.</p>
-        <Field label="Message (300 caractères maximum)"><textarea value={msg} maxLength={300} onChange={e => setMsg(e.target.value)} rows={2} placeholder="Nouvelle fonction : les sondages dans la messagerie" style={{ ...inputStyle, resize: "vertical" }} /></Field>
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 220px" }}><Field label="Afficher à partir de (heure de votre appareil)"><input type="datetime-local" value={when} onChange={e => setWhen(e.target.value)} style={inputStyle} /></Field></div>
-          <button type="button" onClick={publish} disabled={!msg.trim() || busy} style={{ ...primaryBtn, width: "auto", padding: "10px 20px", marginBottom: 14, opacity: msg.trim() && !busy ? 1 : 0.5 }}>{busy ? "…" : when ? "Programmer" : "Publier maintenant"}</button>
-        </div>
-      </div>
-      <div style={adminBox}>
-        <AdminHeading>Annonces</AdminHeading>
-        {rows === null && <div style={{ padding: 10, display: "grid", placeItems: "center" }}><Spinner /></div>}
-        {rows && ann.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dimmer)" }}>Aucune annonce.</div>}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          {ann.map(r => { const [lab, col] = status(r); return (
-            <div key={r.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 0", borderTop: "1px solid var(--border)" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, wordBreak: "break-word" }}>{r.message}</div>
-                <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 3 }}>{fmtDate(r.display_at)} (heure de Paris)</div>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: col, border: `1px solid ${col}`, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap" }}>{lab}</span>
-              <button type="button" onClick={() => remove(r.id)} style={{ ...iconBtn, color: "var(--late)" }} title="Supprimer" aria-label="Supprimer l'annonce"><I.Trash size={14} /></button>
-            </div>
-          ); })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Administration : onglets ---------------- */
 function UserForm({ initial, onCancel, onSave }) {
   const [username, setUsername] = useState(initial?.username || "");
   const [email, setEmail] = useState(initial?.email || "");
@@ -2036,7 +1232,6 @@ const ADMIN_NAV = [
   { group: "Travail", items: [["tasks", "Tâches", "✅"], ["projects", "Projets", "📁"], ["meetings", "Réunions", "📹"]] },
   { group: "Système", items: [["settings", "Réglages", "⚙️"], ["data", "Données", "💾"], ["journal", "Journal", "🕘"], ["status", "Statut", "🩺"]] },
 ];
-const ADMIN_SITE_NAV = [["patch", "Patch notes", "📝"], ["site", "Site", "🌐"]];
 
 function AdminGate({ title, text, action, href, onLogout }) {
   return (
@@ -2133,7 +1328,7 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
   const pending = useMemo(() => accounts.filter(a => a.status === "pending"), [accounts]);
   const pendingLeaves = leaves.filter(l => l.status === "pending").length;
   const go = (p) => { setPage(p); setMenuOpen(false); try { localStorage.setItem("carnet-admin-page", p); } catch (_) {} try { window.scrollTo(0, 0); } catch (_) {} };
-  const cur = (page === "site" || page === "patch") && !siteAdmin ? "dashboard" : page;
+  const cur = page === "site" || page === "patch" ? "dashboard" : page;   // ces pages sont passées dans le Supra Admin
   const badges = { members: pending.length, leaves: pendingLeaves };
   const navBtn = ([id, label, icon]) => (
     <button key={id} type="button" data-admin-nav={id} aria-current={cur === id ? "page" : undefined} onClick={() => go(id)} className="adm-nav-btn">
@@ -2141,13 +1336,14 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
       {badges[id] > 0 && <span style={{ background: "#FFB648", color: "#1a1405", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px" }}>{badges[id]}</span>}
     </button>
   );
-  const title = [...ADMIN_NAV.flatMap(g => g.items), ...ADMIN_SITE_NAV].find(x => x[0] === cur);
+  const title = ADMIN_NAV.flatMap(g => g.items).find(x => x[0] === cur);
   return (
     <div className="adm-layout">
       <header className="adm-top">
         <button type="button" className="adm-burger" aria-label="Menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}>☰</button>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}><I.Shield size={20} color="var(--admin)" /><strong style={{ fontFamily: "Literata, serif", fontSize: 16 }}>Le Carnet — Espace Administrateur</strong></div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          {siteAdmin && <a href="/supra/" data-supra-link style={{ ...chipBtn, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>🛡️ Supra Admin</a>}
           <a href="/app/" data-back-app style={{ ...chipBtn, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>← Retour à l'application</a>
           <button type="button" onClick={onLogout} style={chipBtn} title="Se déconnecter">⎋</button>
         </div>
@@ -2155,7 +1351,6 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
       <div className="adm-body">
         <nav className={"adm-side" + (menuOpen ? " open" : "")} aria-label="Navigation de l'espace administrateur">
           {ADMIN_NAV.map(g => (<div key={g.group}><div className="adm-group">{g.group}</div>{g.items.map(navBtn)}</div>))}
-          {siteAdmin && <div><div className="adm-group">Plateforme</div>{ADMIN_SITE_NAV.map(navBtn)}</div>}
           <div style={{ marginTop: "auto", padding: "14px 12px 4px", fontSize: 12, color: "var(--text-dimmer)", display: "flex", alignItems: "center", gap: 8 }}><Avatar user={me} size={22} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{me.display_name}</span></div>
         </nav>
         <main className="adm-main">
@@ -2180,8 +1375,6 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
           {cur === "data" && <AdminData tasksAll={tasksAll} accounts={accounts} projects={projects} projectMembers={projectMembers} meetings={meetings} attendees={attendees} leaves={leaves} announcements={announcements} notes={notes} timeEntries={timeEntries} objectives={objectives} keyResults={keyResults} checkins={checkinsAll} resources={resourcesAll} bookings={bookingsAll} server={server} notify={notify} />}
           {cur === "journal" && <ActivityLog accounts={accounts} bare />}
           {cur === "status" && <AdminStatus session={session} notify={notify} go={go} />}
-          {cur === "patch" && <AdminPatchNotes />}
-          {cur === "site" && <AdminSite notify={notify} />}
           <SiteFooter />
         </main>
       </div>

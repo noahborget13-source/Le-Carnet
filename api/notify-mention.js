@@ -35,8 +35,8 @@ export default async function handler(req, res) {
     if (!claimed || !claimed.length) return res.status(200).json({ ok: true, sent: 0 });
 
     const { data: people } = await supabaseAdmin.from('profiles')
-      .select('id, email, username, display_name').eq('server_id', caller.server_id).eq('status', 'approved');
-    const targets = (people || []).filter(p => p.id !== caller.id && names.includes(p.username.toLowerCase())).slice(0, MAX_PEOPLE);
+      .select('id, email, username, display_name, banned_at').eq('server_id', caller.server_id).eq('status', 'approved');
+    const targets = (people || []).filter(p => !p.banned_at && p.id !== caller.id && names.includes(p.username.toLowerCase())).slice(0, MAX_PEOPLE);
 
     let where = 'dans le salon du serveur';
     if (kind === 'comment') {
