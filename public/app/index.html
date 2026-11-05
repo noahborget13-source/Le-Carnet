@@ -1302,7 +1302,13 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   ];
   const [moreOpen, setMoreOpen] = useState(false);
   const goTab = (id) => { setMoreOpen(false); setTab(id); };
-  const openFromAnywhere = (id) => setOpenId(id);
+  const pinsKey = "carnet-pins-" + me.id, recKey = "carnet-recent-" + me.id;
+  const [pins, setPins] = useState(() => { const v = lsJson(pinsKey, []); return Array.isArray(v) ? v : []; });
+  const [recents, setRecents] = useState(() => { const v = lsJson(recKey, []); return Array.isArray(v) ? v : []; });
+  const togglePin = (id) => setPins(p => { const n = p.includes(id) ? p.filter(x => x !== id) : [id, ...p].slice(0, 12); lsSet(pinsKey, JSON.stringify(n)); return n; });
+  const pushRecent = (k, id) => setRecents(r => { const n = [{ k, id }, ...r.filter(x => !(x.k === k && x.id === id))].slice(0, 8); lsSet(recKey, JSON.stringify(n)); return n; });
+  useEffect(() => { applyAccent(getAccent()); applyZoom(getZoom()); }, []);
+  const openFromAnywhere = (id) => { setOpenId(id); pushRecent("task", id); };
   const startFocus = async (task, workMin, breakMin, rounds) => {
     const { data: running } = await supabase.from("time_entries").select("*").eq("user_id", me.id).is("ended_at", null);
     for (const r of running || []) await stopEntry(r);
@@ -1382,12 +1388,12 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         <FocusSession me={me} tasks={tasks} focus={focus} setFocus={setFocus} onStart={startFocus} onOpen={openFromAnywhere} notify={notify} />
         {!(focus && focus.phase === "work") && <RunningTimer me={me} entries={timeEntries} tasks={tasks} onOpen={openFromAnywhere} notify={notify} />}
         <AlertBanner inline />
-        {tab === "home" && <HomeView projects={projects} me={me} accounts={people} tasks={tasks} comments={comments} leaves={leaves} meetings={meetings} attendees={attendees} events={teamEvents} onOpen={openFromAnywhere} goTo={setTab} onReview={() => setShowReview(true)} />}
+        {tab === "home" && <HomeView projects={projects} me={me} accounts={people} tasks={tasks} comments={comments} leaves={leaves} meetings={meetings} attendees={attendees} events={teamEvents} onOpen={openFromAnywhere} goTo={setTab} onReview={() => setShowReview(true)} pins={pins} onUnpin={togglePin} notify={notify} />}
         {tab === "tasks" && <TasksView savedViews={savedViews} projects={projects} projectMembers={projectMembers} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} events={teamEvents} isAdmin={isAdmin} notify={notify} me={me} onOpen={openFromAnywhere} />}
         {tab === "meetings" && <MeetingsView meetingFiles={meetingFiles} onFilesChanged={reloadMeetingFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} tasks={tasks} notify={notify} />}
         {tab === "reports" && <ReportsView me={me} accounts={people} tasks={tasks} projects={projects} meetings={meetings} attendees={attendees} timeEntries={timeEntries} onOpen={openFromAnywhere} notify={notify} />}
-        {tab === "activity" && <ActivityView me={me} accounts={people} tasks={tasks} comments={comments} notes={notes} objectives={objectives} meetings={meetings} announcements={announcements} checkins={checkins} bookings={bookings} resources={resources} onOpen={openFromAnywhere} onNote={(id) => { setFocusNote(id); setTab("notes"); }} goTo={setTab} />}
+        {tab === "activity" && <ActivityView me={me} accounts={people} tasks={tasks} comments={comments} notes={notes} objectives={objectives} meetings={meetings} announcements={announcements} checkins={checkins} bookings={bookings} resources={resources} onOpen={openFromAnywhere} onNote={(id) => { setFocusNote(id); setTab("notes"); pushRecent("note", id); }} goTo={setTab} />}
         {tab === "appointments" && <AppointmentsView me={me} accounts={people} availabilities={availabilities} appointments={appointments} notify={notify} />}
         {tab === "bookings" && <BookingsView me={me} accounts={people} resources={resources} bookings={bookings} notify={notify} />}
         {tab === "habits" && <HabitsView me={me} habits={habits} logs={habitLogs} notify={notify} />}
@@ -1399,11 +1405,11 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} leaves={leaves} meetings={meetings} attendees={attendees} notify={notify} onChanged={onProfileChanged} />}
         <SiteFooter />
       </main>
-      {showPalette && <CommandPalette tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} onReview={() => { setShowPalette(false); setShowReview(true); }} />}
+      {showPalette && <CommandPalette recents={recents} tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); pushRecent("note", id); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} onReview={() => { setShowPalette(false); setShowReview(true); }} />}
       {showReview && <WeeklyReview me={me} tasks={tasks} meetings={meetings} attendees={attendees} timeEntries={timeEntries} notify={notify} onClose={() => setShowReview(false)} onOpen={(id) => { setShowReview(false); setOpenId(id); }} />}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} />}
       {showServers && <ServersModal initialCode={inviteFromUrl} me={me} session={session} notify={notify} onClose={() => setShowServers(false)} />}
-      {openTask && <TaskDetail onFocus={startFocus} reactions={reactions} task={openTask} accounts={people} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openTask.id)} attachments={attachments.filter(a => a.task_id === openTask.id)} onAttachmentsChanged={reloadAttachments} timeEntries={timeEntries.filter(e => e.task_id === openTask.id)} notify={notify} onClose={() => setOpenId(null)} />}
+      {openTask && <TaskDetail pinned={pins.includes(openTask.id)} onPin={() => togglePin(openTask.id)} onFocus={startFocus} reactions={reactions} task={openTask} accounts={people} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openTask.id)} attachments={attachments.filter(a => a.task_id === openTask.id)} onAttachmentsChanged={reloadAttachments} timeEntries={timeEntries.filter(e => e.task_id === openTask.id)} notify={notify} onClose={() => setOpenId(null)} />}
     </div>
   );
 }
@@ -2021,6 +2027,7 @@ function applyTheme(mode) {
   let t = mode;
   if (t !== "light" && t !== "dark") t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", t);
+  try { applyAccent(getAccent()); } catch (_) {}
 }
 const isLeapY = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
 /** Événements d'équipe et anniversaires d'un jour (iso = AAAA-MM-JJ). */
@@ -2078,6 +2085,7 @@ function PersonalCard({ me, session, notify, onChanged, card }) {
           <button key={k} type="button" aria-pressed={mode === k} onClick={() => pick(k)} style={{ ...chipBtn, borderColor: mode === k ? "var(--accent)" : undefined, color: mode === k ? "var(--text)" : undefined, fontWeight: mode === k ? 600 : 500 }}>{l}</button>
         ))}
       </div>
+      <PersonalizeCard notify={notify} />
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Mon anniversaire</div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Facultatif : il s'affiche dans le calendrier de votre équipe (jour et mois, jamais l'année).</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -2504,7 +2512,7 @@ function RunningTimer({ me, entries, tasks, onOpen, notify }) {
 
 /** Recherche globale (Ctrl K) : pages, tâches, réunions, notes. */
 const normSearch = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab, onTask, onNote, onNewTask, canCreate, onReview }) {
+function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab, onTask, onNote, onNewTask, canCreate, onReview, recents = [] }) {
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const inputRef = useRef(null);
@@ -2516,6 +2524,12 @@ function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab
     if (canCreate) pages.unshift({ k: "new-task", kind: "Action", label: "Nouvelle tâche", hint: "Créer une tâche", run: onNewTask });
     if (onReview) pages.push({ k: "review", kind: "Action", label: "Revue de la semaine", hint: "Faire le point guidé", run: onReview });
     const match = (txt) => !needle || normSearch(txt).includes(needle);
+    if (!needle) {
+      for (const r of recents.slice(0, 5)) {
+        if (r.k === "task") { const t = tasks.find(x => x.id === r.id); if (t) out.push({ k: "rec-t-" + t.id, kind: "Récent", label: t.title, hint: "Rouvrir la tâche", run: () => onTask(t.id) }); }
+        else { const n = notes.find(x => x.id === r.id); if (n) out.push({ k: "rec-n-" + n.id, kind: "Récent", label: n.title, hint: "Rouvrir la note", run: () => onNote(n.id) }); }
+      }
+    }
     out.push(...pages.filter(p => match(p.label)).slice(0, needle ? 4 : 20));
     if (needle) {
       out.push(...tasks.filter(t => match(t.title) || match((t.tags || []).join(" "))).slice(0, 6).map(t => ({ k: "task-" + t.id, kind: t.done ? "Tâche terminée" : "Tâche", label: t.title, hint: t.due ? "Échéance " + formatDue(t.due, daysUntil(t.due)).toLowerCase() : "Sans échéance", run: () => onTask(t.id) })));
@@ -2524,7 +2538,7 @@ function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab
       out.push(...accounts.filter(a => match(a.display_name) || match(a.username)).slice(0, 3).map(a => ({ k: "user-" + a.id, kind: "Personne", label: a.display_name, hint: "Écrire un message", run: () => onTab("messages") })));
     }
     return out;
-  }, [needle, tasks, meetings, notes, accounts, tabs]);
+  }, [needle, tasks, meetings, notes, accounts, tabs, recents]);
   useEffect(() => { setSel(0); }, [needle]);
   const key = (e) => {
     if (e.key === "Escape") { e.preventDefault(); onClose(); }
@@ -3449,7 +3463,12 @@ function MyStats({ me, tasks, projects }) {
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const frDate = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 /** Onglet réservé à l'administrateur du site : historique complet, avec les détails techniques. */
-function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], attendees = [], events = [], onOpen, goTo, projects = [], onReview }) {
+function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], attendees = [], events = [], onOpen, goTo, projects = [], onReview, pins = [], onUnpin, notify = () => {} }) {
+  const [hidden, setHiddenRaw] = useState(() => { const v = lsJson("carnet-home-" + me.id, []); return Array.isArray(v) ? v : []; });
+  const setHidden = (h) => { setHiddenRaw(h); lsSet("carnet-home-" + me.id, JSON.stringify(h)); };
+  const [showPrefs, setShowPrefs] = useState(false);
+  const show = (id) => !hidden.includes(id);
+  const pinned = pins.map(id => tasks.find(t => t.id === id)).filter(Boolean);
   const mine = tasks.filter(t => !t.done && assigneeIds(t).includes(me.id));
   const late = mine.filter(t => t.due && dueInfo(t).late);
   const today = mine.filter(t => t.due && !dueInfo(t).late && daysUntil(t.due) === 0);
@@ -3484,8 +3503,12 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
           <h1 style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>Bonjour {first} 👋</h1>
           <p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", textTransform: "capitalize" }}>{dateLabel}</p>
         </div>
-        {onReview && <button type="button" data-review-open onClick={onReview} style={chipBtn}>📋 Revue de la semaine</button>}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {onReview && <button type="button" data-review-open onClick={onReview} style={chipBtn}>📋 Revue de la semaine</button>}
+          <button type="button" data-home-customize aria-expanded={showPrefs} onClick={() => setShowPrefs(v => !v)} style={chipBtn}>⚙ Personnaliser</button>
+        </div>
       </div>
+      {showPrefs && <HomePrefs hidden={hidden} setHidden={setHidden} onClose={() => setShowPrefs(false)} />}
       <MyDay me={me} accounts={accounts} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} events={events} onOpen={onOpen} goTo={goTo} />
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 26 }}>
         <StatCard value={mine.length} label="À faire pour moi" hex="#5B9EF5" onClick={() => goTo("tasks")} />
@@ -3494,6 +3517,10 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
         <StatCard value={myDoneWeek.length} label="Terminées cette semaine" hex="#5FBF8B" />
       </div>
 
+      {show("pins") && pinned.length > 0 && (<div data-pinned-section style={{ marginBottom: 26 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>📌 Épinglées</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{pinned.map(t => (<div key={t.id} data-pinned={t.title} style={{ display: "flex", gap: 8, alignItems: "stretch" }}><div style={{ flex: 1, minWidth: 0, opacity: t.done ? 0.6 : 1 }}><Row t={t} /></div><button type="button" data-unpin onClick={() => onUnpin(t.id)} aria-label="Retirer des épinglées" title="Retirer des épinglées" style={{ ...iconBtn, border: "1px solid var(--border-soft)" }}><I.X size={14} /></button></div>))}</div>
+      </div>)}
       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>À traiter en priorité</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 26 }}>
         {urgent.length === 0 && <EmptyState text={mine.length ? "Rien d'urgent dans les 3 prochains jours. 🎉" : "Aucune tâche ne vous est assignée pour l'instant."} />}
@@ -3505,9 +3532,11 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 26 }}>{doing.map(t => <Row key={t.id} t={t} />)}</div>
       </>)}
 
-      <MyStats me={me} tasks={tasks} projects={projects} />
+      {show("stats") && <MyStats me={me} tasks={tasks} projects={projects} />}
+      {show("heat") && <ActivityHeat me={me} tasks={tasks} />}
+      {show("scratch") && <ScratchPad me={me} notify={notify} />}
 
-      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>Récap de la semaine</div>
+      {show("recap") && <><div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>Récap de la semaine</div>
       <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 18px", display: "flex", gap: 28, flexWrap: "wrap", alignItems: "center" }}>
         <div><div style={{ fontFamily: "Literata, serif", fontSize: 24, fontWeight: 600 }}>{doneWeek.length}</div><div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>tâche(s) terminée(s) sur le serveur</div></div>
         <div><div style={{ fontFamily: "Literata, serif", fontSize: 24, fontWeight: 600 }}>{createdWeek.length}</div><div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>nouvelle(s) tâche(s)</div></div>
@@ -3517,7 +3546,7 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>{top.map(({ user, n }) => <div key={user.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}><Avatar user={user} size={22} /> {user.display_name} <span style={{ color: "var(--text-dimmer)" }}>· {n}</span></div>)}</div>
           </div>
         )}
-      </div>
+      </div></>}
     </div>
   );
 }
@@ -5112,6 +5141,128 @@ function WeeklyReview({ me, tasks, meetings, attendees, timeEntries, notify, onC
   );
 }
 
+/* ---------------- Personnalisation de l'application (propre à chaque appareil) ---------------- */
+const ACCENTS = [
+  { id: "bleu", label: "Bleu", d: ["#5B79F0", "#7490F5", "#9DB1FF", "91,121,240"], l: ["#1E40AF", "#2B52C9", "#1E40AF", "30,64,175"] },
+  { id: "turquoise", label: "Turquoise", d: ["#2EC4B6", "#4FD6C9", "#7EE6DB", "46,196,182"], l: ["#0F766E", "#14918A", "#0F766E", "15,118,110"] },
+  { id: "vert", label: "Vert", d: ["#4CB782", "#6BCB98", "#9BE0BC", "76,183,130"], l: ["#15803D", "#1F9A4E", "#15803D", "21,128,61"] },
+  { id: "violet", label: "Violet", d: ["#9A7BEA", "#B096F2", "#CDBDF8", "154,123,234"], l: ["#6D28D9", "#7C3AED", "#6D28D9", "109,40,217"] },
+  { id: "rose", label: "Rose", d: ["#E5679E", "#EE86B3", "#F6AECB", "229,103,158"], l: ["#BE185D", "#DB2777", "#BE185D", "190,24,93"] },
+  { id: "orange", label: "Orange", d: ["#F08A3C", "#F5A261", "#F9C597", "240,138,60"], l: ["#C2410C", "#EA580C", "#C2410C", "194,65,12"] },
+];
+const ACCENT_KEY = "carnet-accent", ZOOM_KEY = "carnet-zoom";
+const ZOOMS = [[90, "Petit"], [100, "Normal"], [112, "Grand"], [125, "Très grand"]];
+const lsGet = (k, fb) => { try { const v = localStorage.getItem(k); return v === null ? fb : v; } catch (_) { return fb; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+const lsJson = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v === null || v === undefined ? fb : v; } catch (_) { return fb; } };
+const getAccent = () => { const v = lsGet(ACCENT_KEY, "bleu"); return ACCENTS.some(a => a.id === v) ? v : "bleu"; };
+const getZoom = () => { const n = Number(lsGet(ZOOM_KEY, "100")); return ZOOMS.some(z => z[0] === n) ? n : 100; };
+function applyAccent(id) {
+  const r = document.documentElement, a = ACCENTS.find(x => x.id === id);
+  ["--accent", "--accent-2", "--ring", "--accent-glow"].forEach(k => r.style.removeProperty(k));
+  if (!a || a.id === "bleu") return;
+  const light = r.getAttribute("data-theme") === "light", c = light ? a.l : a.d;
+  r.style.setProperty("--accent", c[0]); r.style.setProperty("--accent-2", c[1]); r.style.setProperty("--ring", c[2]);
+  r.style.setProperty("--accent-glow", `rgba(${c[3]},${light ? ".22" : ".32"})`);
+}
+function applyZoom(n) { try { document.body.style.zoom = n && n !== 100 ? String(n / 100) : ""; } catch (_) {} }
+function PersonalizeCard({ notify }) {
+  const [accent, setAccent] = useState(getAccent());
+  const [zoom, setZoom] = useState(getZoom());
+  const pickAccent = (id) => { setAccent(id); lsSet(ACCENT_KEY, id); applyAccent(id); };
+  const pickZoom = (n) => { setZoom(n); lsSet(ZOOM_KEY, String(n)); applyZoom(n); };
+  return (
+    <div data-personalize>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Couleur d'accentuation</div>
+      <div role="group" aria-label="Couleur d'accentuation" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+        {ACCENTS.map(a => (
+          <button key={a.id} type="button" data-accent={a.id} aria-pressed={accent === a.id} title={a.label} onClick={() => pickAccent(a.id)} style={{ width: 34, height: 34, borderRadius: 999, background: a.d[0], border: accent === a.id ? "3px solid var(--text)" : "3px solid transparent", outline: "1px solid var(--border-soft)", cursor: "pointer", padding: 0 }}><span className="sr-only" style={{ position: "absolute", left: -9999 }}>{a.label}</span></button>
+        ))}
+      </div>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Taille d'affichage</div>
+      <div role="group" aria-label="Taille d'affichage" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22 }}>
+        {ZOOMS.map(([n, l]) => <button key={n} type="button" data-zoom={n} aria-pressed={zoom === n} onClick={() => pickZoom(n)} style={{ ...chipBtn, borderColor: zoom === n ? "var(--accent)" : undefined, color: zoom === n ? "var(--text)" : undefined, fontWeight: zoom === n ? 600 : 500 }}>{l}</button>)}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Accueil : carte d'activité, bloc-notes rapide, personnalisation ---------------- */
+const HOME_SECTIONS = [["pins", "Tâches épinglées"], ["stats", "Mes statistiques"], ["heat", "Carte d'activité"], ["scratch", "Bloc-notes rapide"], ["recap", "Récap de la semaine"]];
+function ActivityHeat({ me, tasks }) {
+  const WEEKS = 26;
+  const { cells, total, best } = useMemo(() => {
+    const today = parisDay(), counts = new Map();
+    for (const t of tasks) if (t.done && t.done_at && assigneeIds(t).includes(me.id)) { const d = parisDay(Date.parse(t.done_at)); counts.set(d, (counts.get(d) || 0) + 1); }
+    const monday = shiftDay(today, 1 - isoWd(today) - (WEEKS - 1) * 7);
+    const out = []; let total = 0, best = 0;
+    for (let w = 0; w < WEEKS; w++) for (let d = 0; d < 7; d++) { const day = shiftDay(monday, w * 7 + d), n = day > today ? -1 : (counts.get(day) || 0); if (n > 0) total += n; best = Math.max(best, n); out.push({ day, n, w, d }); }
+    return { cells: out, total, best };
+  }, [tasks, me.id]);
+  const level = (n) => n <= 0 ? 0 : best <= 1 ? 4 : Math.min(4, Math.ceil((n / best) * 4));
+  const shade = (l) => l === 0 ? "var(--bg-2)" : `color-mix(in srgb, var(--accent) ${[0, 28, 50, 75, 100][l]}%, transparent)`;
+  return (
+    <div data-heat style={{ marginBottom: 26 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>Carte d'activité</div>
+      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
+        <div style={{ overflowX: "auto", paddingBottom: 4 }}>
+          <div style={{ display: "grid", gridTemplateRows: "repeat(7, 12px)", gridAutoFlow: "column", gridAutoColumns: "12px", gap: 3, width: "max-content" }}>
+            {cells.map(c => <div key={c.day} data-heat-cell={c.day} data-count={Math.max(0, c.n)} title={c.n < 0 ? "" : `${fmtDay(c.day, { weekday: "long", day: "numeric", month: "long" })} : ${c.n} tâche${c.n > 1 ? "s" : ""} terminée${c.n > 1 ? "s" : ""}`} style={{ gridRow: c.d + 1, gridColumn: c.w + 1, width: 12, height: 12, borderRadius: 3, background: c.n < 0 ? "transparent" : shade(level(c.n)), border: c.n < 0 ? "none" : "1px solid var(--border-soft)" }} />)}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 12, color: "var(--text-dim)", flexWrap: "wrap" }}>
+          <span data-heat-total><strong>{total}</strong> tâche{total > 1 ? "s" : ""} terminée{total > 1 ? "s" : ""} ces 6 derniers mois</span>
+          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>Moins {[0, 1, 2, 3, 4].map(l => <span key={l} style={{ width: 12, height: 12, borderRadius: 3, background: shade(l), border: "1px solid var(--border-soft)" }} />)} Plus</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+function ScratchPad({ me, notify, onSavedTask }) {
+  const key = "carnet-scratch-" + me.id;
+  const [text, setText] = useState(() => lsGet(key, ""));
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { const id = setTimeout(() => lsSet(key, text), 300); return () => clearTimeout(id); }, [text]);
+  const lines = text.trim().split("\n"), title = (lines[0] || "").trim().slice(0, 120), rest = lines.slice(1).join("\n").trim();
+  const toTask = async () => {
+    if (!title || busy) return; setBusy(true);
+    const { error } = await supabase.from("tasks").insert({ title, notes: rest.slice(0, 2000), label: LABELS[0].id, priority: 2, assignees: [me.id], assignee: me.id, tags: [], done: false, created_by: me.id, server_id: me.server_id });
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    setText(""); notify("Tâche créée depuis votre bloc-notes.");
+  };
+  const toNote = async () => {
+    if (!title || busy) return; setBusy(true);
+    const { error } = await supabase.from("notes").insert({ server_id: me.server_id, created_by: me.id, title, body: rest.slice(0, 20000) });
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    setText(""); notify("Note créée depuis votre bloc-notes.");
+  };
+  return (
+    <div data-scratch style={{ marginBottom: 26 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>Bloc-notes rapide <span style={{ fontWeight: 400, color: "var(--text-dimmer)" }}>· enregistré sur cet appareil</span></div>
+      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: 12 }}>
+        <textarea data-scratch-text value={text} onChange={e => setText(e.target.value)} maxLength={5000} rows={3} placeholder="Une idée, un numéro, une liste… La première ligne servira de titre." style={{ ...inputStyle, resize: "vertical", minHeight: 74, marginBottom: 8 }} />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" data-scratch-task disabled={!title || busy} onClick={toTask} style={{ ...chipBtn, opacity: title ? 1 : 0.5 }}>☑ En faire une tâche</button>
+          <button type="button" data-scratch-note disabled={!title || busy} onClick={toNote} style={{ ...chipBtn, opacity: title ? 1 : 0.5 }}>📝 En faire une note</button>
+          {text && <button type="button" data-scratch-clear onClick={() => setText("")} style={{ ...chipBtn, marginLeft: "auto" }}>Effacer</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+function HomePrefs({ hidden, setHidden, onClose }) {
+  const toggle = (id) => setHidden(hidden.includes(id) ? hidden.filter(x => x !== id) : [...hidden, id]);
+  return (
+    <div data-home-prefs className="paper" style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 18, background: "var(--panel)" }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><strong style={{ fontSize: 14, flex: 1 }}>Personnaliser l'accueil</strong><button type="button" onClick={onClose} aria-label="Fermer" style={{ ...iconBtn, border: "none" }}><I.X size={16} /></button></div>
+      <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8 }}>Choisissez les blocs à afficher. Ce réglage est propre à cet appareil.</div>
+      {HOME_SECTIONS.map(([id, label]) => <label key={id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "5px 0", fontSize: 13.5, cursor: "pointer" }}><input type="checkbox" data-home-toggle={id} checked={!hidden.includes(id)} onChange={() => toggle(id)} /> {label}</label>)}
+    </div>
+  );
+}
+
 function SelectPill({ icon: Icon, value, onChange, options }) {
   return (<div style={{ position: "relative" }}><Icon size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)", pointerEvents: "none" }} /><select value={value} onChange={e => onChange(e.target.value)} style={{ ...chipBtn, paddingLeft: 28, paddingRight: 26, appearance: "none", cursor: "pointer" }}>{options.map(o => <option key={o.value} value={o.value} style={{ background: "var(--bg-2)" }}>{o.label}</option>)}</select><I.Chevron size={12} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: "var(--text-dimmer)", pointerEvents: "none" }} /></div>);
 }
@@ -5670,7 +5821,7 @@ function AttachmentRow({ att, canDelete, onDelete, notify }) {
     </div>
   );
 }
-function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, attachments, onAttachmentsChanged, notify, onClose, reactions = [], timeEntries = [], onFocus }) {
+function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, attachments, onAttachmentsChanged, notify, onClose, reactions = [], timeEntries = [], onFocus, pinned, onPin }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -5769,6 +5920,7 @@ function TaskDetail({ task, accounts, me, session, isAdmin, myPerms, comments, a
           {task.doing && !task.done && <span style={{ color: "#FFB648", fontWeight: 600 }}>En cours</span>}
           {task.done && <span style={{ color: "#5FBF8B", fontWeight: 600 }}>Terminée</span>}
         </div>
+        {onPin && <div style={{ marginBottom: 8 }}><button type="button" data-pin-task aria-pressed={Boolean(pinned)} onClick={onPin} title="Les tâches épinglées s'affichent en haut de votre accueil (sur cet appareil)" style={{ ...chipBtn, fontSize: 12, padding: "5px 10px", borderColor: pinned ? "var(--accent)" : undefined }}>{pinned ? "📌 Épinglée · retirer" : "📌 Épingler sur mon accueil"}</button></div>}
         {(canCreate || (canEdit && task.due && !task.done)) && (
           <div data-task-quick style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
             {canEdit && task.due && !task.done && (<>
