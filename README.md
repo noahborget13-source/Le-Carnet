@@ -1,125 +1,87 @@
-# Le Carnet — guide de déploiement
+# Le Carnet — comment ça marche
 
-Cette version est un vrai site indépendant de Claude : lien public, comptes réels
-créés uniquement par toi (l'admin), rôles et droits appliqués **côté serveur**
-(donc réellement sécurisés, pas juste cachés dans l'interface).
+Le Carnet est une application web de gestion de tâches en équipe, pensée pour une équipe, une famille ou un groupe
+d'amis. Elle fonctionne dans le navigateur, sur ordinateur comme sur téléphone, et s'installe comme une application.
+Ce document explique **comment le site est organisé et comment il fonctionne**.
 
-Tout est gratuit pour démarrer (Supabase et Vercel ont des plans gratuits largement
-suffisants pour une petite équipe).
+## Les quatre sites
 
-Temps estimé : 15-20 minutes, aucune compétence technique poussée requise —
-suis les étapes dans l'ordre.
+| Adresse | Public | Rôle |
+| --- | --- | --- |
+| `/` | tout le monde | Page d'accueil : présentation, nouveautés, connexion. |
+| `/app/` | membres d'un serveur | L'application elle-même (tâches, calendrier, messages, notes…). |
+| `/admin/` | administrateurs d'un serveur | Espace administrateur : membres, congés, annonces, rapports, données, journal. |
+| `/supra/` | propriétaire de la plateforme uniquement | Supra Admin : comptes et bannissements, serveurs, emails, patch notes, maintenance. |
 
----
+Les quatre partagent la même connexion : on se connecte une fois, dans le même navigateur.
 
-## 1. Créer le projet Supabase (la base de données + les comptes)
+## Les notions de base
 
-1. Va sur https://supabase.com et crée un compte (gratuit).
-2. Clique sur **"New project"**.
-3. Choisis un nom (ex. `le-carnet`), un mot de passe de base de données (garde-le
-   de côté, tu n'en auras normalement pas besoin ensuite), et une région proche
-   de toi (ex. Europe).
-4. Attends 1-2 minutes que le projet soit prêt.
+- **Serveur** : l'espace d'une équipe. Ses tâches, ses notes et ses membres sont totalement séparés de ceux des autres
+  serveurs. Une même personne peut appartenir à plusieurs serveurs avec des comptes liés.
+- **Rôles** : administrateur, modérateur, membre ou invité. Chaque rôle a des droits par défaut, que l'administrateur peut
+  ajuster personne par personne (créer, modifier ou supprimer des tâches, écrire des messages…).
+- **Invitations** : l'administrateur invite par email ou partage le code du serveur ; les demandes d'adhésion passent par lui.
+- **Propriétaire de la plateforme** : une personne unique, au-dessus des serveurs, qui peut suspendre un compte ou un
+  serveur et pilote le site (maintenance, annonces, patch notes).
 
-### Récupère tes clés
+## Ce que l'on peut faire dans l'application
 
-Dans le projet Supabase, va dans **Project Settings > API**. Tu y trouveras trois
-informations à garder de côté :
+- **Tâches** : priorités, échéances, heures, couleurs, étiquettes, sous-tâches, récurrence, assignation à plusieurs
+  personnes, pièces jointes, commentaires, réactions, dépendances (« bloquée par »), historique des changements.
+  Vues Liste, Kanban, Semaine, Chronologie (Gantt), Tableau et Matrice de priorités ; vues enregistrées ; import CSV ;
+  ajout rapide en langage naturel (« Appeler Marie demain 14h30 #client »).
+- **Calendrier et réunions** : réunions uniques ou récurrentes, appel vidéo intégré, comptes rendus, détection de conflits
+  d'agenda, créneaux communs, synchronisation d'un agenda externe, congés.
+- **Équipe** : présence (disponible, en réunion, en congé, hors horaires), statuts personnalisés, points quotidiens,
+  objectifs avec résultats clés, rendez-vous sur disponibilités (présentiel ou appel), réservation de salles et de matériel.
+- **Communication** : messagerie privée, salons, mentions `@`, notifications dans l'application (la cloche), emails.
+- **Organisation personnelle** : notes partagées, suivi du temps, mode concentration (séances de 25 ou 50 minutes),
+  suivi d'habitudes (privé), revue de la semaine, recherche globale (Ctrl/⌘ + K), raccourcis clavier.
+- **Rapports** : charge de travail, avancement, temps suivi, exports CSV.
 
-- **Project URL** (ressemble à `https://xxxxx.supabase.co`)
-- **anon public key** (une longue chaîne de caractères)
-- **service_role key** (une autre longue chaîne — **ne la partage jamais, ne la
-  mets jamais dans le code du site**, elle donne un accès total)
+## Comment c'est construit
 
-### Crée les tables
+Le projet n'a **aucune étape de compilation** : ce sont des pages HTML statiques qui chargent React et leurs dépendances
+directement dans le navigateur.
 
-1. Dans le menu de gauche, clique sur **SQL Editor > New query**.
-2. Ouvre le fichier `supabase-schema.sql` fourni avec ce projet, copie tout son
-   contenu, colle-le dans l'éditeur, puis clique sur **Run**.
-3. Tu dois voir "Success. No rows returned" — les tables et les règles de
-   sécurité sont créées.
-
----
-
-## 2. Remplir les clés dans le site
-
-Ouvre le fichier `public/index.html` et cherche ces deux lignes (vers le début) :
-
-```js
-window.SUPABASE_URL = "https://VOTRE-PROJET.supabase.co";
-window.SUPABASE_ANON_KEY = "VOTRE_CLE_ANON_PUBLIQUE";
+```
+public/            pages servies telles quelles (index, app/, admin/, supra/, confidentialité, maintenance)
+api/               fonctions serveur Vercel (emails, invitations, gestion des comptes, outils d'administration)
+migration-NN-*.sql historique des évolutions de la base de données
+supabase-schema.sql  schéma de départ
+vercel.json        planificateur (rappels quotidiens)
 ```
 
-Remplace-les par ton **Project URL** et ta clé **anon public** récupérées à
-l'étape précédente. (Cette clé "anon" est faite pour être publique — ne mets
-jamais la clé "service_role" ici.)
+- **Interface** : React 18 et Babel, chargés dans la page ; un seul fichier par site (`public/app/index.html`,
+  `public/admin/index.html`, `public/supra/index.html`). Le style suit la direction « papier quadrillé » : mode clair
+  « papier » et mode sombre « ardoise », polices Literata et Figtree.
+- **Base de données et comptes** : Supabase (PostgreSQL, authentification, stockage de fichiers, temps réel). Les mises à
+  jour apparaissent chez tout le monde sans recharger la page.
+- **Hébergement** : Vercel. Les fonctions serveur sont limitées à douze : les actions du Supra Admin passent donc par la
+  fonction `api/admin-tools.js`, et les fichiers dont le nom commence par `_` sont des modules partagés, pas des fonctions.
+- **Emails** : envoyés via Gmail (invitations, assignations, mentions, rappels d'échéance, résumé hebdomadaire).
+  Un planificateur quotidien (cron Vercel) déclenche les rappels.
 
----
+## La sécurité
 
-## 3. Déployer sur Vercel
+- **Les droits sont appliqués par la base de données** (Row Level Security), pas seulement par l'interface : contourner
+  l'interface ne donne accès à rien. Chaque ligne n'est visible que par les membres approuvés de son serveur.
+- **Les données privées le restent** : messages privés, habitudes, vues enregistrées et rendez-vous ne sont lisibles que par
+  les personnes concernées.
+- **Mots de passe** : gérés par l'authentification de Supabase, stockés sous forme chiffrée irréversible. Personne ne peut
+  les lire, pas même le propriétaire de la plateforme ; il peut seulement envoyer un lien de nouveau mot de passe.
+- **Bannissement** : un compte banni ne peut plus se connecter ni lire une seule donnée, et ne reçoit plus aucun email.
+  Seul le serveur, sur ordre du propriétaire, peut bannir ou débannir.
+- **Clés** : la clé publique (`anon`) est faite pour être visible ; la clé `service_role` ne vit que dans les variables
+  d'environnement de Vercel et ne figure jamais dans le code.
 
-1. Va sur https://vercel.com et crée un compte (gratuit), idéalement en te
-   connectant avec GitHub.
-2. Le plus simple : mets ce dossier de projet dans un nouveau dépôt GitHub
-   (crée un repo, importe tous les fichiers), puis dans Vercel clique sur
-   **"Add New… > Project"** et sélectionne ce dépôt.
-3. Vercel détecte automatiquement la configuration (`vercel.json`). Avant de
-   cliquer sur "Deploy", ouvre la section **Environment Variables** et ajoute :
-   - `SUPABASE_URL` → ton Project URL
-   - `SUPABASE_SERVICE_ROLE_KEY` → ta clé service_role (celle qu'on garde secrète)
-4. Clique sur **Deploy**. Après une minute, Vercel te donne un lien du type
-   `https://le-carnet-xxxx.vercel.app` — c'est ton site, déjà en ligne et
-   public.
+## Maintenance et évolutions
 
----
-
-## 4. Premier lancement
-
-Ouvre ton lien Vercel. Comme aucun compte n'existe encore, tu verras l'écran
-**"Bienvenue"** : crée ton compte administrateur (identifiant, email, mot de
-passe). C'est le seul compte qui pourra ensuite créer, modifier ou supprimer
-les autres — imposé par la base de données elle-même, pas juste par
-l'interface.
-
-Une fois connecté, va dans **Administration** pour créer des comptes pour les
-autres personnes (avec leur rôle : modérateur / membre / invité, et leurs
-droits individuels).
-
----
-
-## 5. (Optionnel) Nom de domaine personnalisé + référencement Google
-
-- Dans Vercel, onglet **Domains** du projet, tu peux relier un nom de domaine
-  que tu achètes ailleurs (OVH, Namecheap, Google Domains…) — Vercel te guide
-  pas à pas (ajouter un enregistrement DNS).
-- Une fois le site en ligne avec une vraie URL stable, Google finit par
-  l'indexer tout seul avec le temps. Pour accélérer, crée un compte gratuit sur
-  **Google Search Console** (https://search.google.com/search-console), ajoute
-  ton domaine, et demande une indexation manuelle de la page d'accueil.
-- Attention : si tu veux que Google indexe le contenu, garde à l'esprit que
-  les tâches/messages restent derrière un écran de connexion (normal pour un
-  outil interne) — seule la page de connexion elle-même sera visible dans les
-  résultats de recherche, pas le contenu de l'intérieur.
-
----
-
-## L'Espace Administrateur
-
-L'administration est un site à part : `https://VOTRE-SITE/admin/` (« Le Carnet — Espace Administrateur »).
-Il partage la connexion de l'application (même navigateur, même domaine) et n'est accessible qu'aux comptes administrateurs.
-L'onglet « Admin » de l'application y mène directement. Le fichier `public/admin/index.html` est autonome : les composants
-d'administration n'existent plus dans `public/app/index.html`. Les annonces nécessitent `migration-17-annonces.sql`.
-
-## Notes de sécurité
-
-- Les mots de passe sont gérés par Supabase Auth (hachage sécurisé standard de
-  l'industrie) — bien plus robuste que la version précédente sur Claude.
-- Les droits (qui peut créer/modifier/supprimer quoi) sont vérifiés **dans la
-  base de données elle-même** (Row Level Security), pas seulement dans
-  l'interface : quelqu'un ne peut pas les contourner en bidouillant le code
-  depuis son navigateur.
-- Les messages sont réellement privés : seuls les deux participants d'une
-  conversation peuvent la lire, imposé par la base de données.
-- Ne partage jamais la clé `service_role` publiquement (ni sur GitHub en clair,
-  ni ailleurs) — mets-la uniquement dans les variables d'environnement Vercel
-  comme indiqué à l'étape 3.
+- Les évolutions de la base sont des fichiers `migration-NN-*.sql`, à exécuter dans l'ordre. Elles sont conçues pour être
+  relancées sans danger.
+- Les nouveautés visibles de tous sont dans `public/patchnotes.json` (affichées sur l'accueil) ; le détail technique de
+  chaque jour est dans l'onglet « Patch notes » du Supra Admin.
+- La maintenance programmée affiche un bandeau puis redirige les visiteurs vers `/maintenance.html` ; l'espace
+  administrateur reste accessible.
+- Tous les textes s'adressent aux utilisateurs avec « vous ».

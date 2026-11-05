@@ -1,6 +1,6 @@
 // Actions du Supra Admin (réservées au propriétaire de la plateforme, table platform_admins).
 // Appelées par /api/admin-tools : Vercel gratuit = 12 fonctions maximum, donc pas de nouveau fichier de fonction.
-import { esc, siteUrl, layout, sendMail, mailConfigured } from './_mail.js';
+import { esc, siteUrl, layout, button, sendMail, mailConfigured } from './_mail.js';
 import { realEmail, isShadowEmail, logPlatform, ownerEmails } from './_platform.js';
 
 const clip = (s, n) => String(s || '').replace(/[\r\n]+/g, ' ').trim().slice(0, n);
@@ -8,6 +8,26 @@ const clip = (s, n) => String(s || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 
 async function allProfiles(sb) {
   const { data } = await sb.from('profiles').select('id, username, display_name, email, role, status, server_id, banned_at, ban_reason');
   return data || [];
+}
+/** Dates de création et de dernière connexion (table auth, jamais lisible côté navigateur). */
+async function authInfo(sb) {
+  const map = new Map();
+  try {
+    for (let page = 1; page <= 10; page++) {
+      const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 200 });
+      if (error || !data || !data.users) break;
+      for (const u of data.users) map.set(u.id, { created_at: u.created_at || null, last_sign_in_at: u.last_sign_in_at || null });
+      if (data.users.length < 200) break;
+    }
+  } catch (_) { /* informations facultatives */ }
+  return map;
+}
+const DAY = 86400000;
+async function setBanned(sb, id, ban, reason, by) {
+  const patch = ban ? { banned_at: new Date().toISOString(), ban_reason: reason, banned_by: by } : { banned_at: null, ban_reason: '', banned_by: null };
+  const { error } = await sb.from('profiles').update(patch).eq('id', id);
+  if (error) throw new Error(error.message);
+  try { await sb.auth.admin.updateUserById(id, { ban_duration: ban ? '876000h' : 'none' }); } catch (_) { /* le profil est déjà bloqué */ }
 }
 async function linkedIds(sb, userId) {
   const { data: mine } = await sb.from('account_links').select('group_id').eq('user_id', userId).maybeSingle();
@@ -27,7 +47,7 @@ export async function handleSupra({ req, res, sb, user, action }) {
     const tasks = (await sb.from('tasks').select('id', { count: 'exact', head: true })).count || 0;
     const out = (servers || []).map(s => {
       const m = profiles.filter(p => p.server_id === s.id);
-      return { id: s.id, name: s.name, created_at: s.created_at, members: m.filter(p => p.status === 'approved' && !p.banned_at).length, pending: m.filter(p => p.status === 'pending').length, banned: m.filter(p => p.banned_at).length, admins: m.filter(p => p.role === 'admin').map(p => p.display_name) };
+      return { id: s.id, name: s.name, created_at: s.created_at, members: m.filter(p => p.status === 'approved' && !p.banned_at).length, pending: m.filter(p => p.status === 'pending').length, banned: m.filter(p => p.banned_at).length, admins: m.filter(p => p.role === 'admin').map(p => p.display_name), suspended: m.length > 0 && m.every(p => p.banned_at) };
     }).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     return res.status(200).json({
       ok: true, servers: out,
@@ -38,12 +58,71 @@ export async function handleSupra({ req, res, sb, user, action }) {
 
   if (action === 'supra-users') {
     const q = clip(body.q, 80).toLowerCase();
-    const [profiles, { data: servers }] = await Promise.all([allProfiles(sb), sb.from('servers').select('id, name')]);
+    const filter = ['banned', 'pending', 'inactive', 'admins'].includes(body.filter) ? body.filter : 'all';
+    const exportAll = body.all === true;
+    const [profiles, { data: servers }, auth] = await Promise.all([allProfiles(sb), sb.from('servers').select('id, name'), authInfo(sb)]);
     const sname = new Map((servers || []).map(s => [s.id, s.name]));
     let list = profiles;
     if (q) list = list.filter(p => [p.display_name, p.username, realEmail(p.email), sname.get(p.server_id)].some(v => String(v || '').toLowerCase().includes(q)));
-    list = list.sort((a, b) => (b.banned_at ? 1 : 0) - (a.banned_at ? 1 : 0) || String(a.display_name).localeCompare(String(b.display_name), 'fr')).slice(0, 60);
-    return res.status(200).json({ ok: true, total: profiles.length, users: list.map(p => ({ id: p.id, display_name: p.display_name, username: p.username, email: realEmail(p.email), role: p.role, status: p.status, server: sname.get(p.server_id) || '?', banned_at: p.banned_at || null, ban_reason: p.ban_reason || '' })) });
+    const lastSeen = (p) => (auth.get(p.id) || {}).last_sign_in_at || null;
+    if (filter === 'banned') list = list.filter(p => p.banned_at);
+    else if (filter === 'pending') list = list.filter(p => p.status === 'pending');
+    else if (filter === 'admins') list = list.filter(p => p.role === 'admin');
+    else if (filter === 'inactive') list = list.filter(p => { const t = lastSeen(p); return !t || Date.now() - Date.parse(t) > 30 * DAY; });
+    const matched = list.length;
+    list = list.sort((a, b) => (b.banned_at ? 1 : 0) - (a.banned_at ? 1 : 0) || String(a.display_name).localeCompare(String(b.display_name), 'fr')).slice(0, exportAll ? 2000 : 60);
+    return res.status(200).json({ ok: true, total: profiles.length, matched, users: list.map(p => ({ id: p.id, display_name: p.display_name, username: p.username, email: realEmail(p.email), role: p.role, status: p.status, server: sname.get(p.server_id) || '?', server_id: p.server_id, banned_at: p.banned_at || null, ban_reason: p.ban_reason || '', last_sign_in_at: lastSeen(p), created_at: (auth.get(p.id) || {}).created_at || null })) });
+  }
+
+  if (action === 'supra-reset-password') {
+    if (!mailConfigured()) return res.status(400).json({ error: "Les emails ne sont pas configurés : GMAIL_USER et GMAIL_APP_PASSWORD manquent sur Vercel." });
+    const userId = String(body.userId || '');
+    const { data: target } = await sb.from('profiles').select('id, display_name, email, banned_at').eq('id', userId).maybeSingle();
+    if (!target) return res.status(404).json({ error: 'Compte introuvable.' });
+    if (target.banned_at) return res.status(400).json({ error: 'Ce compte est banni : débannissez-le d\'abord.' });
+    const { data, error } = await sb.auth.admin.generateLink({ type: 'recovery', email: target.email, options: { redirectTo: `${siteUrl(req)}/app/` } });
+    const link = data && data.properties && data.properties.action_link;
+    if (error || !link) return res.status(500).json({ error: (error && error.message) || 'Impossible de créer le lien.' });
+    try {
+      await sendMail({ to: realEmail(target.email), subject: 'Nouveau mot de passe — Le Carnet',
+        text: `Bonjour ${target.display_name}, voici le lien pour choisir un nouveau mot de passe (valable peu de temps) : ${link}\nSi vous n'avez rien demandé, ignorez ce message.`,
+        html: layout(`<p>Bonjour ${esc(target.display_name)},</p><p>Un lien pour choisir un nouveau mot de passe vous a été envoyé. Il est valable peu de temps.</p>${button(link, 'Choisir un nouveau mot de passe')}<p style="font-size:13px;color:#556">Si vous n'avez rien demandé, ignorez ce message : votre mot de passe actuel reste valable.</p>`) });
+    } catch (e) { return res.status(502).json({ error: "L'envoi a échoué : " + (e.message || 'erreur inconnue') }); }
+    await logPlatform(sb, me, 'reset_link', userId, target.display_name, 'Lien de réinitialisation envoyé');
+    return res.status(200).json({ ok: true, to: realEmail(target.email).replace(/^(.).*(@.*)$/, '$1•••$2') });
+  }
+
+  if (action === 'supra-server-ban') {
+    const serverId = String(body.serverId || '');
+    const ban = body.banned !== false;
+    const reason = clip(body.reason, 300);
+    const { data: server } = await sb.from('servers').select('id, name').eq('id', serverId).maybeSingle();
+    if (!server) return res.status(404).json({ error: 'Serveur introuvable.' });
+    const { data: owners } = await sb.from('platform_admins').select('user_id');
+    const ownerIds = new Set((owners || []).map(o => o.user_id));
+    const members = (await allProfiles(sb)).filter(p => p.server_id === serverId && !ownerIds.has(p.id) && (ban ? !p.banned_at : p.banned_at));
+    let done = 0;
+    for (const m of members) { try { await setBanned(sb, m.id, ban, reason, me); done++; } catch (e) { return res.status(500).json({ error: e.message, count: done }); } }
+    await logPlatform(sb, me, ban ? 'server_ban' : 'server_unban', serverId, server.name, `${done} compte(s)${reason ? '. ' + reason : ''}`);
+    return res.status(200).json({ ok: true, count: done });
+  }
+
+  if (action === 'supra-stats') {
+    const auth = await authInfo(sb);
+    const weeks = 12, now = Date.now();
+    const monday = (t) => { const d = new Date(t); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.getTime(); };
+    const start = monday(now) - (weeks - 1) * 7 * DAY;
+    const bucket = (iso) => { const t = Date.parse(iso); return t >= start ? Math.floor((monday(t) - start) / (7 * DAY)) : -1; };
+    const signups = new Array(weeks).fill(0), tasks = new Array(weeks).fill(0);
+    let active7 = 0, active30 = 0;
+    for (const u of auth.values()) {
+      if (u.created_at) { const b = bucket(u.created_at); if (b >= 0 && b < weeks) signups[b]++; }
+      if (u.last_sign_in_at) { const age = now - Date.parse(u.last_sign_in_at); if (age <= 7 * DAY) active7++; if (age <= 30 * DAY) active30++; }
+    }
+    const { data: trows } = await sb.from('tasks').select('created_at').gte('created_at', new Date(start).toISOString()).limit(20000);
+    for (const t of trows || []) { const b = bucket(t.created_at); if (b >= 0 && b < weeks) tasks[b]++; }
+    const labels = Array.from({ length: weeks }, (_, i) => new Date(start + i * 7 * DAY).toISOString().slice(0, 10));
+    return res.status(200).json({ ok: true, labels, signups, tasks, active7, active30, known: auth.size });
   }
 
   if (action === 'supra-ban') {
@@ -59,11 +138,7 @@ export async function handleSupra({ req, res, sb, user, action }) {
     if (ids.some(i => (owners || []).some(o => o.user_id === i))) return res.status(400).json({ error: "Le propriétaire de la plateforme ne peut pas être banni." });
     let done = 0;
     for (const id of ids) {
-      const patch = ban ? { banned_at: new Date().toISOString(), ban_reason: reason, banned_by: me } : { banned_at: null, ban_reason: '', banned_by: null };
-      const { error } = await sb.from('profiles').update(patch).eq('id', id);
-      if (error) return res.status(500).json({ error: error.message });
-      // Coupe aussi la connexion : plus de nouvelle session ni de renouvellement (les accès aux données sont déjà fermés par la base)
-      try { await sb.auth.admin.updateUserById(id, { ban_duration: ban ? '876000h' : 'none' }); } catch (_) { /* le profil est déjà bloqué */ }
+      try { await setBanned(sb, id, ban, reason, me); } catch (e) { return res.status(500).json({ error: e.message }); }
       done++;
     }
     await logPlatform(sb, me, ban ? 'ban' : 'unban', userId, target.display_name, (ids.length > 1 ? `${ids.length} comptes liés. ` : '') + reason);
