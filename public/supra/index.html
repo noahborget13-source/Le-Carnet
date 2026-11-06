@@ -364,6 +364,13 @@ function computeReport({ tasks, meetings, attendees, accounts, projects, days, p
   return { from, created: created.length, done: done.length, open: open.length, late: late.length, lateTasks: late, dueCount: dueIn.length, onTimeRate: dueIn.length ? Math.round(onTime.length / dueIn.length * 100) : null, avgLead, series, people, byProject, byLabel, meetings: mts.length, meetingHours: hours };
 }
 const PATCH_TECH = {
+  "2026-11-06": [
+    "migration-30-retours-estimations.sql : tasks.estimate_min (null ou 5–1440, contrainte tasks_estimate_range) ; table feedback (kind idee/bug/question/compliment, message 3–2000, page, status new/read/done) avec RLS en lecture seule pour l'auteur ; réglage platform_settings « notify_feedback ».",
+    "api/manage-account.js : action send-feedback (validation, limite de 5 messages par heure et par personne, insertion par la clé de service, email au propriétaire via notifyOwner). requireUser refuse désormais les comptes bannis. api/_supra.js : supra-feedback, supra-feedback-set, compteur feedbackNew dans la vue d'ensemble.",
+    "Supra Admin : page « Retours » (filtres nouveaux / lus / traités, réponse par email, marquage), alerte « nouveau retour » dans Emails, indicateur sur la vue d'ensemble.",
+    "Application (sans autre migration) : composants GettingStarted, TipCard, HelpCenter (FAQ, retours, export JSON/CSV généré côté navigateur), MemberCard, AchievementsCard, VoiceButton (SpeechRecognition fr-FR), ReminderPrefs + dndActive (filtre dans showNotif), printAgenda (iframe d'impression), A11yPrefs (attributs data-contrast / data-motion sur <html>), PROJECT_TEMPLATES (insertion des tâches après la création du projet et de ses membres).",
+    "Site public : cgu.html, 404.html, image Open Graph 1200×630 (icons/og-image.png), twitter:card summary_large_image, sitemap mis à jour, accueil enrichi.",
+  ],
   "2026-11-05": [
     "migration-29-supra-admin.sql : profiles.banned_at / ban_reason / banned_by (my_approved_server et my_role ignorent les comptes bannis ; trigger profiles_protect_ban : seule la clé de service peut bannir ou débannir), tables platform_settings (alertes email du propriétaire) et platform_log (journal du Supra Admin, lecture réservée à is_platform_admin()).",
     "public/supra/index.html : nouveau site « Supra Admin » (patch notes, annonces et maintenance déplacés depuis l'espace administrateur, comptes et bannissement, emails, journal). Les actions supra-* passent par /api/admin-tools (api/_supra.js), après vérification de platform_admins ; aucune nouvelle fonction Vercel.",
@@ -642,7 +649,7 @@ const Panel = ({ title, right, children, id }) => (
    ============================================================ */
 const SUPRA_NAV = [
   { group: "Plateforme", items: [["overview", "Vue d'ensemble", "📊"], ["accounts", "Comptes et bannissements", "🚫"]] },
-  { group: "Communication", items: [["emails", "Emails", "✉️"], ["site", "Annonces et maintenance", "🌐"], ["patch", "Patch notes", "📝"]] },
+  { group: "Communication", items: [["feedback", "Retours", "💬"], ["emails", "Emails", "✉️"], ["site", "Annonces et maintenance", "🌐"], ["patch", "Patch notes", "📝"]] },
   { group: "Système", items: [["log", "Journal", "🕘"]] },
 ];
 const supraDate = (iso) => new Date(iso).toLocaleString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -700,6 +707,7 @@ function SupraOverview({ session, go, notify }) {
         <Kpi id="pending" value={t.pending} label="En attente d'approbation" color={t.pending ? "#FFB648" : undefined} />
         <Kpi id="banned" value={t.banned} label="Comptes bannis" color={t.banned ? "var(--late)" : undefined} onClick={t.banned ? () => go("accounts") : undefined} />
         <Kpi id="tasks" value={t.tasks} label="Tâches" />
+        <Kpi id="feedback" value={t.feedbackNew || 0} label="Retours non lus" color={t.feedbackNew ? "#FFB648" : undefined} onClick={() => go("feedback")} />
       </div>
       {!st.data.mailConfigured && <div data-supra-nomail style={{ background: "var(--warn-bg)", border: "1px solid var(--warn-border)", color: "var(--warn-text)", borderRadius: 10, padding: "10px 14px", fontSize: 13, marginBottom: 14 }}>Les emails ne sont pas configurés sur Vercel (GMAIL_USER et GMAIL_APP_PASSWORD) : aucune alerte ne peut vous parvenir.</div>}
       <Panel title="Serveurs" id="servers">
@@ -849,6 +857,7 @@ function SupraEmails({ session, notify }) {
         {d && d.owners && d.owners.length > 0 && <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 6px" }}>Envoyées à : {d.owners.join(", ")}</p>}
         {sw("notify_signup", "Nouveau compte ou demande d'adhésion", "Un email dès qu'une personne rejoint ou demande à rejoindre un serveur.")}
         {sw("notify_server", "Nouveau serveur", "Un email dès qu'un serveur est créé.")}
+        {sw("notify_feedback", "Nouveau retour d'un utilisateur", "Un email dès qu'une personne vous envoie une idée, un problème ou une question depuis l'application.")}
       </Panel>
       <Panel title="Écrire aux administrateurs ou à tous les membres" id="broadcast">
         <Field label="Destinataires">
@@ -867,6 +876,38 @@ function SupraEmails({ session, notify }) {
         {d && d.available && d.rows.length === 0 && <EmptyState text="Aucun email pour l'instant." />}
         {d && d.rows.map((r, i) => <div key={i} style={{ display: "flex", gap: 10, padding: "7px 0", borderTop: i ? "1px solid var(--border-soft)" : "none", fontSize: 13 }}><span style={{ color: r.ok ? "#1F9D6B" : "var(--late)", width: 16 }}>{r.ok ? "✓" : "✗"}</span><span style={{ flex: 1, minWidth: 0 }}>{r.subject}{r.error ? <span style={{ color: "var(--late)" }}> — {r.error}</span> : null}</span><span style={{ color: "var(--text-dimmer)", whiteSpace: "nowrap" }}>{supraDate(r.at)}</span></div>)}
       </Panel>
+    </div>
+  );
+}
+const FB_KIND = { idee: ["💡", "Idée"], bug: ["🐞", "Problème"], question: ["❓", "Question"], compliment: ["💚", "Compliment"] };
+function SupraFeedback({ session, notify }) {
+  const [status, setStatus] = useState("new");
+  const [st, reload] = useSupraApi(session, "supra-feedback", [{ status: status === "all" ? undefined : status }]);
+  const set = async (f, next) => { try { await callApi("/api/admin-tools", { action: "supra-feedback-set", ids: [f.id], status: next }, session); reload(); } catch (e) { notify(e.message, "err"); } };
+  const d = st.data, rows = (d && d.rows) || [], counts = (d && d.counts) || {};
+  const fb = (id, label, n) => <button key={id} type="button" data-fb-filter={id} aria-pressed={status === id} onClick={() => setStatus(id)} style={{ ...chipBtn, background: status === id ? "var(--panel-2)" : "transparent", fontWeight: status === id ? 600 : 500, borderColor: status === id ? "var(--accent)" : "var(--border-soft)" }}>{label}{n !== undefined ? ` (${n})` : ""}</button>;
+  return (
+    <div data-supra-feedback>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>{fb("new", "Nouveaux", counts.new || 0)}{fb("read", "Lus", counts.read || 0)}{fb("done", "Traités", counts.done || 0)}{fb("all", "Tous")}</div>
+      {st.error && <EmptyState text={st.error} />}
+      {d && d.available === false && <EmptyState text="Lancez d'abord la migration 30 (retours des utilisateurs)." />}
+      {d && d.available && rows.length === 0 && <EmptyState text={status === "new" ? "Aucun nouveau retour. 🎉" : "Aucun retour dans cette catégorie."} />}
+      <div style={{ display: "grid", gap: 10 }}>
+        {rows.map(f => { const k = FB_KIND[f.kind] || ["💬", f.kind]; return (
+          <div key={f.id} data-fb={f.kind} data-fb-status={f.status} style={{ background: "var(--panel)", border: "1px solid " + (f.status === "new" ? "var(--accent)" : "var(--border)"), borderRadius: 12, padding: "12px 16px" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6, fontSize: 13 }}>
+              <strong>{k[0]} {k[1]}</strong><span style={{ color: "var(--text-dim)" }}>· {f.name}{f.server ? " · " + f.server : ""}{f.page ? " · page « " + f.page + " »" : ""}</span>
+              <span style={{ marginLeft: "auto", color: "var(--text-dimmer)", fontSize: 12 }}>{supraDate(f.created_at)}</span>
+            </div>
+            <div style={{ fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{f.message}</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              {f.email && <a data-fb-reply href={"mailto:" + f.email + "?subject=" + encodeURIComponent("Votre message à Le Carnet") + "&body=" + encodeURIComponent("Bonjour " + f.name + ",\n\n\n\n— Votre message : « " + f.message.slice(0, 300) + " »")} onClick={() => f.status === "new" && set(f, "read")} style={{ ...chipBtn, textDecoration: "none" }}>✉ Répondre par email</a>}
+              {f.status === "new" && <button type="button" data-fb-read onClick={() => set(f, "read")} style={chipBtn}>Marquer comme lu</button>}
+              {f.status !== "done" && <button type="button" data-fb-done onClick={() => set(f, "done")} style={chipBtn}>✓ Traité</button>}
+              {f.status !== "new" && <button type="button" data-fb-reopen onClick={() => set(f, "new")} style={chipBtn}>Rouvrir</button>}
+            </div>
+          </div>); })}
+      </div>
     </div>
   );
 }
@@ -915,6 +956,7 @@ function SupraWorkspace({ me, session, notify, onLogout }) {
           <div style={{ marginBottom: 18 }}><h1 data-supra-title style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>{title ? title[1] : ""}</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>Réservé au propriétaire de la plateforme.</p></div>
           {page === "overview" && <SupraOverview session={session} go={go} notify={notify} />}
           {page === "accounts" && <SupraAccounts session={session} notify={notify} />}
+          {page === "feedback" && <SupraFeedback session={session} notify={notify} />}
           {page === "emails" && <SupraEmails session={session} notify={notify} />}
           {page === "site" && <AdminSite notify={notify} />}
           {page === "patch" && <AdminPatchNotes />}

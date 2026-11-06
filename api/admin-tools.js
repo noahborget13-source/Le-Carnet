@@ -23,8 +23,8 @@ export default async function handler(req, res) {
       return await handleSupra({ req, res, sb: supabaseAdmin, user: userData.user, action: rawAction });
     }
     const { data: me } = await supabaseAdmin.from('profiles')
-      .select('id, role, status, server_id, email, display_name').eq('id', userData.user.id).single();
-    if (!me || me.status !== 'approved' || me.role !== 'admin') return res.status(403).json({ error: "Réservé à l'administrateur." });
+      .select('id, role, status, server_id, email, display_name, banned_at').eq('id', userData.user.id).single();
+    if (!me || me.status !== 'approved' || me.banned_at || me.role !== 'admin') return res.status(403).json({ error: "Réservé à l'administrateur." });
 
     const { action } = req.body || {};
 

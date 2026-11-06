@@ -1,5 +1,25 @@
 [
   {
+    "date": "2026-11-06",
+    "items": [
+      "Guide « Premiers pas » sur l'accueil : sept petites étapes cochées automatiquement pour prendre le Carnet en main. Vous pouvez le masquer et le retrouver depuis le Centre d'aide.",
+      "Nouveau Centre d'aide (bouton « ? ») : questions fréquentes avec recherche, accès aux raccourcis clavier et formulaire « Un retour ? » pour nous envoyer une idée, un problème, une question ou un compliment directement.",
+      "Temps estimé : indiquez la durée d'une tâche. Elle s'affiche sur la carte, et « Ma journée » additionne le travail prévu et les réunions pour vous dire si la journée est réaliste.",
+      "Modèles de projet : lancement de projet, événement, déménagement, voyage ou chantier. Le projet et ses premières tâches, avec échéances, se créent en un clic.",
+      "Dictée vocale : un bouton micro dans l'ajout rapide pour dicter une tâche (« Réserver la salle demain 10h »), si votre navigateur le permet.",
+      "Rappels avant échéance : choisissez de recevoir une alerte du navigateur 5, 10, 30 minutes ou 1 heure avant une tâche à heure fixe.",
+      "« Ne pas déranger » : choisissez une plage horaire pendant laquelle aucune alerte du navigateur n'est affichée.",
+      "Mes données : téléchargez une copie de vos informations (JSON) ou de vos tâches (tableur CSV) depuis le Centre d'aide.",
+      "Fiche membre : dans Équipe, un clic sur une personne ouvre sa fiche avec ses horaires du jour, ses tâches en cours et ses prochaines échéances.",
+      "Succès : dix badges se débloquent au fil de votre utilisation (premières tâches, séries de jours, ponctualité, travail d'équipe…). Vous seul les voyez.",
+      "Accessibilité : contraste renforcé et réduction des animations, dans Profil → Apparence. Le réglage système « réduire les animations » est aussi respecté.",
+      "Astuce du jour sur l'accueil, pour découvrir une fonction à la fois.",
+      "Impression : imprimez votre journée ou votre semaine depuis « Ma journée ».",
+      "Nouvelles conditions d'utilisation, page d'erreur 404 soignée et accueil public enrichi.",
+      "Quelques corrections de formulation : « Profitez-en » et « Vous avez déjà une réunion… » s'adressent bien à vous."
+    ]
+  },
+  {
     "date": "2026-11-05",
     "items": [
       "Tous les textes du site s'adressent désormais à vous : la dernière page qui tutoyait, celle des règles de confidentialité, a été corrigée.",
