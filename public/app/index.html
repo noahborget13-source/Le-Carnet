@@ -1413,7 +1413,12 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "admin" && isAdmin && <AdminView me={me} session={session} accounts={accounts} tasks={tasks} leaves={leaves} meetings={meetings} attendees={attendees} notify={notify} onChanged={onProfileChanged} />}
         <SiteFooter />
       </main>
-      {showPalette && <CommandPalette recents={recents} tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); pushRecent("note", id); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} onReview={() => { setShowPalette(false); setShowReview(true); }} />}
+      {showPalette && <CommandPalette actions={[
+        { k: "help", label: "Ouvrir le Centre d'aide", hint: "Questions fréquentes et retours", run: () => { setShowPalette(false); setShowHelpCenter(true); } },
+        { k: "theme", label: "Basculer thème clair / sombre", hint: "Changer l'apparence", run: () => { const n = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light"; try { localStorage.setItem(THEME_KEY, n); } catch (_) {} applyTheme(n); setShowPalette(false); } },
+        { k: "print", label: "Imprimer ma journée", hint: "Agenda du jour sur papier", run: () => { setShowPalette(false); printAgenda({ me, tasks, meetings, attendees, from: parisDay(), days: 1, title: "Ma journée · " + fmtDay(parisDay(), { weekday: "long", day: "numeric", month: "long" }) }); } },
+        { k: "keys", label: "Raccourcis clavier", hint: "Afficher la liste", run: () => { setShowPalette(false); setShowHelp(true); } },
+      ]} recents={recents} tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); pushRecent("note", id); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} onReview={() => { setShowPalette(false); setShowReview(true); }} />}
       {showReview && <WeeklyReview me={me} tasks={tasks} meetings={meetings} attendees={attendees} timeEntries={timeEntries} notify={notify} onClose={() => setShowReview(false)} onOpen={(id) => { setShowReview(false); setOpenId(id); }} />}
       {showHelpCenter && <HelpCenter me={me} session={session} tabId={tab} notify={notify} data={{ tasks, notes, timeEntries, habits, habitLogs, meetings, attendees, appointments, projects }} onClose={() => setShowHelpCenter(false)} onShortcuts={() => { setShowHelpCenter(false); setShowHelp(true); }} onRestoreStart={() => { try { const h = lsJson("carnet-home-" + me.id, []); lsSet("carnet-home-" + me.id, JSON.stringify((Array.isArray(h) ? h : []).filter(x => x !== "start"))); } catch (_) {} setShowHelpCenter(false); setTab("home"); setHomeKey(k => k + 1); }} />}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} />}
@@ -2536,7 +2541,7 @@ function RunningTimer({ me, entries, tasks, onOpen, notify }) {
 
 /** Recherche globale (Ctrl K) : pages, tâches, réunions, notes. */
 const normSearch = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab, onTask, onNote, onNewTask, canCreate, onReview, recents = [] }) {
+function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab, onTask, onNote, onNewTask, canCreate, onReview, recents = [], actions = [] }) {
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const inputRef = useRef(null);
@@ -2547,6 +2552,7 @@ function CommandPalette({ tasks, meetings, notes, accounts, tabs, onClose, onTab
     const pages = tabs.map(t => ({ k: "tab-" + t.id, kind: "Page", label: t.label, hint: "Aller à cette page", run: () => onTab(t.id) }));
     if (canCreate) pages.unshift({ k: "new-task", kind: "Action", label: "Nouvelle tâche", hint: "Créer une tâche", run: onNewTask });
     if (onReview) pages.push({ k: "review", kind: "Action", label: "Revue de la semaine", hint: "Faire le point guidé", run: onReview });
+    actions.forEach(a => pages.push({ k: "act-" + a.k, kind: "Action", label: a.label, hint: a.hint, run: a.run }));
     const match = (txt) => !needle || normSearch(txt).includes(needle);
     if (!needle) {
       for (const r of recents.slice(0, 5)) {
@@ -3082,6 +3088,8 @@ function NotesView({ me, accounts, notes, projects, focusId, onFocused, notify }
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
                   <h2 style={{ fontFamily: "Literata, serif", fontSize: 24, fontWeight: 600, margin: 0, flex: 1, minWidth: 180 }}>{cur.pinned ? "📌 " : ""}{cur.title}</h2>
                   {canWrite && <button type="button" data-note-edit onClick={startEdit} style={chipBtn}>✎ Modifier</button>}
+                  <button type="button" data-note-md onClick={() => downloadFile(slugName(cur.title) + ".md", "text/markdown;charset=utf-8", "# " + cur.title + "\n\n" + cur.body + "\n")} style={chipBtn}>⬇ Markdown</button>
+                  <button type="button" data-note-print onClick={() => printNote(cur)} style={chipBtn}>🖨 Imprimer</button>
                   {canWrite && <button type="button" data-note-pin onClick={togglePin} style={chipBtn}>{cur.pinned ? "Désépingler" : "📌 Épingler"}</button>}
                   {(cur.created_by === me.id || isAdmin) && <button type="button" data-note-delete onClick={remove} style={{ ...chipBtn, color: "var(--late)" }}>Supprimer</button>}
                 </div>
@@ -3335,7 +3343,7 @@ function WeekBoard({ tasks, accounts, canEditTask, onOpen, onMoveDue }) {
 
 /* ---------------- Admin : congés ---------------- */
 /* ---------------- Accueil : ma journée ---------------- */
-function MyDay({ me, accounts, tasks, meetings, attendees, leaves, events = [], onOpen, goTo }) {
+function MyDay({ me, accounts, tasks, meetings, attendees, leaves, events = [], onOpen, goTo, notify = () => {} }) {
   const now = Date.now(), today = parisDay(now);
   const extras = dayExtras(today, events, accounts);
   const myMeetings = meetings.filter(m => parisDay(Date.parse(m.starts_at)) === today && (m.created_by === me.id || attendees.some(a => a.meeting_id === m.id && a.user_id === me.id && a.response !== "declined")));
@@ -3352,6 +3360,11 @@ function MyDay({ me, accounts, tasks, meetings, attendees, leaves, events = [], 
   const next = items.find(i => i.end >= now);
   const minsTo = next ? Math.round((next.at - now) / 60000) : 0;
   const empty = !items.length && !allDay.length && !late.length;
+  const rescheduleLate = async () => {
+    const back = []; let ok = 0;
+    for (const t of late) { const { error } = await supabase.from("tasks").update(duePatch(t, today)).eq("id", t.id); if (!error) { ok++; back.push(t); } }
+    notify(`${ok} tâche(s) reportée(s) à aujourd'hui.`, ok ? "ok" : "err", ok ? { label: "Annuler", onClick: async () => { for (const t of back) await supabase.from("tasks").update({ due: t.due, start_date: t.start_date || null }).eq("id", t.id); } } : undefined);
+  };
   const sec = { fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6, color: "var(--text-dimmer)", textTransform: "uppercase", margin: "12px 0 6px" };
   return (
     <section aria-label="Ma journée" data-testid="my-day" style={{ background: "var(--panel)", border: "1px solid var(--border)", borderLeft: "4px solid var(--accent)", borderRadius: 14, padding: "16px 18px", marginBottom: 26 }}>
@@ -3395,7 +3408,7 @@ function MyDay({ me, accounts, tasks, meetings, attendees, leaves, events = [], 
         <div style={sec}>À finir aujourd'hui</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{allDay.map(t => <button key={t.id} type="button" onClick={() => onOpen(t.id)} style={{ textAlign: "left", background: "var(--bg)", border: "none", borderRadius: 10, padding: "9px 12px", cursor: "pointer", color: "var(--text)", fontSize: 14, fontWeight: 600 }}>{t.title}</button>)}</div>
       </>)}
-      {late.length > 0 && <button type="button" onClick={() => goTo("tasks")} style={{ ...chipBtn, marginTop: 12, color: "var(--late)" }}>⚠️ {late.length} tâche(s) en retard</button>}
+      {late.length > 0 && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}><button type="button" onClick={() => goTo("tasks")} style={{ ...chipBtn, color: "var(--late)" }}>⚠️ {late.length} tâche(s) en retard</button><button type="button" data-late-today onClick={rescheduleLate} style={chipBtn}>↷ Tout reporter à aujourd'hui</button></div>}
       {away.length > 0 && (
         <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--text-dim)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span>🌴 Absent(s) aujourd'hui :</span>
@@ -3541,13 +3554,15 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
       </div>
       {showPrefs && <HomePrefs hidden={hidden} setHidden={setHidden} onClose={() => setShowPrefs(false)} />}
       {show("start") && <GettingStarted me={me} tasks={tasks} notes={notes} goTo={goTo} onHelp={onHelp} onHide={() => setHidden([...hidden, "start"])} />}
-      <MyDay me={me} accounts={accounts} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} events={events} onOpen={onOpen} goTo={goTo} />
+      <MyDay notify={notify} me={me} accounts={accounts} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} events={events} onOpen={onOpen} goTo={goTo} />
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 26 }}>
         <StatCard value={mine.length} label="À faire pour moi" hex="#5B9EF5" onClick={() => goTo("tasks")} />
         <StatCard value={late.length} label="En retard" hex="#FF6B5E" onClick={() => goTo("tasks")} />
         <StatCard value={today.length} label="Pour aujourd'hui" hex="#FFB648" onClick={() => goTo("calendar")} />
         <StatCard value={myDoneWeek.length} label="Terminées cette semaine" hex="#5FBF8B" />
       </div>
+      {show("goal") && <DailyGoal me={me} tasks={tasks} />}
+      {show("evening") && <EveningReview me={me} tasks={tasks} meetings={meetings} attendees={attendees} notify={notify} />}
 
       {show("pins") && pinned.length > 0 && (<div data-pinned-section style={{ marginBottom: 26 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>📌 Épinglées</div>
@@ -4029,6 +4044,21 @@ function TasksView({ savedViews = [], me, session, isAdmin, myPerms, accounts, t
     if (error) { notify(error.message, "err"); return; }
     notify("Tâche placée dans la corbeille.", "ok", { label: "Annuler", onClick: () => restoreTask(t.id) });
   };
+  const duplicateTask = async (t) => {
+    const { data: created, error } = await supabase.from("tasks").insert({
+      title: (t.title + " (copie)").slice(0, 200), notes: t.notes || "", label: t.label, priority: t.priority, due: t.due || null, due_time: t.due_time || null, start_date: t.start_date || null,
+      assignees: assigneeIds(t), assignee: assigneeIds(t)[0] || null, tags: t.tags || [], subtasks: (t.subtasks || []).map(x => ({ ...x, id: uid(), done: false })),
+      recurrence: t.recurrence || null, project_id: t.project_id || null, estimate_min: t.estimate_min || null, done: false, created_by: me.id, server_id: me.server_id,
+    }).select().single();
+    if (error) { notify(error.message, "err"); return; }
+    notify("Tâche dupliquée.", "ok", created ? { label: "Annuler", onClick: async () => { await supabase.rpc("trash_task", { p_id: created.id }); } } : undefined);
+  };
+  const snoozeTask = async (t, kind) => {
+    const day = snoozeTarget(kind);
+    const { error } = await supabase.from("tasks").update(duePatch(t, day)).eq("id", t.id);
+    if (error) { notify(error.message, "err"); return; }
+    notify(`Tâche reportée au ${fmtDay(day, { weekday: "long", day: "numeric", month: "long" })}.`, "ok", { label: "Annuler", onClick: async () => { await supabase.from("tasks").update({ due: t.due || null, start_date: t.start_date || null }).eq("id", t.id); } });
+  };
   const purgeTask = async (t) => {
     const paths = attachments.filter(a => a.task_id === t.id).map(a => a.path);
     const { error } = await supabase.from('tasks').delete().eq('id', t.id);
@@ -4145,7 +4175,7 @@ function TasksView({ savedViews = [], me, session, isAdmin, myPerms, accounts, t
           {visible.map(t => (
             <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {selectMode && <input type="checkbox" data-pick={t.id} checked={picked.includes(t.id)} onChange={() => setPicked(p => (p.includes(t.id) ? p.filter(x => x !== t.id) : [...p, t.id]))} aria-label={"Sélectionner « " + t.title + " »"} style={{ width: 18, height: 18, flexShrink: 0, accentColor: "var(--accent)", cursor: "pointer" }} />}
-              <div style={{ flex: 1, minWidth: 0 }}><TaskCard task={t} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} project={projects.find(p => p.id === t.project_id)} blockers={openBlockers(t)} commentCount={comments.filter(c => c.task_id === t.id).length} attachCount={attachments.filter(a => a.task_id === t.id).length} onOpen={() => onOpen(t.id)} onTagClick={setQuery} onToggle={() => toggleDone(t)} onEdit={() => openEdit(t)} onDelete={() => removeTask(t)} /></div>
+              <div style={{ flex: 1, minWidth: 0 }}><TaskCard task={t} accounts={accounts} me={me} isAdmin={isAdmin} myPerms={myPerms} project={projects.find(p => p.id === t.project_id)} blockers={openBlockers(t)} commentCount={comments.filter(c => c.task_id === t.id).length} attachCount={attachments.filter(a => a.task_id === t.id).length} onOpen={() => onOpen(t.id)} onTagClick={setQuery} onToggle={() => toggleDone(t)} onEdit={() => openEdit(t)} onDelete={() => removeTask(t)} onDuplicate={(isAdmin || myPerms.createTasks) ? () => duplicateTask(t) : null} onSnooze={(k) => snoozeTask(t, k)} /></div>
             </div>
           ))}
           {selectMode && (
@@ -5653,8 +5683,104 @@ const PROJECT_TEMPLATES = [
 
 try { applyA11y(); } catch (_) {}
 
+/* ---------------- Lot G : confort au quotidien ---------------- */
+const snoozeTarget = (kind, from = parisDay()) => kind === "tomorrow" ? shiftDay(from, 1) : kind === "monday" ? shiftDay(from, 8 - isoWd(from)) : shiftDay(from, 7);
+function SnoozeMenu({ onPick }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const k = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", h); document.addEventListener("keydown", k);
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", k); };
+  }, [open]);
+  const opts = [["tomorrow", "Demain"], ["monday", "Lundi prochain"], ["week", "Dans une semaine"]];
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button type="button" data-snooze aria-haspopup="menu" aria-expanded={open} aria-label="Reporter la tâche" title="Reporter" onClick={() => setOpen(o => !o)} style={iconBtn}>⏭</button>
+      {open && (
+        <div role="menu" style={{ position: "absolute", right: 0, top: "100%", zIndex: 30, marginTop: 4, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "var(--shadow)", padding: 4, minWidth: 170 }}>
+          {opts.map(([k, l]) => <button key={k} role="menuitem" type="button" data-snooze-opt={k} onClick={() => { setOpen(false); onPick(k); }} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 10px", borderRadius: 7, cursor: "pointer", color: "var(--text)", font: "inherit", fontSize: 13 }}>{l}</button>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DailyGoal({ me, tasks }) {
+  const key = "carnet-goal-" + me.id;
+  const [goal, setGoalRaw] = useState(() => { const n = Number(lsGet(key, "3")); return n >= 1 && n <= 20 ? n : 3; });
+  const setGoal = (n) => { const v = Math.max(1, Math.min(20, n)); setGoalRaw(v); lsSet(key, String(v)); };
+  const today = parisDay();
+  const done = tasks.filter(t => t.done && t.done_at && assigneeIds(t).includes(me.id) && parisDay(Date.parse(t.done_at)) === today).length;
+  const reached = done >= goal, pct = Math.min(1, done / goal), R = 26, C = 2 * Math.PI * R;
+  return (
+    <div data-goal data-reached={reached ? "1" : "0"} style={{ marginBottom: 26 }}>
+      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label={`${done} sur ${goal}`}>
+          <circle cx="32" cy="32" r={R} fill="none" stroke="var(--bg-2)" strokeWidth="7" />
+          <circle cx="32" cy="32" r={R} fill="none" stroke={reached ? "#5FBF8B" : "var(--accent)"} strokeWidth="7" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - pct)} transform="rotate(-90 32 32)" />
+          <text x="32" y="37" textAnchor="middle" fontSize="15" fontWeight="700" fill="var(--text)">{done}/{goal}</text>
+        </svg>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text-dimmer)", textTransform: "uppercase" }}>Objectif du jour</div>
+          <div data-goal-text style={{ fontSize: 14.5, fontWeight: 600 }}>{reached ? "Objectif atteint, bravo ! 🎉" : `Encore ${goal - done} tâche${goal - done > 1 ? "s" : ""} à terminer aujourd'hui`}</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--text-dim)" }}>
+          Objectif
+          <button type="button" data-goal-minus aria-label="Baisser l'objectif" onClick={() => setGoal(goal - 1)} style={{ ...chipBtn, padding: "3px 10px" }}>−</button>
+          <strong data-goal-value style={{ color: "var(--text)", minWidth: 18, textAlign: "center" }}>{goal}</strong>
+          <button type="button" data-goal-plus aria-label="Augmenter l'objectif" onClick={() => setGoal(goal + 1)} style={{ ...chipBtn, padding: "3px 10px" }}>+</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EveningReview({ me, tasks, meetings, attendees, notify }) {
+  const now = Date.now();
+  if (parisHM(now) < "17:00") return null;
+  const today = parisDay(now), tomorrow = shiftDay(today, 1);
+  const mine = tasks.filter(t => assigneeIds(t).includes(me.id) && !t.deleted_at);
+  const doneToday = mine.filter(t => t.done && t.done_at && parisDay(Date.parse(t.done_at)) === today).length;
+  const left = mine.filter(t => !t.done && t.due === today);
+  const tmr = mine.filter(t => !t.done && t.due === tomorrow);
+  const tmrEst = tmr.reduce((a, t) => a + (t.estimate_min || 0), 0);
+  const tmrMeet = meetings.filter(m => parisDay(Date.parse(m.starts_at)) === tomorrow && (m.created_by === me.id || attendees.some(a => a.meeting_id === m.id && a.user_id === me.id && a.response !== "declined"))).length;
+  const carry = async () => {
+    const back = []; let ok = 0;
+    for (const t of left) { const { error } = await supabase.from("tasks").update(duePatch(t, tomorrow)).eq("id", t.id); if (!error) { ok++; back.push(t); } }
+    notify(`${ok} tâche(s) reportée(s) à demain.`, ok ? "ok" : "err", ok ? { label: "Annuler", onClick: async () => { for (const t of back) await supabase.from("tasks").update({ due: t.due, start_date: t.start_date || null }).eq("id", t.id); } } : undefined);
+  };
+  return (
+    <section data-evening aria-label="Bilan du soir" style={{ background: "var(--panel)", border: "1px solid var(--border)", borderLeft: "4px solid #9B7EF5", borderRadius: 14, padding: "14px 18px", marginBottom: 26 }}>
+      <h2 style={{ fontFamily: "Literata, serif", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>🌙 Bilan du soir</h2>
+      <div style={{ fontSize: 14, lineHeight: 1.65 }}>
+        <div data-evening-done>{doneToday > 0 ? <>Aujourd'hui, vous avez terminé <strong>{doneToday}</strong> tâche{doneToday > 1 ? "s" : ""}. Bien joué.</> : "Aucune tâche terminée aujourd'hui, et ce n'est pas grave : demain est un autre jour."}</div>
+        {left.length > 0 && <div data-evening-left><strong>{left.length}</strong> tâche{left.length > 1 ? "s" : ""} prévue{left.length > 1 ? "s" : ""} pour aujourd'hui {left.length > 1 ? "restent" : "reste"} à faire.</div>}
+        <div data-evening-tomorrow>Demain : <strong>{tmr.length}</strong> tâche{tmr.length > 1 ? "s" : ""}{tmrEst ? ` (${fmtEst(tmrEst)} estimées)` : ""}{tmrMeet ? ` et ${tmrMeet} réunion${tmrMeet > 1 ? "s" : ""}` : ""}.</div>
+      </div>
+      {left.length > 0 && <button type="button" data-evening-carry onClick={carry} style={{ ...chipBtn, marginTop: 10 }}>↷ Reporter le reste à demain</button>}
+    </section>
+  );
+}
+
+function printHtml(html) {
+  if (typeof window.__printHook === "function") { window.__printHook(html); return; }
+  const f = document.createElement("iframe");
+  f.setAttribute("aria-hidden", "true"); f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(f);
+  const d = f.contentDocument; d.open(); d.write(html); d.close();
+  setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (_) {} setTimeout(() => f.remove(), 3000); }, 250);
+}
+const slugName = (s) => String(s || "note").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase().slice(0, 50) || "note";
+function printNote(n) {
+  printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escH(n.title)}</title><style>body{font:15px/1.6 Georgia,serif;color:#111;margin:28px}h1{font-size:24px;margin:0 0 14px}.b{white-space:pre-wrap}@media print{body{margin:12mm}}</style></head><body><h1>${escH(n.title)}</h1><div class="b">${escH(n.body)}</div></body></html>`);
+}
+
 /* ---------------- Accueil : carte d'activité, bloc-notes rapide, personnalisation ---------------- */
-const HOME_SECTIONS = [["start", "Guide « Premiers pas »"], ["tip", "Astuce du jour"], ["pins", "Tâches épinglées"], ["stats", "Mes statistiques"], ["heat", "Carte d'activité"], ["scratch", "Bloc-notes rapide"], ["recap", "Récap de la semaine"]];
+const HOME_SECTIONS = [["goal", "Objectif du jour"], ["evening", "Bilan du soir (après 17 h)"], ["start", "Guide « Premiers pas »"], ["tip", "Astuce du jour"], ["pins", "Tâches épinglées"], ["stats", "Mes statistiques"], ["heat", "Carte d'activité"], ["scratch", "Bloc-notes rapide"], ["recap", "Récap de la semaine"]];
 function ActivityHeat({ me, tasks }) {
   const WEEKS = 26;
   const { cells, total, best } = useMemo(() => {
@@ -6016,7 +6142,7 @@ function ProjectsModal({ projects, members, accounts, me, isAdmin, canCreate, no
   );
 }
 
-function TaskCard({ blockers = [], task, project, accounts, me, isAdmin, myPerms, commentCount, attachCount, onOpen, onTagClick, onToggle, onEdit, onDelete }) {
+function TaskCard({ blockers = [], task, project, accounts, me, isAdmin, myPerms, commentCount, attachCount, onOpen, onTagClick, onToggle, onEdit, onDelete, onDuplicate, onSnooze }) {
   const label = LABELS.find(l => l.id === task.label) || LABELS[0];
   const prio = PRIORITIES.find(p => p.id === task.priority) || PRIORITIES[1];
   const people = assigneeIds(task).map(id => accounts.find(a => a.id === id)).filter(Boolean);
@@ -6028,8 +6154,8 @@ function TaskCard({ blockers = [], task, project, accounts, me, isAdmin, myPerms
   const canDelete = isAdmin || myPerms.deleteAnyTask || (own && myPerms.deleteOwnTask);
   const hasMeta = (task.estimate_min > 0 && !task.done) || (task.tags || []).length > 0 || (task.subtasks || []).length > 0 || task.recurrence || commentCount > 0 || attachCount > 0 || task.doing || Boolean(project) || blockers.length > 0;
   return (
-    <div className="fade-in" style={{ display: "flex", alignItems: "stretch", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", opacity: task.done ? 0.55 : 1 }}>
-      <div style={{ width: 5, background: label.hex, flexShrink: 0 }} />
+    <div className="fade-in" style={{ display: "flex", alignItems: "stretch", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, opacity: task.done ? 0.55 : 1 }}>
+      <div style={{ width: 5, background: label.hex, flexShrink: 0, borderRadius: "11px 0 0 11px" }} />
       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", flexWrap: "wrap" }}>
         <button onClick={onToggle} style={{ background: "none", border: "none", cursor: "pointer", color: task.done ? "#5FBF8B" : "var(--text-dimmer)", flexShrink: 0 }}>{task.done ? <I.Check size={20} /> : <I.Circle size={20} />}</button>
         <div style={{ flex: 1, minWidth: 140 }}>
@@ -6052,6 +6178,8 @@ function TaskCard({ blockers = [], task, project, accounts, me, isAdmin, myPerms
         {task.due && (<div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, flexShrink: 0, color: late ? "var(--late)" : soon ? "#FFC97A" : "var(--text-dim)" }}>{late ? <I.Alert size={13} /> : di.timed ? <I.Clock size={13} /> : <I.Calendar size={13} />}{di.label}</div>)}
         {people.length > 0 && <AvatarStack users={people} size={26} max={3} />}
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          {onSnooze && canEdit && !task.done && <SnoozeMenu onPick={onSnooze} />}
+          {onDuplicate && <button type="button" data-dup onClick={onDuplicate} style={iconBtn} title="Dupliquer" aria-label="Dupliquer la tâche">⧉</button>}
           {canEdit && <button onClick={onEdit} style={iconBtn} title="Modifier"><I.Settings size={14} /></button>}
           {canDelete && <button onClick={onDelete} style={{ ...iconBtn, color: "var(--late)" }} title="Mettre à la corbeille"><I.Trash size={14} /></button>}
         </div>
@@ -6061,8 +6189,12 @@ function TaskCard({ blockers = [], task, project, accounts, me, isAdmin, myPerms
 }
 function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], onDeleteTemplate, onCancel, onSave, projects = [], projectMembers = [], defaultProject = "" }) {
   const [pendingFiles, setPendingFiles] = useState([]);
-  const [title, setTitle] = useState(initial?.title || "");
-  const [notes, setNotes] = useState(initial?.notes || "");
+  const draftKey = "carnet-draft-task-" + meId;
+  const draft0 = useMemo(() => (initial ? null : lsJson(draftKey, null)), []);
+  const [draftOff, setDraftOff] = useState(false);
+  const [title, setTitle] = useState(initial?.title || (draft0 && draft0.title) || "");
+  const [notes, setNotes] = useState(initial?.notes || (draft0 && draft0.notes) || "");
+  useEffect(() => { if (initial) return; const id = setTimeout(() => lsSet(draftKey, title.trim() || notes.trim() ? JSON.stringify({ title, notes }) : ""), 400); return () => clearTimeout(id); }, [title, notes]);
   const [label, setLabel] = useState(initial?.label || LABELS[0].id);
   const [priority, setPriority] = useState(initial?.priority || 2);
   const [due, setDue] = useState(initial?.due || "");
@@ -6109,7 +6241,7 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
       tags: parseTags(tagsText), subtasks: pendingSub, recurrence: recurrence || null, blocked_by: blockedBy, estimate_min: estimate ? Number(estimate) : null,
       saveAsTemplate: asTemplate ? (tplName.trim() || title.trim()) : null,
       __files: pendingFiles,
-    }); } finally { setSaving(false); }
+    }); if (!initial) lsSet(draftKey, ""); } finally { setSaving(false); }
   };
   const selectedTpl = (templates || []).find(x => x.id === tplId);
   const allDayDue = !(timed && dueTime);
@@ -6138,6 +6270,7 @@ function TaskForm({ initial, meId, accounts, templates, tasks: allTasks = [], on
             {selectedTpl && <button type="button" onClick={() => { onDeleteTemplate(selectedTpl.id); setTplId(""); }} style={{ background: "none", border: "none", color: "var(--late)", fontSize: 12, cursor: "pointer", padding: "6px 0 0" }}>Supprimer le modèle « {selectedTpl.name} »</button>}
           </div>
         )}
+        {draft0 && !draftOff && (draft0.title || draft0.notes) && <div data-draft-banner role="status" style={{ fontSize: 12.5, background: "var(--bg-2)", borderRadius: 9, padding: "7px 11px", marginBottom: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>📝 Votre brouillon a été restauré.<button type="button" data-draft-clear onClick={() => { setTitle(""); setNotes(""); lsSet(draftKey, ""); setDraftOff(true); }} style={{ ...chipBtn, padding: "2px 9px" }}>Repartir de zéro</button></div>}
         <Field label="Titre"><input autoFocus value={title} onChange={e => setTitle(e.target.value)} style={inputStyle} /></Field>
         <Field label="Notes (optionnel)"><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></Field>
         <div style={{ display: "flex", gap: 12 }}>

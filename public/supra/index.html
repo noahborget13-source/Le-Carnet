@@ -365,6 +365,7 @@ function computeReport({ tasks, meetings, attendees, accounts, projects, days, p
 }
 const PATCH_TECH = {
   "2026-11-06": [
+    "Lot suivant, application uniquement, sans migration : SnoozeMenu et snoozeTarget (report relatif à aujourd'hui), duplicateTask / snoozeTask avec annulation, rescheduleLate dans MyDay, DailyGoal (objectif en localStorage), EveningReview (visible à partir de 17 h, heure de Paris), actions de la palette (prop actions), brouillon du formulaire de tâche (localStorage, effacé après enregistrement), export Markdown et impression des notes (printHtml).",
     "migration-30-retours-estimations.sql : tasks.estimate_min (null ou 5–1440, contrainte tasks_estimate_range) ; table feedback (kind idee/bug/question/compliment, message 3–2000, page, status new/read/done) avec RLS en lecture seule pour l'auteur ; réglage platform_settings « notify_feedback ».",
     "api/manage-account.js : action send-feedback (validation, limite de 5 messages par heure et par personne, insertion par la clé de service, email au propriétaire via notifyOwner). requireUser refuse désormais les comptes bannis. api/_supra.js : supra-feedback, supra-feedback-set, compteur feedbackNew dans la vue d'ensemble.",
     "Supra Admin : page « Retours » (filtres nouveaux / lus / traités, réponse par email, marquage), alerte « nouveau retour » dans Emails, indicateur sur la vue d'ensemble.",

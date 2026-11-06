@@ -16,6 +16,14 @@
       "Astuce du jour sur l'accueil, pour découvrir une fonction à la fois.",
       "Impression : imprimez votre journée ou votre semaine depuis « Ma journée ».",
       "Nouvelles conditions d'utilisation, page d'erreur 404 soignée et accueil public enrichi.",
+      "Dupliquer une tâche d'un clic (bouton ⧉), avec ses sous-tâches remises à zéro. Vous pouvez annuler.",
+      "Reporter une tâche (bouton ⏭) à demain, lundi prochain ou dans une semaine, avec possibilité d'annuler.",
+      "Tâches en retard : un bouton « Tout reporter à aujourd'hui » dans « Ma journée ».",
+      "Objectif du jour : choisissez combien de tâches vous voulez terminer aujourd'hui et suivez votre progression sur l'accueil.",
+      "Bilan du soir (à partir de 17 h) : ce que vous avez accompli, ce qu'il reste, et la charge du lendemain. Un bouton reporte le reste à demain.",
+      "La recherche globale (Ctrl + K) propose maintenant des actions : ouvrir l'aide, basculer le thème clair/sombre, imprimer votre journée, afficher les raccourcis.",
+      "Brouillon automatique : si vous fermez le formulaire d'une nouvelle tâche sans l'enregistrer, vous retrouvez ce que vous aviez écrit.",
+      "Notes : téléchargez une note au format Markdown ou imprimez-la.",
       "Quelques corrections de formulation : « Profitez-en » et « Vous avez déjà une réunion… » s'adressent bien à vous."
     ]
   },
