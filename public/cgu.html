@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<script>try{var m=localStorage.getItem("carnet-theme");var t=(m==="light"||m==="dark")?m:((window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark");document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,600;7..72,700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Conditions d'utilisation — Le Carnet</title>
+<meta name="description" content="Les conditions d'utilisation de Le Carnet : compte, contenu, bonne conduite et responsabilités." />
+<link rel="canonical" href="https://le-carnet-beta.vercel.app/cgu.html" />
+<style>
+  /* Identité visuelle « papier quadrillé » : papier pâle, encre bleue, marge rouge ; thème sombre « ardoise ». */
+  :root {
+    --bg: #0E1420; --bg-2: #131B2A; --panel: #161F30; --panel-2: #1B2638;
+    --border: #242F45; --border-soft: #2E3B55; --text: #E9EEF7;
+    --text-dim: #97A5BE; --text-dimmer: #6F7D97;
+    --accent: #5B79F0; --accent-2: #7490F5; --admin: #4FC3A8;
+    --late: #FF9A8F; --margin-line: rgba(240,100,95,.38); --grid: rgba(124,150,255,.055);
+    --ring: #9DB1FF; --shadow: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.28); --accent-glow: rgba(91,121,240,.32);
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F1F4F8; --bg-2: #E7ECF3; --panel: #FFFFFF; --panel-2: #F7F9FC;
+    --border: #D8DFE9; --border-soft: #C5CEDB; --text: #12203A;
+    --text-dim: #475670; --text-dimmer: #66748E;
+    --accent: #1E40AF; --accent-2: #2B52C9; --admin: #0F766E;
+    --late: #B42318; --margin-line: rgba(214,69,69,.5); --grid: rgba(30,64,175,.07);
+    --ring: #1E40AF; --shadow: 0 1px 2px rgba(18,32,58,.06), 0 6px 18px rgba(18,32,58,.07); --accent-glow: rgba(30,64,175,.22);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background-color: var(--bg);
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px; background-attachment: fixed;
+    color: var(--text); font-family: 'Figtree', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 2px solid var(--ring) !important; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+  body { margin: 0; line-height: 1.65; }
+  body::before { content: ''; position: fixed; top: 0; bottom: 0; left: clamp(10px, 4.5vw, 64px); width: 1px; background: var(--margin-line); }
+  main { width: min(760px, 100% - 32px); margin: 0 auto; padding: 40px 0 60px; position: relative; }
+  h1 { font-family: 'Literata', Georgia, serif; font-size: 34px; margin: 0 0 6px; }
+  h2 { font-family: 'Literata', Georgia, serif; font-size: 21px; margin: 32px 0 8px; }
+  p, li { color: var(--text-dim); font-size: 15.5px; }
+  li strong, p strong { color: var(--text); }
+  a { color: var(--accent); }
+  .meta { color: var(--text-dimmer); font-size: 13.5px; }
+  footer { text-align: center; color: var(--text-dimmer); font-size: 13px; padding: 0 0 36px; position: relative; }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="/">← Retour à l'accueil</a></p>
+  <h1>Conditions d'utilisation</h1>
+  <p class="meta">Dernière mise à jour : 6 novembre 2026</p>
+
+  <p>Le Carnet est une application de gestion de tâches en équipe, produite par Noah Borget. En créant un compte ou en utilisant l'application, vous acceptez les conditions ci-dessous. Elles sont volontairement courtes et en langage clair.</p>
+
+  <h2>1. Le service</h2>
+  <p>Le Carnet vous permet d'organiser des tâches, un calendrier, des réunions, des notes et des échanges au sein d'un « serveur » : l'espace d'une équipe, d'une famille ou d'un groupe d'amis. Le service est proposé gratuitement et en l'état. De nouvelles fonctions sont ajoutées régulièrement, et certaines peuvent évoluer ou disparaître.</p>
+
+  <h2>2. Votre compte</h2>
+  <ul>
+    <li>Vous devez fournir une adresse email valide dont vous avez l'usage.</li>
+    <li>Vous êtes responsable de la confidentialité de vos identifiants et de ce qui est fait avec votre compte. Choisissez un mot de passe que vous n'utilisez pas ailleurs.</li>
+    <li>Une personne = un compte. Ne vous faites pas passer pour quelqu'un d'autre.</li>
+  </ul>
+
+  <h2>3. Votre contenu</h2>
+  <p>Les tâches, notes, messages et fichiers que vous ajoutez restent les vôtres. Vous nous autorisez simplement à les stocker et à les afficher aux membres de votre serveur, comme vous l'avez choisi, pour faire fonctionner l'application. Vous êtes responsable de ce que vous publiez. Vous pouvez récupérer une copie de vos données à tout moment depuis le Centre d'aide (« Mes données »).</p>
+
+  <h2>4. Règles de bonne conduite</h2>
+  <p>Il est interdit d'utiliser Le Carnet pour :</p>
+  <ul>
+    <li>publier des contenus illégaux, haineux, diffamatoires, ou portant atteinte à la vie privée d'autrui ;</li>
+    <li>harceler d'autres personnes ou leur envoyer des messages non sollicités en masse ;</li>
+    <li>tenter d'accéder à des comptes ou à des données qui ne sont pas les vôtres, ou perturber le fonctionnement du service ;</li>
+    <li>utiliser des programmes automatisés pour créer des comptes ou surcharger l'application.</li>
+  </ul>
+
+  <h2>5. Modération et suspension</h2>
+  <p>L'administrateur d'un serveur peut gérer les membres de son serveur. L'éditeur du Carnet peut suspendre ou supprimer un compte, ou un serveur entier, en cas de non-respect de ces conditions ou pour protéger le service et ses utilisateurs.</p>
+
+  <h2>6. Disponibilité et sauvegarde</h2>
+  <p>Nous faisons le maximum pour que le service soit disponible et vos données en sécurité, mais nous ne pouvons pas garantir l'absence d'interruption ou de perte. Des maintenances peuvent avoir lieu, annoncées dans l'application quand c'est possible. Nous vous conseillons d'exporter régulièrement vos données si elles sont importantes.</p>
+
+  <h2>7. Responsabilité</h2>
+  <p>Le Carnet est fourni sans garantie d'aucune sorte. Dans la limite permise par la loi, l'éditeur ne peut être tenu responsable des dommages indirects liés à l'utilisation du service (perte de données, de temps, de rendez-vous manqués, etc.).</p>
+
+  <h2>8. Fin de l'utilisation</h2>
+  <p>Vous pouvez supprimer votre compte à tout moment depuis la page Profil de l'application. Supprimer un compte efface son profil ; les tâches qu'il a créées peuvent rester dans le serveur.</p>
+
+  <h2>9. Données personnelles</h2>
+  <p>Le traitement de vos données est détaillé dans nos <a href="/confidentialite.html">règles de confidentialité</a>.</p>
+
+  <h2>10. Modifications</h2>
+  <p>Ces conditions peuvent évoluer. En cas de changement important, vous en serez informé(e) dans l'application. Continuer à utiliser Le Carnet après une modification vaut acceptation.</p>
+
+  <h2>Contact</h2>
+  <p>Pour toute question : <a href="mailto:lecarnetvercel@gmail.com">lecarnetvercel@gmail.com</a></p>
+</main></main>
+<footer>© 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget · <a href="/confidentialite.html">Confidentialité</a> · <a href="/cgu.html">Conditions d'utilisation</a><br><small style="font-size:10.5px;opacity:.7">Ce site a été créé avec l'aide de Claude, l'assistant d'Anthropic.</small></footer>
+</body>
+</html>

@@ -44,7 +44,12 @@
 <meta property="og:title" content="Le Carnet — Gestion de tâches en équipe" />
 <meta property="og:description" content="Priorités, échéances, rappels par email, calendrier et messagerie : organisez vos tâches à plusieurs, dans votre propre espace." />
 <meta property="og:url" content="https://le-carnet-beta.vercel.app/" />
-<meta name="twitter:card" content="summary" />
+<meta property="og:image" content="https://le-carnet-beta.vercel.app/icons/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Le Carnet — gestion de tâches en équipe" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://le-carnet-beta.vercel.app/icons/og-image.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,600;7..72,700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -236,6 +241,12 @@
         <article class="card"><div class="ic">🔁</div><h3>Tâches récurrentes</h3><p>Tous les jours, toutes les semaines ou tous les mois : la prochaine occurrence se crée toute seule.</p></article>
         <article class="card"><div class="ic">📅</div><h3>Calendrier</h3><p>Visualisez toutes les échéances du mois et ouvrez une tâche d'un clic.</p></article>
         <article class="card"><div class="ic">💬</div><h3>Commentaires et messagerie</h3><p>Échangez sous chaque tâche, ou envoyez un message privé à un membre de votre espace.</p></article>
+        <article class="card"><div class="ic">⏱️</div><h3>Temps estimé et journée réaliste</h3><p>Indiquez combien de temps prend une tâche : « Ma journée » additionne le travail prévu et vous prévient quand elle est trop chargée.</p></article>
+        <article class="card"><div class="ic">🚀</div><h3>Modèles de projet</h3><p>Lancement, événement, déménagement, voyage, travaux : un projet et ses premières tâches se créent d'un clic.</p></article>
+        <article class="card"><div class="ic">🎤</div><h3>Dictée vocale et rappels</h3><p>Dictez une tâche à voix haute, recevez un rappel avant l'échéance, et coupez les alertes la nuit avec « Ne pas déranger ».</p></article>
+        <article class="card"><div class="ic">🤝</div><h3>Fiche membre et rendez-vous</h3><p>Consultez la disponibilité et les tâches en cours d'un collègue, puis prenez rendez-vous en présentiel ou en appel.</p></article>
+        <article class="card"><div class="ic">♿</div><h3>Accessible à tous</h3><p>Contraste renforcé, animations réduites, taille d'affichage réglable, clavier complet : Le Carnet s'adapte à vous.</p></article>
+        <article class="card"><div class="ic">📦</div><h3>Vos données vous appartiennent</h3><p>Téléchargez à tout moment une copie de vos tâches et de vos informations, et supprimez votre compte quand vous le souhaitez.</p></article>
         <article class="card"><div class="ic">🛡️</div><h3>Rôles et droits</h3><p>Administrateur, modérateur, membre ou invité, avec des droits réglables personne par personne.</p></article>
       </div>
     </div>
@@ -285,6 +296,8 @@
       <details><summary>Comment inviter quelqu'un ?</summary><p>L'administrateur peut envoyer une invitation par email : la personne crée son compte via le lien reçu. Il peut aussi donner le code du serveur ; la demande d'accès doit alors être approuvée par lui.</p></details>
       <details><summary>Mes tâches sont-elles visibles par tout le monde ?</summary><p>Non. Seuls les membres approuvés de votre serveur voient ses tâches. Les messages privés ne sont visibles que par les deux personnes concernées.</p></details>
       <details><summary>Peut-on choisir ce que chaque personne a le droit de faire ?</summary><p>Oui. Chaque personne a un rôle (modérateur, membre ou invité) et l'administrateur peut ajuster ses droits un par un : créer, modifier ou supprimer des tâches, envoyer des messages.</p></details>
+      <details><summary>Puis-je récupérer mes données ?</summary><p>Oui. Dans l'application, ouvrez le Centre d'aide (bouton « ? ») puis « Mes données » : vous téléchargez une copie complète (JSON) ou vos tâches sous forme de tableur (CSV).</p></details>
+      <details><summary>Comment vous signaler un problème ou proposer une idée ?</summary><p>Depuis l'application, le Centre d'aide propose un formulaire « Un retour ? » qui arrive directement à l'équipe du Carnet. Vous pouvez aussi écrire à <a href="mailto:lecarnetvercel@gmail.com">lecarnetvercel@gmail.com</a>.</p></details>
       <details><summary>Faut-il installer quelque chose ?</summary><p>Non. Le Carnet fonctionne dans le navigateur, sur ordinateur comme sur téléphone.</p></details>
     </div>
   </section>
@@ -302,7 +315,7 @@
 </main>
 
 <footer>
-  <div class="wrap">© 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget · <a href="/confidentialite.html">Confidentialité</a> · <a href="mailto:lecarnetvercel@gmail.com">Contact : lecarnetvercel@gmail.com</a></div>
+  <div class="wrap">© 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget · <a href="/confidentialite.html">Confidentialité</a> · <a href="/cgu.html">Conditions d'utilisation</a> · <a href="mailto:lecarnetvercel@gmail.com">Contact : lecarnetvercel@gmail.com</a></div>
 </footer>
 <script>
   // Nouveautés : lues dans /patchnotes.json (une entrée par jour). Si le fichier est inaccessible, la section reste masquée.

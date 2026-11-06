@@ -45,13 +45,14 @@ export async function handleSupra({ req, res, sb, user, action }) {
   if (action === 'supra-overview') {
     const [{ data: servers }, profiles] = await Promise.all([sb.from('servers').select('id, name, created_at, join_code'), allProfiles(sb)]);
     const tasks = (await sb.from('tasks').select('id', { count: 'exact', head: true })).count || 0;
+    const feedbackNew = (await sb.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new')).count || 0;
     const out = (servers || []).map(s => {
       const m = profiles.filter(p => p.server_id === s.id);
       return { id: s.id, name: s.name, created_at: s.created_at, members: m.filter(p => p.status === 'approved' && !p.banned_at).length, pending: m.filter(p => p.status === 'pending').length, banned: m.filter(p => p.banned_at).length, admins: m.filter(p => p.role === 'admin').map(p => p.display_name), suspended: m.length > 0 && m.every(p => p.banned_at) };
     }).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     return res.status(200).json({
       ok: true, servers: out,
-      totals: { servers: out.length, accounts: profiles.length, pending: profiles.filter(p => p.status === 'pending').length, banned: profiles.filter(p => p.banned_at).length, tasks },
+      totals: { servers: out.length, accounts: profiles.length, pending: profiles.filter(p => p.status === 'pending').length, banned: profiles.filter(p => p.banned_at).length, tasks, feedbackNew },
       mailConfigured: mailConfigured(),
     });
   }
@@ -193,6 +194,28 @@ export async function handleSupra({ req, res, sb, user, action }) {
     if (sent) await logPlatform(sb, me, 'broadcast', null, subject, `${sent} destinataire(s), ${audience === 'all' ? 'tous les membres' : 'administrateurs'}${body.serverId ? ' d\'un serveur' : ''}`);
     if (!sent) return res.status(502).json({ error: "Aucun email n'a pu partir. Vérifiez la configuration Gmail." });
     return res.status(200).json({ ok: true, sent, failed, recipients: to.length });
+  }
+
+  if (action === 'supra-feedback') {
+    const filter = ['new', 'read', 'done'].includes(body.status) ? body.status : null;
+    let q = sb.from('feedback').select('id, user_id, server_id, kind, message, page, status, created_at').order('created_at', { ascending: false }).limit(200);
+    if (filter) q = q.eq('status', filter);
+    const { data, error } = await q;
+    if (error) return res.status(200).json({ ok: true, available: false, rows: [], counts: {} });
+    const [profiles, { data: servers }] = await Promise.all([allProfiles(sb), sb.from('servers').select('id, name')]);
+    const pname = new Map(profiles.map(p => [p.id, p])), sname = new Map((servers || []).map(s => [s.id, s.name]));
+    const { data: all } = await sb.from('feedback').select('status');
+    const counts = { new: 0, read: 0, done: 0 }; for (const f of all || []) counts[f.status] = (counts[f.status] || 0) + 1;
+    return res.status(200).json({ ok: true, available: true, counts, rows: (data || []).map(f => { const p = pname.get(f.user_id); return { id: f.id, kind: f.kind, message: f.message, page: f.page, status: f.status, created_at: f.created_at, name: p ? p.display_name : 'Ancien membre', email: p ? realEmail(p.email) : '', server: sname.get(f.server_id) || '' }; }) });
+  }
+
+  if (action === 'supra-feedback-set') {
+    const status = String(body.status || '');
+    if (!['new', 'read', 'done'].includes(status)) return res.status(400).json({ error: 'Statut invalide.' });
+    const ids = Array.isArray(body.ids) ? body.ids.slice(0, 200).map(String) : [String(body.id || '')];
+    const { error } = await sb.from('feedback').update({ status }).in('id', ids);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ ok: true, count: ids.length });
   }
 
   if (action === 'supra-log') {

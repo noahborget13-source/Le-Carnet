@@ -192,9 +192,26 @@ async function requireUser(req, res) {
   const { data: userData, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !userData?.user) { res.status(401).json({ error: 'Session invalide' }); return null; }
   const { data: profile } = await supabaseAdmin.from('profiles')
-    .select('id, role, server_id, status, username').eq('id', userData.user.id).single();
-  if (!profile || profile.status !== 'approved') { res.status(403).json({ error: 'Accès refusé.' }); return null; }
+    .select('id, role, server_id, status, username, display_name, email, banned_at').eq('id', userData.user.id).single();
+  if (!profile || profile.status !== 'approved' || profile.banned_at) { res.status(403).json({ error: 'Accès refusé.' }); return null; }
   return profile;
+}
+
+const FEEDBACK_KINDS = { idee: 'Idée', bug: 'Problème', question: 'Question', compliment: 'Compliment' };
+async function sendFeedback(req, me, body, res) {
+  const kind = String(body.kind || '');
+  const message = String(body.message || '').replace(/\r\n/g, '\n').trim();
+  const page = String(body.page || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 60);
+  if (!FEEDBACK_KINDS[kind]) return res.status(400).json({ error: 'Choisissez le type de message.' });
+  if (message.length < 3) return res.status(400).json({ error: 'Écrivez au moins quelques mots.' });
+  if (message.length > 2000) return res.status(400).json({ error: 'Votre message est trop long (2 000 caractères au maximum).' });
+  const hourAgo = new Date(Date.now() - 3600000).toISOString();
+  const { count } = await supabaseAdmin.from('feedback').select('id', { count: 'exact', head: true }).eq('user_id', me.id).gte('created_at', hourAgo);
+  if ((count || 0) >= 5) return res.status(429).json({ error: "Vous avez déjà envoyé plusieurs messages : réessayez dans une heure." });
+  const { error } = await supabaseAdmin.from('feedback').insert({ user_id: me.id, server_id: me.server_id, kind, message, page });
+  if (error) return res.status(500).json({ error: /feedback/.test(error.message) ? "Cette fonction n'est pas encore activée (migration 30)." : error.message });
+  await notifyOwner(supabaseAdmin, req, 'notify_feedback', 'Nouveau message de ' + (me.display_name || me.username), [`${FEEDBACK_KINDS[kind]} · ${me.display_name || me.username} (${me.email || ''})`, message.slice(0, 600)]);
+  return res.status(200).json({ ok: true });
 }
 
 async function updateSelf(me, body, res) {
@@ -287,6 +304,7 @@ export default async function handler(req, res) {
     if (!me) return;
 
     // ---- Actions sur son propre compte ----
+    if (action === 'send-feedback') return await sendFeedback(req, me, body, res);
     if (action === 'update-self') return await updateSelf(me, body, res);
     if (action === 'delete-self') {
       if (me.role === 'admin') {
