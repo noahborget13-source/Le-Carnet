@@ -1,5 +1,17 @@
 [
   {
+    "date": "2026-11-07",
+    "items": [
+      "Nouvel onglet Listes : courses, valise, idées de cadeaux… des listes à cocher à plusieurs, mises à jour en direct. Vous pouvez les archiver, copier leur contenu et supprimer les éléments cochés en un clic (raccourci G puis L).",
+      "Nouvel onglet Dépenses : notez qui a payé quoi et pour qui. Le Carnet calcule les soldes, propose les remboursements les plus simples, et vous les marquez comme faits. Export CSV inclus (raccourci G puis D).",
+      "Nouvel onglet Charge : un tableau jour par jour qui additionne, pour chaque personne, le temps estimé des tâches et les réunions. Les journées de plus de huit heures sont signalées (raccourci G puis W).",
+      "Accueil : compte à rebours (« Vacances dans 12 jours »), podium de la semaine et boîte de réception qui vous aide à donner une date, une par une, à vos tâches sans échéance (touches 1 à 5).",
+      "Votre série de jours consécutifs avec une tâche terminée s'affiche sous l'objectif du jour.",
+      "Bilan de la semaine imprimable : ce que vous avez terminé, ce qui est en retard et ce qui arrive.",
+      "Affichage compact pour voir plus de tâches d'un coup, et thème « Noir pur » pour les écrans OLED, dans Profil → Affichage."
+    ]
+  },
+  {
     "date": "2026-11-06",
     "items": [
       "Guide « Premiers pas » sur l'accueil : sept petites étapes cochées automatiquement pour prendre le Carnet en main. Vous pouvez le masquer et le retrouver depuis le Centre d'aide.",

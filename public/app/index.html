@@ -150,6 +150,9 @@
   }
   .show-mobile { display: none; }
 
+
+  :root[data-density="compact"] { --card-pad: 6px 12px; }
+  :root[data-amoled="on"]:not([data-theme="light"]) { --bg: #000000; --bg-2: #07090D; --panel: #0A0C11; --panel-2: #10131A; --border: #1A1F2D; --border-soft: #232A3A; --grid: rgba(124,150,255,.025); }
   :root[data-contrast="high"] { --text: #FFFFFF; --text-dim: #E6EAF2; --text-dimmer: #C6CCDA; --border: #8F99AE; --border-soft: #6F7A92; }
   :root[data-theme="light"][data-contrast="high"] { --text: #000000; --text-dim: #1A1F29; --text-dimmer: #343B4A; --border: #4B5365; --border-soft: #6B7388; }
   :root[data-contrast="high"] :focus-visible { outline: 3px solid var(--accent-2) !important; outline-offset: 2px !important; }
@@ -321,6 +324,8 @@ const I = {
   Check: p => <Icon {...p} path={<><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></>} />,
   Circle: p => <Icon {...p} path={<circle cx="12" cy="12" r="10"/>} />,
   Chevron: p => <Icon {...p} path={<polyline points="6 9 12 15 18 9"/>} />,
+  Wallet: p => <Icon {...p} path={<><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></>} />,
+  Gauge: p => <Icon {...p} path={<><path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></>} />,
   Target: p => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>} />,
   Users: p => <Icon {...p} path={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />,
   Repeat: p => <Icon {...p} path={<><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></>} />,
@@ -1210,6 +1215,10 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [showReview, setShowReview] = useState(false);
   const [habits, setHabits] = useState([]);
   const [habitLogs, setHabitLogs] = useState([]);
+  const [lists, setLists] = useState([]);
+  const [listItems, setListItems] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [settlements, setSettlements] = useState([]);
   const [resources, setResources] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [availabilities, setAvailabilities] = useState([]);
@@ -1263,6 +1272,10 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   useLiveTable('checkins', setCheckins);
   useLiveTable('habits', setHabits);
   useLiveTable('habit_logs', setHabitLogs);
+  useLiveTable('lists', setLists);
+  useLiveTable('list_items', setListItems);
+  useLiveTable('expenses', setExpenses);
+  useLiveTable('settlements', setSettlements);
   useLiveTable('resources', setResources);
   useLiveTable('bookings', setBookings);
   useLiveTable('availabilities', setAvailabilities);
@@ -1301,6 +1314,9 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
     { id: "bookings", label: "Réservations", icon: I.Building, secondary: true },
     { id: "appointments", label: "Rendez-vous", icon: I.Handshake, secondary: true },
     { id: "habits", label: "Habitudes", icon: I.Repeat, secondary: true },
+    { id: "lists", label: "Listes", icon: I.List, secondary: true },
+    { id: "expenses", label: "Dépenses", icon: I.Wallet, secondary: true },
+    { id: "workload", label: "Charge", icon: I.Gauge, secondary: true },
     { id: "objectives", label: "Objectifs", icon: I.Target, secondary: true },
     { id: "notes", label: "Notes", icon: I.Note, secondary: true },
     { id: "messages", label: "Messages", icon: I.Message },
@@ -1314,7 +1330,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [recents, setRecents] = useState(() => { const v = lsJson(recKey, []); return Array.isArray(v) ? v : []; });
   const togglePin = (id) => setPins(p => { const n = p.includes(id) ? p.filter(x => x !== id) : [id, ...p].slice(0, 12); lsSet(pinsKey, JSON.stringify(n)); return n; });
   const pushRecent = (k, id) => setRecents(r => { const n = [{ k, id }, ...r.filter(x => !(x.k === k && x.id === id))].slice(0, 8); lsSet(recKey, JSON.stringify(n)); return n; });
-  useEffect(() => { applyAccent(getAccent()); applyZoom(getZoom()); applyA11y(); }, []);
+  useEffect(() => { applyAccent(getAccent()); applyZoom(getZoom()); applyA11y(); applyDisplay(); }, []);
   const openFromAnywhere = (id) => { setOpenId(id); pushRecent("task", id); };
   const startFocus = async (task, workMin, breakMin, rounds) => {
     const { data: running } = await supabase.from("time_entries").select("*").eq("user_id", me.id).is("ended_at", null);
@@ -1343,7 +1359,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       if (document.querySelector(".modal-card")) return;
       const k = ev.key.toLowerCase();
       if (Date.now() - gAt < 1500) {
-        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", b: "bookings", v: "appointments", i: "habits", f: "activity", n: "notes", m: "messages", p: "profile", a: "admin" };
+        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", b: "bookings", v: "appointments", i: "habits", l: "lists", d: "expenses", w: "workload", f: "activity", n: "notes", m: "messages", p: "profile", a: "admin" };
         gAt = 0;
         if (map[k] && (k !== "a" || isAdmin)) { setTab(map[k]); ev.preventDefault(); }
         return;
@@ -1404,6 +1420,9 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "activity" && <ActivityView me={me} accounts={people} tasks={tasks} comments={comments} notes={notes} objectives={objectives} meetings={meetings} announcements={announcements} checkins={checkins} bookings={bookings} resources={resources} onOpen={openFromAnywhere} onNote={(id) => { setFocusNote(id); setTab("notes"); pushRecent("note", id); }} goTo={setTab} />}
         {tab === "appointments" && <AppointmentsView me={me} accounts={people} availabilities={availabilities} appointments={appointments} notify={notify} />}
         {tab === "bookings" && <BookingsView me={me} accounts={people} resources={resources} bookings={bookings} notify={notify} />}
+        {tab === "lists" && <ListsView me={me} people={people} lists={lists} items={listItems} notify={notify} />}
+        {tab === "expenses" && <ExpensesView me={me} people={people} expenses={expenses} settlements={settlements} notify={notify} />}
+        {tab === "workload" && <WorkloadView me={me} people={people} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} onOpen={openFromAnywhere} />}
         {tab === "habits" && <HabitsView me={me} habits={habits} logs={habitLogs} notify={notify} />}
         {tab === "team" && <TeamView checkins={checkins} me={me} session={session} accounts={people} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} goTo={setTab} onChanged={onProfileChanged} notify={notify} />}
         {tab === "objectives" && <ObjectivesView me={me} accounts={people} objectives={objectives} keyResults={keyResults} tasks={tasks} projects={projects} onOpen={openFromAnywhere} notify={notify} />}
@@ -1417,6 +1436,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         { k: "help", label: "Ouvrir le Centre d'aide", hint: "Questions fréquentes et retours", run: () => { setShowPalette(false); setShowHelpCenter(true); } },
         { k: "theme", label: "Basculer thème clair / sombre", hint: "Changer l'apparence", run: () => { const n = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light"; try { localStorage.setItem(THEME_KEY, n); } catch (_) {} applyTheme(n); setShowPalette(false); } },
         { k: "print", label: "Imprimer ma journée", hint: "Agenda du jour sur papier", run: () => { setShowPalette(false); printAgenda({ me, tasks, meetings, attendees, from: parisDay(), days: 1, title: "Ma journée · " + fmtDay(parisDay(), { weekday: "long", day: "numeric", month: "long" }) }); } },
+        { k: "review", label: "Imprimer le bilan de la semaine", hint: "Terminé, en retard, à venir", run: () => { setShowPalette(false); printWeekReview({ me, tasks, meetings, attendees }); } },
         { k: "keys", label: "Raccourcis clavier", hint: "Afficher la liste", run: () => { setShowPalette(false); setShowHelp(true); } },
       ]} recents={recents} tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); pushRecent("note", id); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} onReview={() => { setShowPalette(false); setShowReview(true); }} />}
       {showReview && <WeeklyReview me={me} tasks={tasks} meetings={meetings} attendees={attendees} timeEntries={timeEntries} notify={notify} onClose={() => setShowReview(false)} onOpen={(id) => { setShowReview(false); setOpenId(id); }} />}
@@ -2053,7 +2073,7 @@ function dayExtras(iso, events = [], accounts = []) {
   };
 }
 
-const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis F", "Fil d'activité"], ["G puis V", "Rendez-vous"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
+const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis L", "Listes"], ["G puis D", "Dépenses"], ["G puis W", "Charge de l'équipe"], ["G puis F", "Fil d'activité"], ["G puis V", "Rendez-vous"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
 function ShortcutsHelp({ onClose, isAdmin }) {
   return (
     <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
@@ -2101,6 +2121,7 @@ function PersonalCard({ me, session, notify, onChanged, card }) {
       </div>
       <PersonalizeCard notify={notify} />
       <A11yPrefs />
+      <DisplayPrefs />
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Mon anniversaire</div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Facultatif : il s'affiche dans le calendrier de votre équipe (jour et mois, jamais l'année).</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -3373,6 +3394,7 @@ function MyDay({ me, accounts, tasks, meetings, attendees, leaves, events = [], 
         {next && <span style={{ fontSize: 12.5, color: "var(--accent-2)", fontWeight: 600 }}>{minsTo > 0 ? `Prochain : ${next.kind === "meeting" ? next.m.title : next.t.title} · dans ${minsTo >= 60 ? `${Math.floor(minsTo / 60)} h ${String(minsTo % 60).padStart(2, "0")}` : `${minsTo} min`}` : `En cours : ${next.kind === "meeting" ? next.m.title : next.t.title}`}</span>}
         <span style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
           <button type="button" data-print-day onClick={() => printAgenda({ me, tasks, meetings, attendees, from: today, days: 1, title: "Ma journée · " + fmtDay(today, { weekday: "long", day: "numeric", month: "long" }) })} style={chipBtn}>🖨 Imprimer</button>
+          <button type="button" data-print-review onClick={() => printWeekReview({ me, tasks, meetings, attendees })} style={chipBtn}>📊 Bilan</button>
           <button type="button" data-print-week onClick={() => printAgenda({ me, tasks, meetings, attendees, from: shiftDay(today, 1 - isoWd(today)), days: 7, title: "Ma semaine" })} style={chipBtn}>🖨 Semaine</button>
           <button type="button" onClick={() => goTo("meetings")} style={chipBtn}>Réunions</button>
         </span>
@@ -3561,6 +3583,7 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
         <StatCard value={today.length} label="Pour aujourd'hui" hex="#FFB648" onClick={() => goTo("calendar")} />
         <StatCard value={myDoneWeek.length} label="Terminées cette semaine" hex="#5FBF8B" />
       </div>
+      {show("inbox") && <InboxCard me={me} tasks={tasks} notify={notify} />}
       {show("goal") && <DailyGoal me={me} tasks={tasks} />}
       {show("evening") && <EveningReview me={me} tasks={tasks} meetings={meetings} attendees={attendees} notify={notify} />}
 
@@ -3582,6 +3605,8 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
       {show("stats") && <MyStats me={me} tasks={tasks} projects={projects} />}
       {show("heat") && <ActivityHeat me={me} tasks={tasks} />}
       {show("scratch") && <ScratchPad me={me} notify={notify} />}
+      {show("countdown") && <Countdowns me={me} />}
+      {show("podium") && <Podium tasks={tasks} accounts={accounts} />}
       {show("tip") && <TipCard />}
 
       {show("recap") && <><div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>Récap de la semaine</div>
@@ -5715,6 +5740,7 @@ function DailyGoal({ me, tasks }) {
   const today = parisDay();
   const done = tasks.filter(t => t.done && t.done_at && assigneeIds(t).includes(me.id) && parisDay(Date.parse(t.done_at)) === today).length;
   const reached = done >= goal, pct = Math.min(1, done / goal), R = 26, C = 2 * Math.PI * R;
+  const streak = doneStreak(me, tasks);
   return (
     <div data-goal data-reached={reached ? "1" : "0"} style={{ marginBottom: 26 }}>
       <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
@@ -5726,6 +5752,7 @@ function DailyGoal({ me, tasks }) {
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text-dimmer)", textTransform: "uppercase" }}>Objectif du jour</div>
           <div data-goal-text style={{ fontSize: 14.5, fontWeight: 600 }}>{reached ? "Objectif atteint, bravo ! 🎉" : `Encore ${goal - done} tâche${goal - done > 1 ? "s" : ""} à terminer aujourd'hui`}</div>
+          {streak > 0 && <div data-goal-streak style={{ fontSize: 12.5, color: "var(--text-dim)" }}>🔥 Série de {streak} jour{streak > 1 ? "s" : ""} avec au moins une tâche terminée</div>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--text-dim)" }}>
           Objectif
@@ -5779,8 +5806,464 @@ function printNote(n) {
   printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escH(n.title)}</title><style>body{font:15px/1.6 Georgia,serif;color:#111;margin:28px}h1{font-size:24px;margin:0 0 14px}.b{white-space:pre-wrap}@media print{body{margin:12mm}}</style></head><body><h1>${escH(n.title)}</h1><div class="b">${escH(n.body)}</div></body></html>`);
 }
 
+/* ---------------- Lot H : Listes, Dépenses, Charge + extras ---------------- */
+const fmtEur = (c) => (Number(c || 0) / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+const parseEur = (s) => { const n = Number(String(s).replace(/\s/g, "").replace(",", ".")); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
+const nameOfPerson = (people, id) => { const p = people.find(x => x.id === id); return p ? p.display_name : "Ancien membre"; };
+const pageTitle = (title, sub, right) => (
+  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+    <div><h1 style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>{title}</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0", maxWidth: 560, lineHeight: 1.5 }}>{sub}</p></div>
+    {right}
+  </div>
+);
+
+/* ===== Listes partagées ===== */
+const LIST_PRESETS = [["🛒", "Courses"], ["🧳", "Valise"], ["🎁", "Idées de cadeaux"], ["✅", "À faire ensemble"], ["📝", "Idées"]];
+function ListsView({ me, people, lists, items, notify }) {
+  const canWrite = me.role !== "guest";
+  const [sel, setSel] = useState(null);
+  const [modal, setModal] = useState(false);
+  const [name, setName] = useState(""), [emoji, setEmoji] = useState("🛒");
+  const [text, setText] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const mine = (l) => l.created_by === me.id || me.role === "admin";
+  const shown = lists.filter(l => l.archived === showArchived).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const cur = lists.find(l => l.id === sel) || null;
+  useEffect(() => { if (sel && !lists.some(l => l.id === sel)) setSel(null); }, [lists]);
+  const itemsOf = (id) => items.filter(i => i.list_id === id);
+  const create = async () => {
+    const n = name.trim(); if (!n) return;
+    const { data, error } = await supabase.from("lists").insert({ server_id: me.server_id, name: n, emoji, created_by: me.id }).select().single();
+    if (error) { notify(error.message, "err"); return; }
+    setModal(false); setName(""); setSel(data ? data.id : null); notify("Liste créée.");
+  };
+  const add = async (ev) => {
+    ev.preventDefault(); const t = text.trim(); if (!t || !cur) return;
+    setText("");
+    const { error } = await supabase.from("list_items").insert({ list_id: cur.id, server_id: me.server_id, text: t, created_by: me.id });
+    if (error) { notify(error.message, "err"); setText(t); }
+  };
+  const toggle = async (i) => { const { error } = await supabase.from("list_items").update({ done: !i.done }).eq("id", i.id); if (error) notify(error.message, "err"); };
+  const del = async (i) => { const { error } = await supabase.from("list_items").delete().eq("id", i.id); if (error) notify(error.message, "err"); };
+  const clearDone = async () => { const ids = itemsOf(cur.id).filter(i => i.done).map(i => i.id); if (!ids.length) return; const { error } = await supabase.from("list_items").delete().in("id", ids); if (error) notify(error.message, "err"); else notify(`${ids.length} élément(s) supprimé(s).`); };
+  const uncheckAll = async () => { const ids = itemsOf(cur.id).filter(i => i.done).map(i => i.id); if (!ids.length) return; const { error } = await supabase.from("list_items").update({ done: false }).in("id", ids); if (error) notify(error.message, "err"); };
+  const archive = async (l, v) => { const { error } = await supabase.from("lists").update({ archived: v }).eq("id", l.id); if (error) notify(error.message, "err"); else { notify(v ? "Liste archivée." : "Liste restaurée."); setSel(null); } };
+  const remove = async (l) => { if (!window.confirm(`Supprimer la liste « ${l.name} » et tous ses éléments ?`)) return; const { error } = await supabase.from("lists").delete().eq("id", l.id); if (error) notify(error.message, "err"); else { setSel(null); notify("Liste supprimée."); } };
+  const copyList = async () => { const t = `${cur.emoji ? cur.emoji + " " : ""}${cur.name}\n` + itemsOf(cur.id).map(i => `${i.done ? "☑" : "☐"} ${i.text}`).join("\n"); await copyText(t); notify("Liste copiée."); };
+  return (
+    <div data-lists-view>
+      {pageTitle("Listes", "Courses, valise, idées de cadeaux… des listes à cocher à plusieurs, mises à jour en direct pour tout le serveur.", canWrite && <button type="button" data-list-new onClick={() => { setName(""); setEmoji("🛒"); setModal(true); }} style={{ ...primaryBtn, padding: "10px 18px", display: "flex", alignItems: "center", gap: 7 }}><I.Plus size={15} /> Nouvelle liste</button>)}
+      {!cur && (<>
+        {shown.length === 0 && <div data-lists-empty className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "30px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14, lineHeight: 1.6 }}>{showArchived ? "Aucune liste archivée." : <>Aucune liste pour le moment.<br />{canWrite ? "Créez la première : une liste de courses, par exemple." : "Les listes créées par votre équipe apparaîtront ici."}</>}</div>}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 12 }}>
+          {shown.map(l => { const its = itemsOf(l.id), d = its.filter(i => i.done).length; return (
+            <button key={l.id} type="button" data-list-card={l.name} onClick={() => setSel(l.id)} className="paper" style={{ textAlign: "left", border: "1px solid var(--border-soft)", borderRadius: 14, padding: "14px 16px", cursor: "pointer", color: "var(--text)", font: "inherit" }}>
+              <div style={{ fontSize: 26 }} aria-hidden="true">{l.emoji || "📋"}</div>
+              <div style={{ fontWeight: 600, fontSize: 15.5, marginTop: 4 }}>{l.name}</div>
+              <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8 }}>{its.length === 0 ? "Vide" : `${d} sur ${its.length} cochés`}</div>
+              <div style={{ height: 5, background: "var(--bg-2)", borderRadius: 3, overflow: "hidden" }}><div style={{ width: (its.length ? d / its.length * 100 : 0) + "%", height: "100%", background: "#5FBF8B" }} /></div>
+            </button>); })}
+        </div>
+        <div style={{ marginTop: 16 }}><button type="button" data-list-archived-toggle onClick={() => setShowArchived(v => !v)} style={chipBtn}>{showArchived ? "← Listes actives" : `Archives (${lists.filter(l => l.archived).length})`}</button></div>
+      </>)}
+      {cur && (() => { const its = itemsOf(cur.id).sort((a, b) => Number(a.done) - Number(b.done) || a.created_at.localeCompare(b.created_at)); const d = its.filter(i => i.done).length; return (
+        <div data-list-open={cur.name}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+            <button type="button" data-list-back onClick={() => setSel(null)} style={chipBtn}>← Toutes les listes</button>
+            <h2 style={{ fontFamily: "Literata, serif", fontSize: 22, margin: 0 }}>{cur.emoji} {cur.name}</h2>
+            <span data-list-progress style={{ fontSize: 13, color: "var(--text-dim)" }}>{d}/{its.length}</span>
+          </div>
+          {canWrite && !cur.archived && (
+            <form onSubmit={add} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <input data-list-add value={text} onChange={e => setText(e.target.value)} maxLength={200} placeholder="Ajouter un élément (Entrée pour valider)…" aria-label="Nouvel élément" style={{ ...inputStyle, flex: 1 }} />
+              <button type="submit" style={primaryBtn} disabled={!text.trim()}>Ajouter</button>
+            </form>)}
+          {its.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 14, padding: "10px 2px" }}>Cette liste est vide.</div>}
+          <div className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, overflow: "hidden" }}>
+            {its.map((i, k) => (
+              <div key={i.id} data-list-item={i.text} data-done={i.done ? "1" : "0"} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: k ? "1px solid var(--border-soft)" : "none" }}>
+                <input type="checkbox" data-item-check checked={i.done} disabled={!canWrite} onChange={() => toggle(i)} aria-label={"Cocher « " + i.text + " »"} style={{ width: 18, height: 18 }} />
+                <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", textDecoration: i.done ? "line-through" : "none", color: i.done ? "var(--text-dimmer)" : "var(--text)" }}>{i.text}</span>
+                {i.done && i.done_by && <span style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>{nameOfPerson(people, i.done_by).split(" ")[0]}</span>}
+                {canWrite && <button type="button" data-item-del onClick={() => del(i)} style={{ ...iconBtn, border: "none" }} aria-label={"Supprimer « " + i.text + " »"}><I.X size={14} /></button>}
+              </div>))}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+            {canWrite && d > 0 && <button type="button" data-list-clear-done onClick={clearDone} style={chipBtn}>Supprimer les cochés ({d})</button>}
+            {canWrite && d > 0 && <button type="button" onClick={uncheckAll} style={chipBtn}>Tout décocher</button>}
+            <button type="button" data-list-copy onClick={copyList} style={chipBtn}>Copier en texte</button>
+            {mine(cur) && <button type="button" data-list-archive onClick={() => archive(cur, !cur.archived)} style={chipBtn}>{cur.archived ? "Restaurer" : "Archiver"}</button>}
+            {mine(cur) && <button type="button" data-list-delete onClick={() => remove(cur)} style={{ ...chipBtn, color: "var(--late)" }}>Supprimer la liste</button>}
+          </div>
+        </div>); })()}
+      {modal && (
+        <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) setModal(false); }}>
+          <div className="modal-card" role="dialog" aria-label="Nouvelle liste" style={{ ...modalStyle, width: 420 }}>
+            <h2 style={{ fontFamily: "Literata, serif", fontSize: 20, margin: "0 0 14px" }}>Nouvelle liste</h2>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+              {LIST_PRESETS.map(([e, n]) => <button key={n} type="button" data-list-preset={n} onClick={() => { setEmoji(e); setName(n); }} style={chipBtn}>{e} {n}</button>)}
+            </div>
+            <Field label="Nom"><input data-list-name autoFocus value={name} maxLength={60} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && create()} style={inputStyle} /></Field>
+            <Field label="Icône (un émoji)"><input value={emoji} maxLength={4} onChange={e => setEmoji(e.target.value)} style={{ ...inputStyle, width: 80 }} /></Field>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}><button type="button" onClick={() => setModal(false)} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" data-list-create onClick={create} disabled={!name.trim()} style={{ ...primaryBtn, flex: 1 }}>Créer</button></div>
+          </div>
+        </div>)}
+    </div>
+  );
+}
+
+/* ===== Dépenses partagées ===== */
+function computeBalances(expenses, settlements) {
+  const bal = {}, add = (id, v) => { bal[id] = (bal[id] || 0) + v; };
+  for (const e of expenses) {
+    const ids = [...e.split_among].sort(), base = Math.floor(e.amount_cents / ids.length), rest = e.amount_cents - base * ids.length;
+    add(e.paid_by, e.amount_cents);
+    ids.forEach((id, i) => add(id, -(base + (i < rest ? 1 : 0))));
+  }
+  for (const s of settlements) { add(s.from_user, s.amount_cents); add(s.to_user, -s.amount_cents); }
+  return bal;
+}
+function suggestTransfers(bal) {
+  const d = [], c = [];
+  Object.entries(bal).forEach(([id, v]) => { if (v < 0) d.push({ id, v: -v }); else if (v > 0) c.push({ id, v }); });
+  d.sort((a, b) => b.v - a.v || a.id.localeCompare(b.id)); c.sort((a, b) => b.v - a.v || a.id.localeCompare(b.id));
+  const out = []; let i = 0, j = 0;
+  while (i < d.length && j < c.length) { const m = Math.min(d[i].v, c[j].v); if (m > 0) out.push({ from: d[i].id, to: c[j].id, amount: m }); d[i].v -= m; c[j].v -= m; if (!d[i].v) i++; if (!c[j].v) j++; }
+  return out;
+}
+function ExpensesView({ me, people, expenses, settlements, notify }) {
+  const canWrite = me.role !== "guest";
+  const [modal, setModal] = useState(false);
+  const [title, setTitle] = useState(""), [amount, setAmount] = useState(""), [payer, setPayer] = useState(me.id), [day, setDay] = useState(parisDay());
+  const [parts, setParts] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const bal = useMemo(() => computeBalances(expenses, settlements), [expenses, settlements]);
+  const transfers = useMemo(() => suggestTransfers(bal), [bal]);
+  const total = expenses.reduce((a, e) => a + e.amount_cents, 0);
+  const paidByMe = expenses.filter(e => e.paid_by === me.id).reduce((a, e) => a + e.amount_cents, 0);
+  const myShare = expenses.reduce((a, e) => { if (!e.split_among.includes(me.id)) return a; const ids = [...e.split_among].sort(), base = Math.floor(e.amount_cents / ids.length), rest = e.amount_cents - base * ids.length; return a + base + (ids.indexOf(me.id) < rest ? 1 : 0); }, 0);
+  const myBal = bal[me.id] || 0;
+  const canDel = (x) => x.created_by === me.id || me.role === "admin";
+  const openNew = () => { setTitle(""); setAmount(""); setPayer(me.id); setDay(parisDay()); setParts(people.map(p => p.id)); setModal(true); };
+  const cents = parseEur(amount);
+  const valid = title.trim() && cents > 0 && parts.length > 0;
+  const save = async () => {
+    if (!valid || busy) return; setBusy(true);
+    const { error } = await supabase.from("expenses").insert({ server_id: me.server_id, title: title.trim(), amount_cents: cents, paid_by: payer, split_among: parts, spent_on: day, created_by: me.id });
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    setModal(false); notify("Dépense ajoutée.");
+  };
+  const delExpense = async (e) => { if (!window.confirm(`Supprimer la dépense « ${e.title} » ?`)) return; const { error } = await supabase.from("expenses").delete().eq("id", e.id); if (error) notify(error.message, "err"); };
+  const settle = async (t) => {
+    const { error } = await supabase.from("settlements").insert({ server_id: me.server_id, from_user: t.from, to_user: t.to, amount_cents: t.amount, created_by: me.id });
+    if (error) notify(error.message, "err"); else notify("Remboursement enregistré.");
+  };
+  const delSettlement = async (s) => { const { error } = await supabase.from("settlements").delete().eq("id", s.id); if (error) notify(error.message, "err"); };
+  const exportCsv = () => {
+    const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const rows = [["Date", "Libellé", "Montant (€)", "Payé par", "Partagé entre"], ...expenses.map(e => [e.spent_on, e.title, (e.amount_cents / 100).toFixed(2).replace(".", ","), nameOfPerson(people, e.paid_by), e.split_among.map(id => nameOfPerson(people, id)).join(", ")])];
+    downloadFile(`le-carnet-depenses-${parisDay()}.csv`, "text/csv;charset=utf-8", "﻿" + rows.map(r => r.map(q).join(";")).join("\r\n"));
+  };
+  const sorted = [...expenses].sort((a, b) => b.spent_on.localeCompare(a.spent_on) || b.created_at.localeCompare(a.created_at));
+  const involved = people.filter(p => bal[p.id] !== undefined || p.id === me.id);
+  return (
+    <div data-expenses-view>
+      {pageTitle("Dépenses", "Partagez les frais d'un voyage, d'une colocation ou d'une soirée : chacun note ce qu'il a payé, Le Carnet calcule qui doit combien à qui.", <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{expenses.length > 0 && <button type="button" data-expense-csv onClick={exportCsv} style={chipBtn}>⬇ CSV</button>}{canWrite && <button type="button" data-expense-new onClick={openNew} style={{ ...primaryBtn, padding: "10px 18px", display: "flex", alignItems: "center", gap: 7 }}><I.Plus size={15} /> Nouvelle dépense</button>}</div>)}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
+        {[["total", "Total des dépenses", fmtEur(total), "var(--text)"], ["paid", "Vous avez payé", fmtEur(paidByMe), "var(--text)"], ["share", "Votre part", fmtEur(myShare), "var(--text)"], ["bal", "Votre solde", (myBal > 0 ? "+" : "") + fmtEur(myBal), myBal > 0 ? "#5FBF8B" : myBal < 0 ? "var(--late)" : "var(--text)"]].map(([id, l, v, c]) => (
+          <div key={id} data-exp-kpi={id} className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 12, padding: "12px 14px" }}><div style={{ fontSize: 12, color: "var(--text-dim)" }}>{l}</div><div style={{ fontSize: 21, fontWeight: 700, color: c }}>{v}</div></div>))}
+      </div>
+      {expenses.length === 0 && <div data-expenses-empty className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "30px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14, lineHeight: 1.6 }}>Aucune dépense pour le moment.<br />{canWrite ? "Ajoutez la première : un restaurant, des courses, un billet de train…" : "Les dépenses partagées de votre équipe apparaîtront ici."}</div>}
+      {expenses.length > 0 && (<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, marginBottom: 22 }}>
+        <section className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "14px 16px" }}>
+          <h2 style={{ fontSize: 15, margin: "0 0 10px" }}>Soldes</h2>
+          {involved.map(p => { const v = bal[p.id] || 0; return <div key={p.id} data-balance={p.display_name} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "4px 0" }}><span>{p.display_name}{p.id === me.id ? " (vous)" : ""}</span><strong style={{ color: v > 0 ? "#5FBF8B" : v < 0 ? "var(--late)" : "var(--text-dim)" }}>{v > 0 ? "+" : ""}{fmtEur(v)}</strong></div>; })}
+          <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 6 }}>Positif : on lui doit de l'argent. Négatif : il doit de l'argent.</div>
+        </section>
+        <section className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "14px 16px" }}>
+          <h2 style={{ fontSize: 15, margin: "0 0 10px" }}>Pour tout équilibrer</h2>
+          {transfers.length === 0 && <div data-all-settled style={{ fontSize: 14, color: "#5FBF8B" }}>Tout est réglé 🎉</div>}
+          {transfers.map((t, i) => (
+            <div key={i} data-transfer style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 14, padding: "5px 0" }}>
+              <span style={{ flex: 1, minWidth: 160 }}><strong>{nameOfPerson(people, t.from)}</strong> doit <strong>{fmtEur(t.amount)}</strong> à <strong>{nameOfPerson(people, t.to)}</strong></span>
+              {canWrite && (t.from === me.id || t.to === me.id || me.role === "admin") && <button type="button" data-transfer-settle onClick={() => settle(t)} style={chipBtn}>Marquer remboursé</button>}
+            </div>))}
+        </section>
+      </div>)}
+      {sorted.length > 0 && <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Dépenses</h2>}
+      <div style={{ display: "grid", gap: 8 }}>
+        {sorted.map(e => (
+          <div key={e.id} data-expense-row={e.title} className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 12, padding: "11px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14.5 }}>{e.title}</div>
+              <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{fmtDay(e.spent_on, { day: "numeric", month: "long" })} · payé par {nameOfPerson(people, e.paid_by)} · pour {e.split_among.length === people.length ? "tout le monde" : e.split_among.map(id => nameOfPerson(people, id).split(" ")[0]).join(", ")}</div>
+            </div>
+            <strong style={{ fontSize: 16 }}>{fmtEur(e.amount_cents)}</strong>
+            {canWrite && canDel(e) && <button type="button" data-expense-del onClick={() => delExpense(e)} style={{ ...iconBtn, border: "none" }} aria-label={"Supprimer « " + e.title + " »"}><I.X size={14} /></button>}
+          </div>))}
+      </div>
+      {settlements.length > 0 && (<div style={{ marginTop: 22 }}>
+        <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Remboursements effectués</h2>
+        <div style={{ display: "grid", gap: 6 }}>
+          {[...settlements].sort((a, b) => b.created_at.localeCompare(a.created_at)).map(s => (
+            <div key={s.id} data-settlement-row style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, color: "var(--text-dim)" }}>
+              <span style={{ flex: 1 }}>{nameOfPerson(people, s.from_user)} → {nameOfPerson(people, s.to_user)} · <strong style={{ color: "var(--text)" }}>{fmtEur(s.amount_cents)}</strong> · {fmtDay(parisDay(Date.parse(s.created_at)), { day: "numeric", month: "short" })}</span>
+              {canWrite && canDel(s) && <button type="button" onClick={() => delSettlement(s)} style={{ ...iconBtn, border: "none" }} aria-label="Annuler ce remboursement"><I.X size={13} /></button>}
+            </div>))}
+        </div>
+      </div>)}
+      {modal && (
+        <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) setModal(false); }}>
+          <div className="modal-card" role="dialog" aria-label="Nouvelle dépense" style={{ ...modalStyle, width: 460, maxHeight: "92vh", overflowY: "auto" }}>
+            <h2 style={{ fontFamily: "Literata, serif", fontSize: 20, margin: "0 0 14px" }}>Nouvelle dépense</h2>
+            <Field label="Libellé"><input data-expense-title autoFocus value={title} maxLength={80} onChange={e => setTitle(e.target.value)} placeholder="Restaurant, courses, train…" style={inputStyle} /></Field>
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}><Field label="Montant (€)"><input data-expense-amount inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="42,50" style={inputStyle} /></Field></div>
+              <div style={{ flex: 1 }}><Field label="Date"><input type="date" value={day} max={parisDay()} onChange={e => e.target.value && setDay(e.target.value)} style={inputStyle} /></Field></div>
+            </div>
+            <Field label="Payé par"><select data-expense-payer value={payer} onChange={e => setPayer(e.target.value)} style={inputStyle}>{people.map(p => <option key={p.id} value={p.id}>{p.display_name}{p.id === me.id ? " (vous)" : ""}</option>)}</select></Field>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 6px", display: "flex", gap: 8, alignItems: "center" }}>Partagé entre
+              <button type="button" onClick={() => setParts(people.map(p => p.id))} style={{ ...chipBtn, padding: "2px 9px" }}>Tous</button>
+              <button type="button" onClick={() => setParts([])} style={{ ...chipBtn, padding: "2px 9px" }}>Aucun</button></div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 4, marginBottom: 8 }}>
+              {people.map(p => <label key={p.id} style={{ display: "flex", gap: 7, alignItems: "center", fontSize: 13.5, cursor: "pointer" }}><input type="checkbox" data-expense-part={p.display_name} checked={parts.includes(p.id)} onChange={e => setParts(v => e.target.checked ? [...v, p.id] : v.filter(x => x !== p.id))} /> {p.display_name}</label>)}
+            </div>
+            {valid && <div data-expense-each style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8 }}>Environ {fmtEur(Math.round(cents / parts.length))} par personne.</div>}
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}><button type="button" onClick={() => setModal(false)} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" data-expense-save onClick={save} disabled={!valid || busy} style={{ ...primaryBtn, flex: 1, opacity: valid ? 1 : 0.55 }}>{busy ? "Ajout…" : "Ajouter"}</button></div>
+          </div>
+        </div>)}
+    </div>
+  );
+}
+
+/* ===== Charge de l'équipe ===== */
+function WorkloadView({ me, people, tasks, meetings, attendees, leaves, onOpen }) {
+  const [range, setRange] = useState(14);
+  const [pick, setPick] = useState(null);
+  const today = parisDay();
+  const days = Array.from({ length: range }, (_, i) => shiftDay(today, i));
+  const cap = 480;
+  const open = useMemo(() => tasks.filter(t => !t.done && !t.deleted_at && t.due), [tasks]);
+  const cell = (uid, day) => {
+    const ts = open.filter(t => t.due === day && assigneeIds(t).includes(uid));
+    const ms = meetings.filter(m => parisDay(Date.parse(m.starts_at)) === day && (m.created_by === uid || attendees.some(a => a.meeting_id === m.id && a.user_id === uid && a.response !== "declined")));
+    const est = ts.reduce((a, t) => a + (t.estimate_min || 0), 0);
+    const meet = ms.reduce((a, m) => a + Math.max(0, Math.round((Date.parse(m.ends_at) - Date.parse(m.starts_at)) / 60000)), 0);
+    const leave = leaves.some(l => l.user_id === uid && l.status === "approved" && l.start_date <= day && l.end_date >= day);
+    return { ts, ms, est, meet, total: est + meet, noEst: ts.filter(t => !t.estimate_min).length, leave };
+  };
+  const bg = (c) => c.leave ? "repeating-linear-gradient(45deg, var(--bg-2), var(--bg-2) 6px, transparent 6px, transparent 12px)" : c.total === 0 ? "transparent" : c.total / cap >= 1 ? "rgba(255,100,95,.42)" : c.total / cap >= 0.5 ? "rgba(255,182,72,.38)" : "rgba(95,191,139,.34)";
+  const grid = people.map(p => ({ p, cells: days.map(d => cell(p.id, d)) }));
+  const sel = pick ? cell(pick.uid, pick.day) : null;
+  const doPrint = () => printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Charge de l'équipe</title><style>body{font:12px/1.4 Georgia,serif;margin:20px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:4px 6px;text-align:center}th:first-child,td:first-child{text-align:left}.o{background:#ffd1ce}.m{background:#ffe7b8}.g{background:#cfeedd}</style></head><body><h1>Charge de l'équipe</h1><p>Heures estimées (tâches + réunions), ${range} prochains jours.</p><table><tr><th></th>${days.map(d => `<th>${escH(fmtDay(d, { weekday: "short", day: "numeric" }))}</th>`).join("")}</tr>${grid.map(r => `<tr><td>${escH(r.p.display_name)}</td>${r.cells.map(c => `<td class="${c.total / cap >= 1 ? "o" : c.total / cap >= 0.5 ? "m" : c.total ? "g" : ""}">${c.leave ? "congé" : c.total ? escH(fmtEst(c.total)) : ""}</td>`).join("")}</tr>`).join("")}</table></body></html>`);
+  return (
+    <div data-workload-view>
+      {pageTitle("Charge", "Qui est surchargé, qui a de la marge ? Chaque case additionne le temps estimé des tâches et les réunions du jour (huit heures = journée pleine).", <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{[7, 14, 28].map(n => <button key={n} type="button" data-workload-range={n} aria-pressed={range === n} onClick={() => setRange(n)} style={{ ...chipBtn, borderColor: range === n ? "var(--accent)" : undefined, background: range === n ? "var(--panel-2)" : "transparent" }}>{n} jours</button>)}<button type="button" data-workload-print onClick={doPrint} style={chipBtn}>🖨 Imprimer</button></div>)}
+      <div className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
+          <thead><tr><th style={{ textAlign: "left", padding: "8px 12px", position: "sticky", left: 0, background: "var(--panel)", minWidth: 130 }}>Personne</th>{days.map(d => <th key={d} style={{ padding: "8px 4px", fontWeight: 600, minWidth: 54, color: isoWd(d) >= 6 ? "var(--text-dimmer)" : "var(--text-dim)" }}>{fmtDay(d, { weekday: "short" })}<div style={{ fontWeight: 400 }}>{fmtDay(d, { day: "numeric", month: "numeric" })}</div></th>)}</tr></thead>
+          <tbody>
+            {grid.map(({ p, cells }) => (
+              <tr key={p.id} data-workload-row={p.display_name}>
+                <td style={{ padding: "7px 12px", position: "sticky", left: 0, background: "var(--panel)", fontWeight: p.id === me.id ? 700 : 500, whiteSpace: "nowrap" }}>{p.display_name}{cells.some(c => c.total > cap) && <span data-overload title="Journée surchargée" style={{ marginLeft: 6 }}>⚠️</span>}</td>
+                {cells.map((c, i) => { const d = days[i]; return (
+                  <td key={d} style={{ padding: 2, opacity: isoWd(d) >= 6 && !c.total ? 0.45 : 1 }}>
+                    <button type="button" data-wl-cell={p.display_name + "|" + d} data-minutes={c.total} data-leave={c.leave ? "1" : "0"} onClick={() => setPick({ uid: p.id, day: d })} title={c.leave ? "En congé" : c.total ? `${fmtEst(c.total)} (${c.ts.length} tâche(s), ${c.ms.length} réunion(s))` : "Libre"} style={{ width: "100%", minHeight: 34, border: pick && pick.uid === p.id && pick.day === d ? "2px solid var(--accent)" : "1px solid var(--border-soft)", borderRadius: 7, background: bg(c), color: "var(--text)", cursor: "pointer", font: "inherit", fontSize: 12 }}>{c.leave ? "🌴" : c.total ? fmtEst(c.total) : ""}{c.noEst > 0 && !c.leave && <sup title={`${c.noEst} tâche(s) sans estimation`} style={{ color: "var(--text-dimmer)" }}>+{c.noEst}</sup>}</button>
+                  </td>); })}
+              </tr>))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, color: "var(--text-dim)", margin: "10px 2px 16px" }}>
+        {[["rgba(95,191,139,.5)", "Moins de 4 h"], ["rgba(255,182,72,.5)", "4 à 8 h"], ["rgba(255,100,95,.55)", "Plus de 8 h"]].map(([c, l]) => <span key={l} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 4, background: c }} /> {l}</span>)}
+        <span>🌴 Congé · <sup>+n</sup> tâches sans estimation</span>
+      </div>
+      {sel && (
+        <div data-workload-detail className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "14px 16px" }}>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>{nameOfPerson(people, pick.uid)} · {fmtDay(pick.day, { weekday: "long", day: "numeric", month: "long" })}</div>
+          {sel.leave && <div style={{ fontSize: 13.5 }}>🌴 En congé ce jour-là.</div>}
+          {!sel.leave && sel.ts.length === 0 && sel.ms.length === 0 && <div style={{ fontSize: 13.5, color: "var(--text-dim)" }}>Rien de prévu : de la marge disponible.</div>}
+          {sel.ms.map(m => <div key={m.id} style={{ fontSize: 13.5, padding: "3px 0" }}>📹 {fmtHM(Date.parse(m.starts_at))} – {fmtHM(Date.parse(m.ends_at))} · {m.title}</div>)}
+          {sel.ts.map(t => <button key={t.id} type="button" data-wl-task onClick={() => onOpen(t.id)} style={{ display: "flex", gap: 8, width: "100%", textAlign: "left", background: "none", border: "none", color: "var(--text)", font: "inherit", fontSize: 13.5, padding: "3px 0", cursor: "pointer" }}><span style={{ flex: 1 }}>☐ {t.title}</span><span style={{ color: "var(--text-dim)" }}>{t.estimate_min ? "⏱ " + fmtEst(t.estimate_min) : "non estimée"}</span></button>)}
+        </div>)}
+    </div>
+  );
+}
+
+/* ===== Accueil : compte à rebours, podium, boîte de réception ===== */
+function Countdowns({ me }) {
+  const key = "carnet-countdown-" + me.id;
+  const [rows, setRows] = useState(() => { const v = lsJson(key, []); return Array.isArray(v) ? v.filter(r => r && r.id && r.label && /^\d{4}-\d\d-\d\d$/.test(r.date)).slice(0, 8) : []; });
+  const [adding, setAdding] = useState(false);
+  const [label, setLabel] = useState(""), [date, setDate] = useState("");
+  const save = (n) => { setRows(n); lsSet(key, JSON.stringify(n)); };
+  const today = parisDay();
+  const diff = (d) => Math.round((Date.parse(d + "T12:00:00Z") - Date.parse(today + "T12:00:00Z")) / 86400000);
+  const sorted = [...rows].sort((a, b) => { const x = diff(a.date), y = diff(b.date); return (x < 0) - (y < 0) || Math.abs(x) - Math.abs(y); });
+  const add = (ev) => { ev.preventDefault(); if (!label.trim() || !date || rows.length >= 8) return; save([...rows, { id: uid(), label: label.trim().slice(0, 40), date }]); setLabel(""); setDate(""); setAdding(false); };
+  return (
+    <div data-countdowns style={{ marginBottom: 26 }}>
+      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "13px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: sorted.length || adding ? 10 : 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text-dimmer)", textTransform: "uppercase" }}>⏳ Compte à rebours</div>
+          {!adding && rows.length < 8 && <button type="button" data-cd-add onClick={() => setAdding(true)} style={{ ...chipBtn, marginLeft: "auto" }}>+ Ajouter</button>}
+        </div>
+        {sorted.length === 0 && !adding && <div style={{ fontSize: 13.5, color: "var(--text-dim)", marginTop: 6 }}>Vacances, examen, anniversaire… ajoutez une date à attendre.</div>}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {sorted.map(r => { const n = diff(r.date); return (
+            <div key={r.id} data-cd={r.label} style={{ background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "9px 13px", minWidth: 130, opacity: n < 0 ? 0.6 : 1 }}>
+              <div data-cd-days style={{ fontSize: 22, fontWeight: 700, color: n === 0 ? "#5FBF8B" : "var(--text)" }}>{n === 0 ? "Aujourd'hui !" : n > 0 ? "J-" + n : "Il y a " + (-n) + " j"}</div>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>{r.label}</div>
+              <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", gap: 6, alignItems: "center" }}>{fmtDay(r.date, { day: "numeric", month: "long" })}<button type="button" data-cd-del onClick={() => save(rows.filter(x => x.id !== r.id))} aria-label={"Supprimer « " + r.label + " »"} style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--text-dimmer)", cursor: "pointer", fontSize: 14 }}>×</button></div>
+            </div>); })}
+        </div>
+        {adding && (
+          <form onSubmit={add} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+            <input data-cd-label value={label} onChange={e => setLabel(e.target.value)} maxLength={40} placeholder="Nom (ex. Vacances)" aria-label="Nom" style={{ ...inputStyle, flex: 1, minWidth: 150 }} />
+            <input data-cd-date type="date" value={date} onChange={e => setDate(e.target.value)} aria-label="Date" style={{ ...inputStyle, width: "auto" }} />
+            <button type="submit" data-cd-save disabled={!label.trim() || !date} style={primaryBtn}>Ajouter</button>
+            <button type="button" onClick={() => setAdding(false)} style={chipBtn}>Annuler</button>
+          </form>)}
+      </div>
+    </div>
+  );
+}
+function Podium({ tasks, accounts }) {
+  const today = parisDay(), monday = shiftDay(today, 1 - isoWd(today));
+  const counts = {};
+  tasks.forEach(t => { if (t.done && t.done_at && !t.deleted_at && parisDay(Date.parse(t.done_at)) >= monday) assigneeIds(t).forEach(id => { counts[id] = (counts[id] || 0) + 1; }); });
+  const rows = Object.entries(counts).filter(([id]) => accounts.some(a => a.id === id)).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  if (!rows.length || accounts.length < 2) return null;
+  return (
+    <div data-podium style={{ marginBottom: 26 }}>
+      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "13px 16px" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text-dimmer)", textTransform: "uppercase", marginBottom: 8 }}>🏅 Podium de la semaine</div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {rows.map(([id, n], i) => { const p = accounts.find(a => a.id === id); return (
+            <div key={id} data-podium-row={p.display_name} style={{ display: "flex", alignItems: "center", gap: 9, background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 11, padding: "8px 13px" }}>
+              <span style={{ fontSize: 22 }} aria-hidden="true">{["🥇", "🥈", "🥉"][i]}</span><Avatar user={p} size={30} />
+              <div><div style={{ fontSize: 13.5, fontWeight: 600 }}>{p.display_name}</div><div style={{ fontSize: 12, color: "var(--text-dim)" }}>{n} tâche{n > 1 ? "s" : ""} terminée{n > 1 ? "s" : ""}</div></div>
+            </div>); })}
+        </div>
+      </div>
+    </div>
+  );
+}
+function InboxCard({ me, tasks, notify }) {
+  const list = tasks.filter(t => !t.done && !t.deleted_at && !t.due && assigneeIds(t).includes(me.id));
+  const [queue, setQueue] = useState(null);
+  const [i, setI] = useState(0);
+  const start = () => { setQueue(list.map(t => t.id)); setI(0); };
+  const cur = queue ? tasks.find(t => t.id === queue[i]) : null;
+  const next = () => setI(n => n + 1);
+  const setDay = async (kind) => {
+    if (!cur) return;
+    const day = kind === "today" ? parisDay() : snoozeTarget(kind);
+    const { error } = await supabase.from("tasks").update(duePatch(cur, day)).eq("id", cur.id);
+    if (error) { notify(error.message, "err"); return; }
+    next();
+  };
+  const trash = async () => { if (!cur) return; const { error } = await supabase.rpc("trash_task", { p_id: cur.id }); if (error) { notify(error.message, "err"); return; } next(); };
+  useEffect(() => {
+    if (!queue) return;
+    const h = (e) => {
+      if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+      const m = { 1: "today", 2: "tomorrow", 3: "monday", 4: "week" }[e.key];
+      if (m && cur) { e.preventDefault(); setDay(m); } else if (e.key === "5" && cur) next(); else if (e.key === "Escape") setQueue(null);
+    };
+    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+  });
+  const done = queue && i >= queue.length;
+  const btn = (k, l, extra) => <button key={k} type="button" data-triage={k} onClick={extra} style={{ ...chipBtn, padding: "9px 14px", fontSize: 13.5 }}>{l}</button>;
+  return (
+    <>
+      {list.length > 0 && !queue && (
+        <div data-inbox style={{ marginBottom: 26 }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span aria-hidden="true" style={{ fontSize: 22 }}>📥</span>
+            <div style={{ flex: 1, minWidth: 200 }}><div style={{ fontSize: 14.5, fontWeight: 600 }}><span data-inbox-count>{list.length}</span> tâche{list.length > 1 ? "s" : ""} sans date</div><div style={{ fontSize: 13, color: "var(--text-dim)" }}>Donnez-leur un jour en quelques secondes, une par une.</div></div>
+            <button type="button" data-inbox-start onClick={start} style={primaryBtn}>Trier maintenant</button>
+          </div>
+        </div>)}
+      {queue && (
+        <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) setQueue(null); }}>
+          <div className="modal-card" role="dialog" aria-label="Trier ma boîte" data-triage-modal style={{ ...modalStyle, width: 460 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <h2 style={{ fontFamily: "Literata, serif", fontSize: 20, margin: 0 }}>Trier ma boîte</h2>
+              <span data-triage-progress style={{ fontSize: 13, color: "var(--text-dim)" }}>{Math.min(i + 1, queue.length)} sur {queue.length}</span>
+            </div>
+            {done || !cur ? (
+              <div data-triage-done style={{ textAlign: "center", padding: "20px 0" }}><div style={{ fontSize: 40 }}>🎉</div><div style={{ fontSize: 15, fontWeight: 600, margin: "6px 0 14px" }}>Boîte triée !</div><button type="button" data-triage-close onClick={() => setQueue(null)} style={primaryBtn}>Terminer</button></div>
+            ) : (<>
+              <div data-triage-task style={{ background: "var(--bg)", border: "1px solid var(--border-soft)", borderRadius: 12, padding: "16px 18px", marginBottom: 14 }}>
+                <div style={{ fontSize: 17, fontWeight: 600, overflowWrap: "anywhere" }}>{cur.title}</div>
+                {cur.notes && <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 6, whiteSpace: "pre-wrap" }}>{cur.notes.slice(0, 200)}</div>}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                {btn("today", "1 · Aujourd'hui", () => setDay("today"))}{btn("tomorrow", "2 · Demain", () => setDay("tomorrow"))}{btn("monday", "3 · Lundi", () => setDay("monday"))}{btn("week", "4 · Dans une semaine", () => setDay("week"))}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {btn("skip", "5 · Plus tard", next)}{btn("trash", "Corbeille", trash)}
+                <button type="button" onClick={() => setQueue(null)} style={{ ...chipBtn, marginLeft: "auto" }}>Arrêter</button>
+              </div>
+            </>)}
+          </div>
+        </div>)}
+    </>
+  );
+}
+
+/* ===== Affichage : densité et noir pur ===== */
+const DENSITY_KEY = "carnet-density", AMOLED_KEY = "carnet-amoled";
+function applyDisplay() {
+  try {
+    const r = document.documentElement;
+    r.setAttribute("data-density", lsGet(DENSITY_KEY, "normal") === "compact" ? "compact" : "normal");
+    r.setAttribute("data-amoled", lsGet(AMOLED_KEY, "off") === "on" ? "on" : "off");
+  } catch (_) {}
+}
+function DisplayPrefs() {
+  const [compact, setCompact] = useState(lsGet(DENSITY_KEY, "normal") === "compact");
+  const [amoled, setAmoled] = useState(lsGet(AMOLED_KEY, "off") === "on");
+  const row = (id, label, hint, val, onChange) => (
+    <label style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", cursor: "pointer" }}>
+      <input type="checkbox" data-display={id} checked={val} onChange={e => onChange(e.target.checked)} style={{ marginTop: 3 }} />
+      <span><span style={{ fontSize: 13.5, fontWeight: 600 }}>{label}</span><span style={{ display: "block", fontSize: 12.5, color: "var(--text-dim)" }}>{hint}</span></span>
+    </label>
+  );
+  return (
+    <div data-display-prefs style={{ marginBottom: 22 }}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Affichage</div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>Valable sur cet appareil.</div>
+      {row("compact", "Affichage compact", "Des cartes de tâches plus serrées pour voir plus de choses d'un coup.", compact, (v) => { setCompact(v); lsSet(DENSITY_KEY, v ? "compact" : "normal"); applyDisplay(); })}
+      {row("amoled", "Noir pur (thème sombre)", "Un fond complètement noir, idéal sur écran OLED. Sans effet en thème clair.", amoled, (v) => { setAmoled(v); lsSet(AMOLED_KEY, v ? "on" : "off"); applyDisplay(); })}
+    </div>
+  );
+}
+try { applyDisplay(); } catch (_) {}
+
+function doneStreak(me, tasks) {
+  const days = new Set(tasks.filter(t => t.done && t.done_at && assigneeIds(t).includes(me.id)).map(t => parisDay(Date.parse(t.done_at))));
+  let n = 0, d = parisDay(); if (!days.has(d)) d = shiftDay(d, -1);
+  while (days.has(d)) { n++; d = shiftDay(d, -1); }
+  return n;
+}
+function printWeekReview({ me, tasks, meetings, attendees }) {
+  const today = parisDay(), monday = shiftDay(today, 1 - isoWd(today)), sunday = shiftDay(monday, 6);
+  const mine = tasks.filter(t => assigneeIds(t).includes(me.id) && !t.deleted_at);
+  const dd = (t) => parisDay(Date.parse(t.done_at));
+  const done = mine.filter(t => t.done && t.done_at && dd(t) >= monday && dd(t) <= sunday);
+  const late = mine.filter(t => !t.done && t.due && t.due < today);
+  const next = mine.filter(t => !t.done && t.due && t.due >= today && t.due <= shiftDay(today, 7)).sort((a, b) => a.due.localeCompare(b.due));
+  const meets = meetings.filter(m => { const d = parisDay(Date.parse(m.starts_at)); return d >= monday && d <= sunday && (m.created_by === me.id || attendees.some(a => a.meeting_id === m.id && a.user_id === me.id && a.response !== "declined")); }).length;
+  const est = done.reduce((a, t) => a + (t.estimate_min || 0), 0);
+  const ul = (arr, f) => arr.length ? `<ul>${arr.map(f).join("")}</ul>` : `<p class="none">Aucune.</p>`;
+  printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Bilan de la semaine</title><style>body{font:14px/1.55 Georgia,serif;color:#111;margin:28px}h1{font-size:22px;margin:0}h2{font-size:15px;margin:18px 0 6px;border-bottom:1px solid #999}.sub{color:#555;font-size:12px;margin:2px 0 14px}ul{margin:0;padding-left:20px}.none{color:#777;font-style:italic;margin:4px 0}.k{display:flex;gap:24px;margin:10px 0}.k b{font-size:22px;display:block}@media print{body{margin:12mm}}</style></head><body><h1>Bilan de la semaine</h1><p class="sub">${escH(me.display_name)} · du ${escH(fmtDay(monday, { day: "numeric", month: "long" }))} au ${escH(fmtDay(sunday, { day: "numeric", month: "long", year: "numeric" }))}</p><div class="k"><div><b>${done.length}</b>tâche(s) terminée(s)</div><div><b>${meets}</b>réunion(s)</div><div><b>${escH(est ? fmtEst(est) : "—")}</b>travail estimé terminé</div></div><h2>Terminé cette semaine</h2>${ul(done, t => `<li>${escH(t.title)}</li>`)}<h2>En retard</h2>${ul(late, t => `<li>${escH(t.title)} <small>(échéance ${escH(fmtDay(t.due, { day: "numeric", month: "long" }))})</small></li>`)}<h2>À venir (7 jours)</h2>${ul(next, t => `<li>${escH(t.title)} <small>(${escH(fmtDay(t.due, { weekday: "long", day: "numeric", month: "long" }))})</small></li>`)}</body></html>`);
+}
+
 /* ---------------- Accueil : carte d'activité, bloc-notes rapide, personnalisation ---------------- */
-const HOME_SECTIONS = [["goal", "Objectif du jour"], ["evening", "Bilan du soir (après 17 h)"], ["start", "Guide « Premiers pas »"], ["tip", "Astuce du jour"], ["pins", "Tâches épinglées"], ["stats", "Mes statistiques"], ["heat", "Carte d'activité"], ["scratch", "Bloc-notes rapide"], ["recap", "Récap de la semaine"]];
+const HOME_SECTIONS = [["inbox", "Boîte de réception (tâches sans date)"], ["countdown", "Compte à rebours"], ["podium", "Podium de la semaine"], ["goal", "Objectif du jour"], ["evening", "Bilan du soir (après 17 h)"], ["start", "Guide « Premiers pas »"], ["tip", "Astuce du jour"], ["pins", "Tâches épinglées"], ["stats", "Mes statistiques"], ["heat", "Carte d'activité"], ["scratch", "Bloc-notes rapide"], ["recap", "Récap de la semaine"]];
 function ActivityHeat({ me, tasks }) {
   const WEEKS = 26;
   const { cells, total, best } = useMemo(() => {
@@ -6156,7 +6639,7 @@ function TaskCard({ blockers = [], task, project, accounts, me, isAdmin, myPerms
   return (
     <div className="fade-in" style={{ display: "flex", alignItems: "stretch", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, opacity: task.done ? 0.55 : 1 }}>
       <div style={{ width: 5, background: label.hex, flexShrink: 0, borderRadius: "11px 0 0 11px" }} />
-      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", flexWrap: "wrap" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 14, padding: "var(--card-pad, 13px 16px)", flexWrap: "wrap" }}>
         <button onClick={onToggle} style={{ background: "none", border: "none", cursor: "pointer", color: task.done ? "#5FBF8B" : "var(--text-dimmer)", flexShrink: 0 }}>{task.done ? <I.Check size={20} /> : <I.Circle size={20} />}</button>
         <div style={{ flex: 1, minWidth: 140 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}><span onClick={onOpen} style={{ cursor: "pointer", fontSize: 14.5, fontWeight: 600, textDecoration: task.done ? "line-through" : "none", color: task.done ? "#7A8190" : "var(--text)" }}>{task.title}</span><span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: prio.hex, background: `${prio.hex}1A`, padding: "2px 7px", borderRadius: 6 }}><I.Flag size={10} /> {prio.label}</span></div>
