@@ -2,6 +2,8 @@
   {
     "date": "2026-11-07",
     "items": [
+      "Nouvel onglet Idées : proposez une idée en une phrase, votez pour celles que vous soutenez, et laissez les administrateurs les marquer « retenue », « réalisée » ou « écartée ». Un clic suffit pour transformer une idée en tâche (raccourci G puis J).",
+      "Nouvel onglet Liens : la bibliothèque de liens de votre équipe, avec recherche, étiquettes, épingles et copie de l'adresse en un clic (raccourci G puis K).",
       "Nouvel onglet Listes : courses, valise, idées de cadeaux… des listes à cocher à plusieurs, mises à jour en direct. Vous pouvez les archiver, copier leur contenu et supprimer les éléments cochés en un clic (raccourci G puis L).",
       "Nouvel onglet Dépenses : notez qui a payé quoi et pour qui. Le Carnet calcule les soldes, propose les remboursements les plus simples, et vous les marquez comme faits. Export CSV inclus (raccourci G puis D).",
       "Nouvel onglet Charge : un tableau jour par jour qui additionne, pour chaque personne, le temps estimé des tâches et les réunions. Les journées de plus de huit heures sont signalées (raccourci G puis W).",

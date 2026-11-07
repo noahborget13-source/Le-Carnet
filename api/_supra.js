@@ -1,5 +1,6 @@
 // Actions du Supra Admin (réservées au propriétaire de la plateforme, table platform_admins).
 // Appelées par /api/admin-tools : Vercel gratuit = 12 fonctions maximum, donc pas de nouveau fichier de fonction.
+import crypto from 'node:crypto';
 import { esc, siteUrl, layout, button, sendMail, mailConfigured } from './_mail.js';
 import { realEmail, isShadowEmail, logPlatform, ownerEmails } from './_platform.js';
 
@@ -23,6 +24,7 @@ async function authInfo(sb) {
   return map;
 }
 const DAY = 86400000;
+const FEATURE_TABLES = [['tasks', 'Tâches'], ['meetings', 'Réunions'], ['notes', 'Notes'], ['habits', 'Habitudes'], ['lists', 'Listes'], ['expenses', 'Dépenses'], ['ideas', 'Idées'], ['links', 'Liens'], ['objectives', 'Objectifs'], ['bookings', 'Réservations'], ['appointments', 'Rendez-vous'], ['time_entries', 'Suivi du temps'], ['projects', 'Projets']];
 async function setBanned(sb, id, ban, reason, by) {
   const patch = ban ? { banned_at: new Date().toISOString(), ban_reason: reason, banned_by: by } : { banned_at: null, ban_reason: '', banned_by: null };
   const { error } = await sb.from('profiles').update(patch).eq('id', id);
@@ -194,6 +196,101 @@ export async function handleSupra({ req, res, sb, user, action }) {
     if (sent) await logPlatform(sb, me, 'broadcast', null, subject, `${sent} destinataire(s), ${audience === 'all' ? 'tous les membres' : 'administrateurs'}${body.serverId ? ' d\'un serveur' : ''}`);
     if (!sent) return res.status(502).json({ error: "Aucun email n'a pu partir. Vérifiez la configuration Gmail." });
     return res.status(200).json({ ok: true, sent, failed, recipients: to.length });
+  }
+
+  // ---- Santé et adoption des fonctionnalités ----
+  if (action === 'supra-health') {
+    const since7 = new Date(Date.now() - 7 * DAY).toISOString();
+    const feats = [];
+    for (const [table, label] of FEATURE_TABLES) {
+      const tot = await sb.from(table).select('id', { count: 'exact', head: true });
+      if (tot.error) { feats.push({ table, label, available: false }); continue; }
+      const rec = await sb.from(table).select('id', { count: 'exact', head: true }).gte('created_at', since7);
+      const sv = await sb.from(table).select('server_id').limit(5000);
+      const servers = sv.error ? null : new Set((sv.data || []).map(r => r.server_id).filter(Boolean)).size;
+      feats.push({ table, label, available: true, total: tot.count || 0, last7d: rec.error ? null : (rec.count || 0), servers });
+    }
+    const [{ data: srv }, profiles] = await Promise.all([sb.from('servers').select('id, created_at'), allProfiles(sb)]);
+    const cnt = async (q) => { const r = await q; return r.error ? null : (r.count || 0); };
+    const mailFailed = await cnt(sb.from('mail_log').select('id', { count: 'exact', head: true }).eq('ok', false).gte('at', since7));
+    const mailSent = await cnt(sb.from('mail_log').select('id', { count: 'exact', head: true }).eq('ok', true).gte('at', since7));
+    const feedbackNew = await cnt(sb.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new'));
+    const { data: lastRun } = await sb.from('cron_runs').select('ran_at, mode, sent').order('ran_at', { ascending: false }).limit(1);
+    const cron24h = await cnt(sb.from('cron_runs').select('id', { count: 'exact', head: true }).gte('ran_at', new Date(Date.now() - DAY).toISOString()));
+    const auth = await authInfo(sb);
+    const active7 = profiles.filter(p => { const t = (auth.get(p.id) || {}).last_sign_in_at; return t && Date.now() - Date.parse(t) < 7 * DAY; }).length;
+    const alerts = [];
+    if (!mailConfigured()) alerts.push({ level: 'warn', text: "Les emails ne sont pas configurés sur Vercel (GMAIL_USER et GMAIL_APP_PASSWORD)." });
+    if (mailFailed) alerts.push({ level: 'warn', text: `${mailFailed} email${mailFailed > 1 ? 's' : ''} en échec ces 7 derniers jours.` });
+    if (!process.env.CRON_SECRET) alerts.push({ level: 'warn', text: "CRON_SECRET n'est pas défini : les rappels automatiques sont désactivés." });
+    else if (!lastRun || !lastRun[0] || Date.now() - Date.parse(lastRun[0].ran_at) > 3 * 3600000) alerts.push({ level: 'warn', text: "Les rappels automatiques n'ont pas tourné depuis plus de 3 heures." });
+    if (feedbackNew) alerts.push({ level: 'info', text: `${feedbackNew} retour${feedbackNew > 1 ? 's' : ''} d'utilisateur à lire.` });
+    const pending = profiles.filter(p => p.status === 'pending').length;
+    if (pending) alerts.push({ level: 'info', text: `${pending} demande${pending > 1 ? 's' : ''} d'adhésion en attente.` });
+    return res.status(200).json({ ok: true, features: feats, servers: (srv || []).length, newServers7d: (srv || []).filter(x => x.created_at >= since7).length,
+      accounts: profiles.length, newAccounts7d: [...auth.values()].filter(a => a.created_at && a.created_at >= since7).length, active7,
+      mail: { configured: mailConfigured(), sent7d: mailSent, failed7d: mailFailed }, cron: { secretSet: Boolean(process.env.CRON_SECRET), lastRun: lastRun && lastRun[0] ? lastRun[0] : null, runs24h: cron24h },
+      alerts });
+  }
+
+  // ---- Fiche détaillée d'un serveur ----
+  if (action === 'supra-server-detail') {
+    const serverId = String(body.serverId || '');
+    const { data: server } = await sb.from('servers').select('id, name, created_at, join_code').eq('id', serverId).maybeSingle();
+    if (!server) return res.status(404).json({ error: 'Serveur introuvable.' });
+    const [profiles, auth] = await Promise.all([allProfiles(sb), authInfo(sb)]);
+    const members = profiles.filter(p => p.server_id === serverId).map(p => ({ id: p.id, display_name: p.display_name, username: p.username, role: p.role, status: p.status, banned: Boolean(p.banned_at), last_seen: (auth.get(p.id) || {}).last_sign_in_at || null }))
+      .sort((a, b) => (a.role === 'admin' ? 0 : 1) - (b.role === 'admin' ? 0 : 1) || String(a.display_name).localeCompare(String(b.display_name), 'fr'));
+    const counts = [];
+    for (const [table, label] of FEATURE_TABLES) {
+      const r = await sb.from(table).select('id', { count: 'exact', head: true }).eq('server_id', serverId);
+      if (!r.error) counts.push({ table, label, total: r.count || 0 });
+    }
+    return res.status(200).json({ ok: true, server: { id: server.id, name: server.name, created_at: server.created_at, join_code: server.join_code }, members, counts });
+  }
+
+  // ---- Renommer un serveur ou régénérer son code d'invitation ----
+  if (action === 'supra-server-edit') {
+    const serverId = String(body.serverId || '');
+    const { data: server } = await sb.from('servers').select('id, name').eq('id', serverId).maybeSingle();
+    if (!server) return res.status(404).json({ error: 'Serveur introuvable.' });
+    const patch = {}; const notes = [];
+    if (body.name !== undefined) {
+      const name = clip(String(body.name || '').replace(/\s+/g, ' '), 60);
+      if (name.length < 2) return res.status(400).json({ error: 'Le nom doit compter au moins 2 caractères (60 au maximum).' });
+      if (name !== server.name) { patch.name = name; notes.push(`« ${server.name} » → « ${name} »`); }
+    }
+    if (body.regenerateCode) { patch.join_code = crypto.randomBytes(4).toString('hex'); notes.push("nouveau code d'invitation"); }
+    if (!Object.keys(patch).length) return res.status(400).json({ error: "Rien à modifier." });
+    const { error } = await sb.from('servers').update(patch).eq('id', serverId);
+    if (error) return res.status(400).json({ error: error.message });
+    await logPlatform(sb, me, patch.name ? 'server_rename' : 'server_code', serverId, patch.name || server.name, notes.join(', '));
+    return res.status(200).json({ ok: true, name: patch.name || server.name, join_code: patch.join_code || null });
+  }
+
+  // ---- Exports de données de la plateforme (CSV construit côté navigateur) ----
+  if (action === 'supra-export') {
+    const kind = String(body.kind || '');
+    if (kind === 'servers') {
+      const [{ data: servers }, profiles] = await Promise.all([sb.from('servers').select('id, name, created_at'), allProfiles(sb)]);
+      return res.status(200).json({ ok: true, columns: ['Serveur', 'Créé le', 'Membres', 'En attente', 'Bannis'], rows: (servers || []).map(sv => { const m = profiles.filter(p => p.server_id === sv.id); return [sv.name, sv.created_at, m.filter(p => p.status === 'approved' && !p.banned_at).length, m.filter(p => p.status === 'pending').length, m.filter(p => p.banned_at).length]; }) });
+    }
+    if (kind === 'feedback') {
+      const { data, error } = await sb.from('feedback').select('created_at, kind, status, name, page, message').order('created_at', { ascending: false }).limit(5000);
+      if (error) return res.status(400).json({ error: "Retours indisponibles (migration 30 à lancer)." });
+      return res.status(200).json({ ok: true, columns: ['Date', 'Type', 'Statut', 'Nom', 'Page', 'Message'], rows: (data || []).map(r => [r.created_at, r.kind, r.status, r.name, r.page, r.message]) });
+    }
+    if (kind === 'log') {
+      const { data, error } = await sb.from('platform_log').select('created_at, action, target_label, detail').order('created_at', { ascending: false }).limit(5000);
+      if (error) return res.status(400).json({ error: 'Journal indisponible.' });
+      return res.status(200).json({ ok: true, columns: ['Date', 'Action', 'Cible', 'Détail'], rows: (data || []).map(r => [r.created_at, r.action, r.target_label, r.detail]) });
+    }
+    if (kind === 'mail') {
+      const { data, error } = await sb.from('mail_log').select('at, subject, ok, error').order('at', { ascending: false }).limit(5000);
+      if (error) return res.status(400).json({ error: "Journal des emails indisponible." });
+      return res.status(200).json({ ok: true, columns: ['Date', 'Objet', 'Envoyé', 'Erreur'], rows: (data || []).map(r => [r.at, r.subject, r.ok ? 'oui' : 'non', r.error || '']) });
+    }
+    return res.status(400).json({ error: 'Export inconnu.' });
   }
 
   if (action === 'supra-feedback') {
