@@ -325,6 +325,8 @@ const I = {
   Circle: p => <Icon {...p} path={<circle cx="12" cy="12" r="10"/>} />,
   Chevron: p => <Icon {...p} path={<polyline points="6 9 12 15 18 9"/>} />,
   Wallet: p => <Icon {...p} path={<><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></>} />,
+  Bulb: p => <Icon {...p} path={<><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.7.6 1 1.4 1 2.3h6c0-.9.3-1.7 1-2.3A7 7 0 0 0 12 2z"/></>} />,
+  Link: p => <Icon {...p} path={<><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></>} />,
   Gauge: p => <Icon {...p} path={<><path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></>} />,
   Target: p => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>} />,
   Users: p => <Icon {...p} path={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />,
@@ -1219,6 +1221,9 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [listItems, setListItems] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [settlements, setSettlements] = useState([]);
+  const [ideas, setIdeas] = useState([]);
+  const [ideaVotes, setIdeaVotes] = useState([]);
+  const [links, setLinks] = useState([]);
   const [resources, setResources] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [availabilities, setAvailabilities] = useState([]);
@@ -1276,6 +1281,9 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   useLiveTable('list_items', setListItems);
   useLiveTable('expenses', setExpenses);
   useLiveTable('settlements', setSettlements);
+  useLiveTable('ideas', setIdeas);
+  useLiveTable('idea_votes', setIdeaVotes);
+  useLiveTable('links', setLinks);
   useLiveTable('resources', setResources);
   useLiveTable('bookings', setBookings);
   useLiveTable('availabilities', setAvailabilities);
@@ -1316,6 +1324,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
     { id: "habits", label: "Habitudes", icon: I.Repeat, secondary: true },
     { id: "lists", label: "Listes", icon: I.List, secondary: true },
     { id: "expenses", label: "Dépenses", icon: I.Wallet, secondary: true },
+    { id: "ideas", label: "Idées", icon: I.Bulb, secondary: true },
+    { id: "links", label: "Liens", icon: I.Link, secondary: true },
     { id: "workload", label: "Charge", icon: I.Gauge, secondary: true },
     { id: "objectives", label: "Objectifs", icon: I.Target, secondary: true },
     { id: "notes", label: "Notes", icon: I.Note, secondary: true },
@@ -1359,7 +1369,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       if (document.querySelector(".modal-card")) return;
       const k = ev.key.toLowerCase();
       if (Date.now() - gAt < 1500) {
-        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", b: "bookings", v: "appointments", i: "habits", l: "lists", d: "expenses", w: "workload", f: "activity", n: "notes", m: "messages", p: "profile", a: "admin" };
+        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", b: "bookings", v: "appointments", i: "habits", l: "lists", d: "expenses", j: "ideas", k: "links", w: "workload", f: "activity", n: "notes", m: "messages", p: "profile", a: "admin" };
         gAt = 0;
         if (map[k] && (k !== "a" || isAdmin)) { setTab(map[k]); ev.preventDefault(); }
         return;
@@ -1421,6 +1431,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "appointments" && <AppointmentsView me={me} accounts={people} availabilities={availabilities} appointments={appointments} notify={notify} />}
         {tab === "bookings" && <BookingsView me={me} accounts={people} resources={resources} bookings={bookings} notify={notify} />}
         {tab === "lists" && <ListsView me={me} people={people} lists={lists} items={listItems} notify={notify} />}
+        {tab === "ideas" && <IdeasView me={me} people={people} ideas={ideas} votes={ideaVotes} notify={notify} />}
+        {tab === "links" && <LinksView me={me} people={people} links={links} notify={notify} />}
         {tab === "expenses" && <ExpensesView me={me} people={people} expenses={expenses} settlements={settlements} notify={notify} />}
         {tab === "workload" && <WorkloadView me={me} people={people} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} onOpen={openFromAnywhere} />}
         {tab === "habits" && <HabitsView me={me} habits={habits} logs={habitLogs} notify={notify} />}
@@ -2073,7 +2085,7 @@ function dayExtras(iso, events = [], accounts = []) {
   };
 }
 
-const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis L", "Listes"], ["G puis D", "Dépenses"], ["G puis W", "Charge de l'équipe"], ["G puis F", "Fil d'activité"], ["G puis V", "Rendez-vous"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
+const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis L", "Listes"], ["G puis D", "Dépenses"], ["G puis J", "Idées"], ["G puis K", "Liens"], ["G puis W", "Charge de l'équipe"], ["G puis F", "Fil d'activité"], ["G puis V", "Rendez-vous"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
 function ShortcutsHelp({ onClose, isAdmin }) {
   return (
     <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
@@ -6260,6 +6272,154 @@ function printWeekReview({ me, tasks, meetings, attendees }) {
   const est = done.reduce((a, t) => a + (t.estimate_min || 0), 0);
   const ul = (arr, f) => arr.length ? `<ul>${arr.map(f).join("")}</ul>` : `<p class="none">Aucune.</p>`;
   printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Bilan de la semaine</title><style>body{font:14px/1.55 Georgia,serif;color:#111;margin:28px}h1{font-size:22px;margin:0}h2{font-size:15px;margin:18px 0 6px;border-bottom:1px solid #999}.sub{color:#555;font-size:12px;margin:2px 0 14px}ul{margin:0;padding-left:20px}.none{color:#777;font-style:italic;margin:4px 0}.k{display:flex;gap:24px;margin:10px 0}.k b{font-size:22px;display:block}@media print{body{margin:12mm}}</style></head><body><h1>Bilan de la semaine</h1><p class="sub">${escH(me.display_name)} · du ${escH(fmtDay(monday, { day: "numeric", month: "long" }))} au ${escH(fmtDay(sunday, { day: "numeric", month: "long", year: "numeric" }))}</p><div class="k"><div><b>${done.length}</b>tâche(s) terminée(s)</div><div><b>${meets}</b>réunion(s)</div><div><b>${escH(est ? fmtEst(est) : "—")}</b>travail estimé terminé</div></div><h2>Terminé cette semaine</h2>${ul(done, t => `<li>${escH(t.title)}</li>`)}<h2>En retard</h2>${ul(late, t => `<li>${escH(t.title)} <small>(échéance ${escH(fmtDay(t.due, { day: "numeric", month: "long" }))})</small></li>`)}<h2>À venir (7 jours)</h2>${ul(next, t => `<li>${escH(t.title)} <small>(${escH(fmtDay(t.due, { weekday: "long", day: "numeric", month: "long" }))})</small></li>`)}</body></html>`);
+}
+
+/* ---------------- Lot I : Idées et Liens ---------------- */
+/* ===== Boîte à idées ===== */
+const IDEA_STATUS = { new: ["Nouvelle", "var(--text-dim)"], kept: ["Retenue", "#5B8DEF"], done: ["Réalisée", "#1F9D6B"], dropped: ["Écartée", "var(--text-dimmer)"] };
+function IdeasView({ me, people, ideas, votes, notify }) {
+  const canWrite = me.role !== "guest", isAdmin = me.role === "admin";
+  const [filter, setFilter] = useState("all"), [sort, setSort] = useState("votes");
+  const [title, setTitle] = useState(""), [details, setDetails] = useState("");
+  const [open, setOpen] = useState(null), [busy, setBusy] = useState(false);
+  const votesOf = (id) => votes.filter(v => v.idea_id === id);
+  const counts = { all: ideas.length }; for (const k of Object.keys(IDEA_STATUS)) counts[k] = ideas.filter(i => i.status === k).length;
+  const shown = ideas.filter(i => filter === "all" || i.status === filter).sort((a, b) =>
+    sort === "votes" ? votesOf(b.id).length - votesOf(a.id).length || b.created_at.localeCompare(a.created_at) : b.created_at.localeCompare(a.created_at));
+  const submit = async (ev) => {
+    ev.preventDefault(); const t = title.trim(); if (!t || busy) return; setBusy(true);
+    const { error } = await supabase.from("ideas").insert({ server_id: me.server_id, title: t, details: details.trim(), created_by: me.id });
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    setTitle(""); setDetails(""); notify("Idée proposée. Merci !");
+  };
+  const vote = async (i) => {
+    const mineV = votesOf(i.id).some(v => v.user_id === me.id);
+    const { error } = mineV
+      ? await supabase.from("idea_votes").delete().eq("idea_id", i.id).eq("user_id", me.id)
+      : await supabase.from("idea_votes").insert({ idea_id: i.id, user_id: me.id, server_id: me.server_id });
+    if (error) notify(error.message, "err");
+  };
+  const setStatus = async (i, status) => { const { error } = await supabase.from("ideas").update({ status }).eq("id", i.id); if (error) notify(error.message, "err"); else notify("Statut mis à jour : " + IDEA_STATUS[status][0].toLowerCase() + "."); };
+  const remove = async (i) => { if (!window.confirm(`Supprimer l'idée « ${i.title} » ?`)) return; const { error } = await supabase.from("ideas").delete().eq("id", i.id); if (error) notify(error.message, "err"); else notify("Idée supprimée."); };
+  const toTask = async (i) => {
+    const { error } = await supabase.from("tasks").insert({ title: i.title.slice(0, 120), notes: (i.details || "").slice(0, 2000), label: LABELS[0].id, priority: 2, assignees: [me.id], assignee: me.id, tags: [], done: false, created_by: me.id, server_id: me.server_id });
+    if (error) { notify(error.message, "err"); return; }
+    notify("Tâche créée à partir de l'idée.");
+    if (isAdmin && i.status === "new") setStatus(i, "kept");
+  };
+  const copyIdea = async (i) => { await copyText(`${i.title}${i.details ? "\n" + i.details : ""}\n(${votesOf(i.id).length} vote${votesOf(i.id).length > 1 ? "s" : ""})`); notify("Idée copiée."); };
+  const mineV = (i) => votesOf(i.id).some(v => v.user_id === me.id);
+  const chip = (id, label) => <button key={id} type="button" data-idea-filter={id} aria-pressed={filter === id} onClick={() => setFilter(id)} style={{ ...chipBtn, background: filter === id ? "var(--panel-2)" : "transparent", fontWeight: filter === id ? 600 : 500 }}>{label} · {counts[id] || 0}</button>;
+  return (
+    <div data-ideas-view>
+      {pageTitle("Idées", "Proposez, votez, décidez ensemble : les idées les plus soutenues remontent en haut, et les administrateurs choisissent celles qui passent à l'action.")}
+      {canWrite ? (
+        <form onSubmit={submit} className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: 14, marginBottom: 16, display: "grid", gap: 8 }}>
+          <input data-idea-title value={title} onChange={e => setTitle(e.target.value)} maxLength={120} placeholder="Votre idée en une phrase…" aria-label="Titre de l'idée" style={inputStyle} />
+          {title.trim() && <textarea data-idea-details value={details} onChange={e => setDetails(e.target.value)} maxLength={1500} rows={3} placeholder="Précisions (facultatif)" aria-label="Précisions" style={{ ...inputStyle, resize: "vertical" }} />}
+          <div><button type="submit" data-idea-submit disabled={!title.trim() || busy} style={{ ...primaryBtn, width: "auto", padding: "9px 18px" }}>Proposer l'idée</button></div>
+        </form>) : <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>En tant qu'invité, vous pouvez consulter les idées mais pas en proposer ni voter.</p>}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+        {chip("all", "Toutes")}{Object.entries(IDEA_STATUS).map(([k, v]) => chip(k, v[0] + "s"))}
+        <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: "var(--text-dim)" }}>Tri
+          <select data-idea-sort value={sort} onChange={e => setSort(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 10px" }}><option value="votes">Plus soutenues</option><option value="recent">Plus récentes</option></select></span>
+      </div>
+      {shown.length === 0 && <div data-ideas-empty className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "30px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14, lineHeight: 1.6 }}>{ideas.length === 0 ? "Aucune idée pour l'instant. Lancez-vous : une bonne idée tient souvent en une phrase." : "Aucune idée dans cette catégorie."}</div>}
+      <div style={{ display: "grid", gap: 10 }}>
+        {shown.map(i => { const n = votesOf(i.id).length, st = IDEA_STATUS[i.status] || IDEA_STATUS.new, mv = mineV(i), canEdit = i.created_by === me.id || isAdmin; return (
+          <div key={i.id} data-idea={i.title} data-idea-status={i.status} className="paper" style={{ display: "flex", gap: 14, border: "1px solid var(--border-soft)", borderRadius: 14, padding: "12px 16px", opacity: i.status === "dropped" ? 0.7 : 1 }}>
+            <button type="button" data-idea-vote aria-pressed={mv} aria-label={(mv ? "Retirer votre vote pour « " : "Voter pour « ") + i.title + " »"} disabled={!canWrite} onClick={() => vote(i)} style={{ flex: "none", width: 54, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, border: "1px solid " + (mv ? "var(--accent)" : "var(--border)"), background: mv ? "var(--panel-2)" : "transparent", color: "var(--text)", borderRadius: 12, cursor: canWrite ? "pointer" : "default", fontFamily: "inherit" }}>
+              <span aria-hidden="true" style={{ fontSize: 15 }}>▲</span><strong data-idea-count style={{ fontSize: 16 }}>{n}</strong></button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                <strong style={{ fontSize: 15.5, overflowWrap: "anywhere" }}>{i.title}</strong>
+                <span data-idea-badge style={{ fontSize: 11.5, fontWeight: 600, color: st[1], border: "1px solid currentColor", borderRadius: 20, padding: "1px 8px" }}>{st[0]}</span>
+              </div>
+              {i.details && <div style={{ fontSize: 13.5, color: "var(--text-dim)", margin: "4px 0 0", whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.5 }}>{i.details}</div>}
+              <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 6 }}>Proposée par {nameOfPerson(people, i.created_by).split(" ")[0]} · {fmtDay(parisDay(new Date(i.created_at)))}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                {isAdmin && <select data-idea-status-set value={i.status} onChange={e => setStatus(i, e.target.value)} aria-label="Statut de l'idée" style={{ ...inputStyle, width: "auto", padding: "4px 8px", fontSize: 12.5 }}>{Object.entries(IDEA_STATUS).map(([k, v]) => <option key={k} value={k}>{v[0]}</option>)}</select>}
+                {canWrite && <button type="button" data-idea-task onClick={() => toTask(i)} style={chipBtn}>Créer une tâche</button>}
+                <button type="button" data-idea-copy onClick={() => copyIdea(i)} style={chipBtn}>Copier</button>
+                {canEdit && <button type="button" data-idea-delete onClick={() => remove(i)} style={{ ...chipBtn, color: "var(--late)" }}>Supprimer</button>}
+              </div>
+            </div>
+          </div>); })}
+      </div>
+    </div>
+  );
+}
+
+/* ===== Bibliothèque de liens ===== */
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (_) { return u; } };
+const normUrl = (u) => { const t = String(u || "").trim(); if (!t) return ""; return /^https?:\/\//i.test(t) ? t : "https://" + t; };
+function LinksView({ me, people, links, notify }) {
+  const canWrite = me.role !== "guest", isAdmin = me.role === "admin";
+  const [q, setQ] = useState(""), [tag, setTag] = useState("");
+  const [modal, setModal] = useState(null); // { id? }
+  const [f, setF] = useState({ title: "", url: "", description: "", tags: "" });
+  const canEdit = (l) => l.created_by === me.id || isAdmin;
+  const allTags = [...new Set(links.flatMap(l => l.tags || []))].sort((a, b) => a.localeCompare(b, "fr"));
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const shown = links.filter(l => (!tag || (l.tags || []).includes(tag)) && (!q.trim() || norm([l.title, l.url, l.description, (l.tags || []).join(" ")].join(" ")).includes(norm(q.trim()))))
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.created_at.localeCompare(a.created_at));
+  const openNew = () => { setF({ title: "", url: "", description: "", tags: "" }); setModal({}); };
+  const openEdit = (l) => { setF({ title: l.title, url: l.url, description: l.description || "", tags: (l.tags || []).join(", ") }); setModal({ id: l.id }); };
+  const tagsOf = (s) => [...new Set(String(s).split(/[,;]/).map(t => t.trim().toLowerCase().slice(0, 20)).filter(Boolean))].slice(0, 6);
+  const save = async () => {
+    const url = normUrl(f.url);
+    if (!/^https?:\/\/[^\s]+$/i.test(url) || url.length < 8) { notify("Cette adresse ne semble pas valide.", "err"); return; }
+    const row = { title: (f.title.trim() || hostOf(url)).slice(0, 100), url: url.slice(0, 500), description: f.description.trim().slice(0, 300), tags: tagsOf(f.tags) };
+    const { error } = modal.id ? await supabase.from("links").update(row).eq("id", modal.id) : await supabase.from("links").insert({ ...row, server_id: me.server_id, created_by: me.id });
+    if (error) { notify(error.message, "err"); return; }
+    setModal(null); notify(modal.id ? "Lien modifié." : "Lien ajouté.");
+  };
+  const pin = async (l) => { const { error } = await supabase.from("links").update({ pinned: !l.pinned }).eq("id", l.id); if (error) notify(error.message, "err"); };
+  const remove = async (l) => { if (!window.confirm(`Supprimer le lien « ${l.title} » ?`)) return; const { error } = await supabase.from("links").delete().eq("id", l.id); if (error) notify(error.message, "err"); else notify("Lien supprimé."); };
+  const copy = async (l) => { await copyText(l.url); notify("Adresse copiée."); };
+  return (
+    <div data-links-view>
+      {pageTitle("Liens", "La bibliothèque de liens de votre équipe : documents, outils, tableaux de bord… tout au même endroit, avec recherche et étiquettes.", canWrite && <button type="button" data-link-new onClick={openNew} style={{ ...primaryBtn, width: "auto", padding: "10px 18px" }}>+ Ajouter un lien</button>)}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <input data-link-search type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher un lien…" aria-label="Rechercher un lien" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+      </div>
+      {allTags.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+        <button type="button" data-link-tag="" aria-pressed={!tag} onClick={() => setTag("")} style={{ ...chipBtn, background: !tag ? "var(--panel-2)" : "transparent", fontWeight: !tag ? 600 : 500 }}>Tous</button>
+        {allTags.map(t => <button key={t} type="button" data-link-tag={t} aria-pressed={tag === t} onClick={() => setTag(tag === t ? "" : t)} style={{ ...chipBtn, background: tag === t ? "var(--panel-2)" : "transparent", fontWeight: tag === t ? 600 : 500 }}>#{t}</button>)}
+      </div>}
+      {shown.length === 0 && <div data-links-empty className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "30px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14, lineHeight: 1.6 }}>{links.length === 0 ? "Aucun lien pour l'instant. Ajoutez le premier : un document de référence, un outil que tout le monde utilise…" : "Aucun lien ne correspond à votre recherche."}</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+        {shown.map(l => (
+          <div key={l.id} data-link={l.title} data-pinned={l.pinned ? "1" : "0"} className="paper" style={{ border: "1px solid " + (l.pinned ? "var(--accent)" : "var(--border-soft)"), borderRadius: 14, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+              {l.pinned && <span aria-label="Épinglé" title="Épinglé">📌</span>}
+              <a data-link-open href={l.url} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600, fontSize: 15.5, color: "var(--text)", overflowWrap: "anywhere" }}>{l.title}</a>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-dimmer)", overflowWrap: "anywhere" }}>{hostOf(l.url)} · ajouté par {nameOfPerson(people, l.created_by).split(" ")[0]}</div>
+            {l.description && <div style={{ fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.45, overflowWrap: "anywhere" }}>{l.description}</div>}
+            {(l.tags || []).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{l.tags.map(t => <span key={t} style={{ fontSize: 11.5, color: "var(--text-dim)" }}>#{t}</span>)}</div>}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+              <button type="button" data-link-copy onClick={() => copy(l)} style={chipBtn}>Copier</button>
+              {canEdit(l) && <button type="button" data-link-pin onClick={() => pin(l)} style={chipBtn}>{l.pinned ? "Désépingler" : "Épingler"}</button>}
+              {canEdit(l) && <button type="button" data-link-edit onClick={() => openEdit(l)} style={chipBtn}>Modifier</button>}
+              {canEdit(l) && <button type="button" data-link-delete onClick={() => remove(l)} style={{ ...chipBtn, color: "var(--late)" }}>Supprimer</button>}
+            </div>
+          </div>))}
+      </div>
+      {modal && (
+        <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) setModal(null); }}>
+          <div className="modal-card" role="dialog" aria-label={modal.id ? "Modifier le lien" : "Nouveau lien"} style={{ ...modalStyle, width: 460 }}>
+            <h2 style={{ fontFamily: "Literata, serif", fontSize: 20, margin: "0 0 14px" }}>{modal.id ? "Modifier le lien" : "Nouveau lien"}</h2>
+            <Field label="Adresse"><input data-link-url autoFocus value={f.url} onChange={e => setF({ ...f, url: e.target.value })} maxLength={500} placeholder="https://…" style={inputStyle} /></Field>
+            <Field label="Titre (facultatif)"><input data-link-title value={f.title} onChange={e => setF({ ...f, title: e.target.value })} maxLength={100} placeholder="Par défaut : le nom du site" style={inputStyle} /></Field>
+            <Field label="Description (facultatif)"><textarea data-link-desc value={f.description} onChange={e => setF({ ...f, description: e.target.value })} maxLength={300} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></Field>
+            <Field label="Étiquettes, séparées par des virgules"><input data-link-tags value={f.tags} onChange={e => setF({ ...f, tags: e.target.value })} placeholder="doc, outils, finance" style={inputStyle} /></Field>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}><button type="button" onClick={() => setModal(null)} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" data-link-save onClick={save} disabled={!f.url.trim()} style={{ ...primaryBtn, flex: 1 }}>Enregistrer</button></div>
+          </div>
+        </div>)}
+    </div>
+  );
 }
 
 /* ---------------- Accueil : carte d'activité, bloc-notes rapide, personnalisation ---------------- */

@@ -365,6 +365,9 @@ function computeReport({ tasks, meetings, attendees, accounts, projects, days, p
 }
 const PATCH_TECH = {
   "2026-11-07": [
+    "migration-32-idees-liens.sql : tables ideas (statut new/kept/done/dropped modifiable par un administrateur seulement, 500 idées par serveur), idea_votes (un vote par personne, clé primaire composite) et links (URL http(s) validée par contrainte, 6 étiquettes, 500 liens par serveur) ; RLS par serveur, invités en lecture seule, suppression réservée à l'auteur ou à l'administrateur, temps réel.",
+    "Application : onglets IdeasView (vote, tri, filtre, création de tâche) et LinksView (recherche sans accents, étiquettes, épingle, liens externes en noopener) ; icônes Bulb et Link ; raccourcis G J et G K.",
+    "api/_supra.js : supra-health (volumes par fonctionnalité, usage sur 7 jours, nombre de serveurs utilisateurs, alertes e-mail / rappels / retours / adhésions), supra-server-detail, supra-server-edit (renommage, nouveau code d'invitation, journalisés) et supra-export (serveurs, retours, journal, emails). Supra Admin : pages « Serveurs », « Santé et adoption » et « Exports ».",
     "migration-31-listes-depenses.sql : tables lists, list_items, expenses, settlements (RLS par serveur, invités en lecture seule, garde-fous : 40 listes actives, 300 éléments par liste, 2000 dépenses, participants limités au serveur, partages sans doublon, done_by renseigné côté base) et publication temps réel. Les soldes de dépenses sont calculés dans l'application (partage en centimes, reste réparti de façon déterministe).",
     "Application : onglets ListsView, ExpensesView (computeBalances, suggestTransfers) et WorkloadView (capacité de 8 h par jour) ; cartes d'accueil Countdowns, Podium, InboxCard ; DisplayPrefs (data-density, data-amoled) ; printWeekReview.",
   ],
@@ -653,9 +656,9 @@ const Panel = ({ title, right, children, id }) => (
    SUPRA ADMIN — réservé au propriétaire de la plateforme (table platform_admins)
    ============================================================ */
 const SUPRA_NAV = [
-  { group: "Plateforme", items: [["overview", "Vue d'ensemble", "📊"], ["accounts", "Comptes et bannissements", "🚫"]] },
+  { group: "Plateforme", items: [["overview", "Vue d'ensemble", "📊"], ["servers", "Serveurs", "🗂️"], ["accounts", "Comptes et bannissements", "🚫"]] },
   { group: "Communication", items: [["feedback", "Retours", "💬"], ["emails", "Emails", "✉️"], ["site", "Annonces et maintenance", "🌐"], ["patch", "Patch notes", "📝"]] },
-  { group: "Système", items: [["log", "Journal", "🕘"]] },
+  { group: "Système", items: [["health", "Santé et adoption", "🩺"], ["exports", "Exports", "📤"], ["log", "Journal", "🕘"]] },
 ];
 const supraDate = (iso) => new Date(iso).toLocaleString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 function useSupraApi(session, action, deps = []) {
@@ -916,7 +919,131 @@ function SupraFeedback({ session, notify }) {
     </div>
   );
 }
-const SUPRA_LOG_LABEL = { ban: "Bannissement", unban: "Fin de bannissement", broadcast: "Envoi groupé", reset_link: "Lien de mot de passe", server_ban: "Serveur suspendu", server_unban: "Serveur réactivé" };
+const downloadCsv = (name, columns, rows) => {
+  const csv = "﻿" + [columns, ...rows].map(row => row.map(csvQ).join(";")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name + "-" + new Date().toISOString().slice(0, 10) + ".csv"; document.body.appendChild(a); a.click(); a.remove();
+};
+function SupraHealth({ session }) {
+  const [st, reload] = useSupraApi(session, "supra-health");
+  if (st.loading && !st.data) return <div style={{ display: "grid", placeItems: "center", padding: 30 }}><Spinner /></div>;
+  if (st.error) return <EmptyState text={st.error} />;
+  const d = st.data, feats = d.features.filter(f => f.available).sort((a, b) => (b.servers || 0) - (a.servers || 0) || b.total - a.total);
+  const maxT = Math.max(1, ...feats.map(f => f.total));
+  return (
+    <div data-supra-health>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+        <Kpi id="h-accounts" value={d.accounts} label="Comptes" hint={`${d.newAccounts7d} nouveau${d.newAccounts7d > 1 ? "x" : ""} cette semaine`} />
+        <Kpi id="h-active" value={d.active7} label="Actifs sur 7 jours" />
+        <Kpi id="h-servers" value={d.servers} label="Serveurs" hint={`${d.newServers7d} nouveau${d.newServers7d > 1 ? "x" : ""} cette semaine`} />
+        <Kpi id="h-mails" value={d.mail.failed7d == null ? "—" : d.mail.failed7d} label="Emails en échec (7 j)" color={d.mail.failed7d ? "var(--late)" : undefined} hint={d.mail.sent7d == null ? "" : `${d.mail.sent7d} envoyés`} />
+      </div>
+      <Panel title="À surveiller" id="alerts" right={<button type="button" data-health-reload onClick={reload} style={chipBtn}>Actualiser</button>}>
+        {d.alerts.length === 0 && <div data-health-ok style={{ fontSize: 14, color: "#1F9D6B" }}>✓ Tout est en ordre.</div>}
+        {d.alerts.map((a, i) => <div key={i} data-health-alert={a.level} style={{ display: "flex", gap: 10, padding: "8px 0", borderTop: i ? "1px solid var(--border-soft)" : "none", fontSize: 14 }}><span aria-hidden="true">{a.level === "warn" ? "⚠️" : "ℹ️"}</span><span>{a.text}</span></div>)}
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "10px 0 0" }}>Rappels automatiques : {d.cron.lastRun ? `dernière exécution le ${supraDate(d.cron.lastRun.ran_at)}, ${d.cron.runs24h == null ? "?" : d.cron.runs24h} sur les dernières 24 h` : "aucune exécution enregistrée"}.</p>
+      </Panel>
+      <Panel title="Adoption des fonctionnalités" id="adoption">
+        <div style={{ display: "grid", gap: 8 }}>
+          {feats.map(f => (
+            <div key={f.table} data-feature={f.table} style={{ display: "grid", gridTemplateColumns: "minmax(110px, 160px) 1fr auto", gap: 12, alignItems: "center", fontSize: 13.5 }}>
+              <strong>{f.label}</strong>
+              <div style={{ height: 8, background: "var(--bg-2)", borderRadius: 4, overflow: "hidden" }}><div style={{ width: Math.max(f.total ? 2 : 0, Math.round(f.total / maxT * 100)) + "%", height: "100%", background: "var(--accent)" }} /></div>
+              <span style={{ color: "var(--text-dim)", textAlign: "right", fontSize: 12.5 }}><span data-feature-total>{f.total}</span> au total{f.last7d != null ? ` · +${f.last7d} cette semaine` : ""}{f.servers != null ? ` · ${f.servers}/${d.servers} serveur${d.servers > 1 ? "s" : ""}` : ""}</span>
+            </div>))}
+        </div>
+        {d.features.some(f => !f.available) && <p style={{ fontSize: 12.5, color: "var(--text-dimmer)", margin: "12px 0 0" }}>Non disponibles (migration non lancée) : {d.features.filter(f => !f.available).map(f => f.label).join(", ")}.</p>}
+      </Panel>
+    </div>
+  );
+}
+function SupraServers({ session, notify }) {
+  const [st, reload] = useSupraApi(session, "supra-overview");
+  const [q, setQ] = useState(""); const [sel, setSel] = useState(null);
+  if (st.loading && !st.data) return <div style={{ display: "grid", placeItems: "center", padding: 30 }}><Spinner /></div>;
+  if (st.error) return <EmptyState text={st.error} />;
+  const list = st.data.servers.filter(s => !q.trim() || (s.name + " " + (s.admins || []).join(" ")).toLowerCase().includes(q.trim().toLowerCase()));
+  return (
+    <div data-supra-servers>
+      <input data-servers-search type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher un serveur ou un administrateur…" aria-label="Rechercher un serveur" style={{ ...inputStyle, marginBottom: 14, maxWidth: 420 }} />
+      {list.length === 0 && <EmptyState text="Aucun serveur ne correspond." />}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+        {list.map(s => (
+          <button key={s.id} type="button" data-server-card={s.name} onClick={() => setSel(s.id)} style={{ textAlign: "left", background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: "var(--text)", fontFamily: "inherit" }}>
+            <div style={{ fontWeight: 600, fontSize: 15.5 }}>{s.name}{s.suspended && <span style={{ marginLeft: 8, fontSize: 11.5, color: "var(--late)" }}>suspendu</span>}</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 4 }}>{s.members} membre{s.members > 1 ? "s" : ""}{s.pending ? ` · ${s.pending} en attente` : ""} · créé le {new Date(s.created_at).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })}</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-dimmer)", marginTop: 2 }}>{(s.admins || []).join(", ") || "—"}</div>
+          </button>))}
+      </div>
+      {sel && <ServerSheet id={sel} session={session} notify={notify} onClose={() => setSel(null)} onChanged={reload} />}
+    </div>
+  );
+}
+function ServerSheet({ id, session, notify, onClose, onChanged }) {
+  const [st, reload] = useSupraApi(session, "supra-server-detail", [{ serverId: id }]);
+  const [name, setName] = useState(null); const [busy, setBusy] = useState(false);
+  const d = st.data;
+  useEffect(() => { if (d && name === null) setName(d.server.name); }, [d]);
+  const edit = async (patch, okMsg) => {
+    if (busy) return; setBusy(true);
+    try { await callApi("/api/admin-tools", { action: "supra-server-edit", serverId: id, ...patch }, session); notify(okMsg); reload(); onChanged(); }
+    catch (e) { notify(e.message, "err"); }
+    setBusy(false);
+  };
+  const copy = async () => { try { await navigator.clipboard.writeText(d.server.join_code); notify("Code copié."); } catch (_) { notify("Copie impossible.", "err"); } };
+  return (
+    <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" role="dialog" aria-label="Fiche du serveur" data-server-sheet style={{ ...modalStyle, width: 560, maxHeight: "90vh", overflowY: "auto" }}>
+        {!d && <div style={{ display: "grid", placeItems: "center", padding: 30 }}>{st.error ? <EmptyState text={st.error} /> : <Spinner />}</div>}
+        {d && (<>
+          <h2 style={{ fontFamily: "Literata, serif", fontSize: 22, margin: "0 0 4px" }}>{d.server.name}</h2>
+          <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 14px" }}>Créé le {new Date(d.server.created_at).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })} · {d.members.length} compte{d.members.length > 1 ? "s" : ""}</p>
+          <Field label="Nom du serveur">
+            <div style={{ display: "flex", gap: 8 }}><input data-sheet-name value={name || ""} onChange={e => setName(e.target.value)} maxLength={60} style={inputStyle} /><button type="button" data-sheet-rename disabled={busy || !name || name.trim() === d.server.name} onClick={() => edit({ name: name.trim() }, "Serveur renommé.")} style={{ ...primaryBtn, width: "auto", padding: "0 16px" }}>Renommer</button></div>
+          </Field>
+          <Field label="Code d'invitation">
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><code data-sheet-code style={{ fontSize: 15, background: "var(--bg-2)", padding: "6px 10px", borderRadius: 8 }}>{d.server.join_code}</code>
+              <button type="button" data-sheet-copy onClick={copy} style={chipBtn}>Copier</button>
+              <button type="button" data-sheet-regen disabled={busy} onClick={() => { if (window.confirm("Générer un nouveau code ? L'ancien ne fonctionnera plus pour rejoindre ce serveur.")) edit({ regenerateCode: true }, "Nouveau code généré."); }} style={chipBtn}>Générer un nouveau code</button></div>
+          </Field>
+          <div style={{ fontSize: 13, fontWeight: 600, margin: "6px 0" }}>Contenu</div>
+          <div data-sheet-counts style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>{d.counts.filter(c => c.total > 0).map(c => <span key={c.table} data-count={c.table} style={{ fontSize: 12.5, border: "1px solid var(--border)", borderRadius: 20, padding: "3px 10px" }}>{c.label} : <strong>{c.total}</strong></span>)}{d.counts.every(c => c.total === 0) && <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Aucune donnée pour l'instant.</span>}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, margin: "6px 0" }}>Membres</div>
+          <div style={{ display: "grid", gap: 4, marginBottom: 14 }}>{d.members.map(m => (
+            <div key={m.id} data-sheet-member={m.display_name} style={{ display: "flex", gap: 8, fontSize: 13.5, padding: "5px 0", borderTop: "1px solid var(--border-soft)" }}>
+              <span style={{ flex: 1 }}>{m.display_name} <span style={{ color: "var(--text-dimmer)" }}>@{m.username}</span></span>
+              <span style={{ color: "var(--text-dim)" }}>{m.banned ? "banni" : m.status === "pending" ? "en attente" : m.role}</span>
+              <span style={{ color: "var(--text-dimmer)", minWidth: 80, textAlign: "right" }}>{m.last_seen ? supraDate(m.last_seen) : "jamais"}</span>
+            </div>))}</div>
+          <button type="button" onClick={onClose} style={{ ...secondaryBtn, width: "100%" }}>Fermer</button>
+        </>)}
+      </div>
+    </div>
+  );
+}
+const SUPRA_EXPORTS = [["servers", "Serveurs", "Un tableau par serveur : membres, demandes en attente, bannis.", "serveurs-le-carnet"], ["feedback", "Retours des utilisateurs", "Tous les retours reçus (jusqu'à 5 000).", "retours-le-carnet"], ["log", "Journal des actions", "Bannissements, envois groupés, modifications de serveurs…", "journal-le-carnet"], ["mail", "Journal des emails", "Emails envoyés par le site, avec les échecs.", "emails-le-carnet"]];
+function SupraExports({ session, notify }) {
+  const [busy, setBusy] = useState("");
+  const run = async (kind, file) => {
+    if (busy) return; setBusy(kind);
+    try { const r = await callApi("/api/admin-tools", { action: "supra-export", kind }, session); downloadCsv(file, r.columns, r.rows); notify(`${r.rows.length} ligne${r.rows.length > 1 ? "s" : ""} exportée${r.rows.length > 1 ? "s" : ""}.`); }
+    catch (e) { notify(e.message, "err"); }
+    setBusy("");
+  };
+  return (
+    <div data-supra-exports>
+      <Panel title="Exporter des données (CSV, compatible Excel)" id="exports">
+        {SUPRA_EXPORTS.map(([k, label, hint, file], i) => (
+          <div key={k} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 0", borderTop: i ? "1px solid var(--border-soft)" : "none", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 200 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{label}</div><div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{hint}</div></div>
+            <button type="button" data-export={k} disabled={!!busy} onClick={() => run(k, file)} style={chipBtn}>{busy === k ? "Export…" : "Télécharger"}</button>
+          </div>))}
+        <p style={{ fontSize: 12, color: "var(--text-dimmer)", margin: "12px 0 0" }}>La liste des comptes s'exporte depuis la page « Comptes et bannissements ». Aucun mot de passe n'est jamais exporté.</p>
+      </Panel>
+    </div>
+  );
+}
+const SUPRA_LOG_LABEL = { ban: "Bannissement", unban: "Fin de bannissement", broadcast: "Envoi groupé", reset_link: "Lien de mot de passe", server_ban: "Serveur suspendu", server_unban: "Serveur réactivé", server_rename: "Serveur renommé", server_code: "Nouveau code d'invitation" };
 function SupraLog({ session }) {
   const [st] = useSupraApi(session, "supra-log");
   if (st.loading && !st.data) return <div style={{ display: "grid", placeItems: "center", padding: 30 }}><Spinner /></div>;
@@ -960,6 +1087,9 @@ function SupraWorkspace({ me, session, notify, onLogout }) {
         <main className="adm-main">
           <div style={{ marginBottom: 18 }}><h1 data-supra-title style={{ fontFamily: "Literata, serif", fontSize: 28, fontWeight: 600, margin: 0 }}>{title ? title[1] : ""}</h1><p style={{ color: "var(--text-dim)", fontSize: 13.5, margin: "6px 0 0" }}>Réservé au propriétaire de la plateforme.</p></div>
           {page === "overview" && <SupraOverview session={session} go={go} notify={notify} />}
+          {page === "servers" && <SupraServers session={session} notify={notify} />}
+          {page === "health" && <SupraHealth session={session} />}
+          {page === "exports" && <SupraExports session={session} notify={notify} />}
           {page === "accounts" && <SupraAccounts session={session} notify={notify} />}
           {page === "feedback" && <SupraFeedback session={session} notify={notify} />}
           {page === "emails" && <SupraEmails session={session} notify={notify} />}
