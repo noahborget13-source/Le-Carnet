@@ -200,7 +200,7 @@
   }
 </style>
 </head>
-<body>
+<body data-owner-banner>
 <div class="wrap">
   <nav class="top" aria-label="Navigation principale">
     <a class="brand" href="/" aria-label="Le Carnet — accueil">
@@ -315,7 +315,7 @@
 </main>
 
 <footer>
-  <div class="wrap">© 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget · <a href="/confidentialite.html">Confidentialité</a> · <a href="/cgu.html">Conditions d'utilisation</a> · <a href="mailto:lecarnetvercel@gmail.com">Contact : lecarnetvercel@gmail.com</a></div>
+  <div class="wrap">© 2026 Le Carnet — Gestion de tâches. <span data-owner-credit>Produit par Noah Borget</span> · <a href="/confidentialite.html">Confidentialité</a> · <a href="/cgu.html">Conditions d'utilisation</a> · <a href="mailto:lecarnetvercel@gmail.com">Contact : lecarnetvercel@gmail.com</a></div>
 </footer>
 <script>
   // Nouveautés : lues dans /patchnotes.json (une entrée par jour). Si le fichier est inaccessible, la section reste masquée.
@@ -365,5 +365,6 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
   })();
 </script>
+<script src="/owner.js" defer></script>
 </body>
 </html>

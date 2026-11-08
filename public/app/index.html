@@ -440,10 +440,83 @@ function Toast({ toast }) {
   </div>);
 }
 function Spinner() { return <div style={{ width: 26, height: 26, borderRadius: "50%", border: "3px solid #2B303A", borderTopColor: "var(--accent)", animation: "spin .8s linear infinite" }} />; }
+
+/* ===== Remise du Carnet à Camélia Borget (cadeau d'anniversaire) ===== */
+try { const g = new URLSearchParams(location.search).get("gift"); if (g) sessionStorage.setItem("carnet-gift", g); } catch (_) {}
+let _ownerP = null;
+const resetOwnership = () => { _ownerP = null; };
+function loadOwnership() {
+  if (!_ownerP) _ownerP = supabase.from("platform_settings").select("value").eq("key", "ownership").maybeSingle().then(({ data }) => (data && data.value && data.value.active ? data.value : null), () => null);
+  return _ownerP;
+}
+function useOwnership(dep) {
+  const [o, setO] = useState(null);
+  const [n, setN] = useState(0);
+  useEffect(() => { const h = () => setN(x => x + 1); window.addEventListener("carnet-ownership", h); return () => window.removeEventListener("carnet-ownership", h); }, []);
+  useEffect(() => { let on = true; loadOwnership().then(v => { if (on) setO(v); }); return () => { on = false; }; }, [dep, n]);
+  return o;
+}
+const BIRTHDAY_KEY = "carnet-birthday-seen";
+const CONFETTI = Array.from({ length: 70 }, (_, i) => ({ left: (i * 37) % 100, delay: ((i * 53) % 40) / 10, dur: 3.2 + ((i * 29) % 30) / 10, size: 6 + (i * 7) % 8, color: ["#38C6B5", "#FFB648", "#7C96FF", "#FF6B8B", "#5FBF8B", "#FFFFFF"][i % 6], rot: (i * 47) % 360 }));
+function BirthdayOverlay({ me, onClose }) {
+  const first = String(me.display_name || "Camélia").split(" ")[0];
+  return (
+    <div data-birthday role="dialog" aria-label="Joyeux anniversaire" aria-modal="true" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "radial-gradient(circle at 50% 30%, #17315F 0%, #0B1E3F 70%)", display: "grid", placeItems: "center", overflow: "hidden", padding: 20 }}>
+      <style>{`@keyframes bd-fall{0%{transform:translateY(-12vh) rotate(0deg);opacity:1}100%{transform:translateY(112vh) rotate(720deg);opacity:.9}}
+@keyframes bd-pop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
+@keyframes bd-flame{0%,100%{transform:scaleY(1) translateX(0)}50%{transform:scaleY(1.25) translateX(1px)}}
+@keyframes bd-rise{0%{transform:translateY(18px);opacity:0}100%{transform:translateY(0);opacity:1}}`}</style>
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {CONFETTI.map((c, i) => <span key={i} data-confetti style={{ position: "absolute", top: 0, left: c.left + "%", width: c.size, height: c.size * 1.6, background: c.color, borderRadius: 2, transform: `rotate(${c.rot}deg)`, animation: `bd-fall ${c.dur}s linear ${c.delay}s infinite` }} />)}
+      </div>
+      <div style={{ position: "relative", textAlign: "center", color: "#fff", maxWidth: 560 }}>
+        <div aria-hidden="true" style={{ position: "relative", display: "inline-block", fontSize: 92, lineHeight: 1, animation: "bd-pop .9s ease-out both" }}>🎂
+          <span style={{ position: "absolute", top: -14, left: "50%", marginLeft: -6, fontSize: 28, transformOrigin: "50% 100%", animation: "bd-flame .9s ease-in-out infinite" }}>🔥</span></div>
+        <h1 data-birthday-title style={{ fontFamily: "Literata, serif", fontSize: "clamp(30px, 6vw, 48px)", margin: "14px 0 6px", fontWeight: 600, animation: "bd-rise .8s ease-out .3s both" }}>Joyeux anniversaire, {first} !</h1>
+        <p style={{ fontSize: 18, lineHeight: 1.55, margin: "0 0 10px", color: "#DCE6FA", animation: "bd-rise .8s ease-out .6s both" }}>Noah a créé Le Carnet pour vous l'offrir.<br /><strong style={{ color: "#fff" }}>Il est désormais entre vos mains.</strong></p>
+        <p data-birthday-supra style={{ fontSize: 14.5, lineHeight: 1.55, margin: "0 0 22px", color: "#9FB3DB", animation: "bd-rise .8s ease-out .9s both" }}>Vous avez maintenant accès au Supra Admin, l'espace qui vous permet de veiller sur tous les serveurs, les comptes et les messages. Noah reste à vos côtés.</p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", animation: "bd-rise .8s ease-out 1.2s both" }}>
+          <button type="button" data-birthday-close autoFocus onClick={onClose} style={{ ...primaryBtn, width: "auto", padding: "12px 26px", fontSize: 15 }}>Découvrir mon Carnet</button>
+          <a data-birthday-supra-link href="/supra/" style={{ ...secondaryBtn, width: "auto", padding: "12px 22px", fontSize: 15, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Ouvrir le Supra Admin</a>
+        </div>
+      </div>
+    </div>
+  );
+}
+function GiftHandler({ me, session, notify }) {
+  const [show, setShow] = useState(false);
+  const [tick, setTick] = useState(0);
+  const o = useOwnership(tick);
+  useEffect(() => {
+    let tk = null; try { tk = sessionStorage.getItem("carnet-gift"); } catch (_) {}
+    if (!tk) return;
+    try { sessionStorage.removeItem("carnet-gift"); const u = new URL(location.href); u.searchParams.delete("gift"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (_) {}
+    callApi("/api/manage-account", { action: "claim-gift", token: tk }, session)
+      .then(() => { resetOwnership(); window.dispatchEvent(new Event("carnet-ownership")); setTick(t => t + 1); try { localStorage.removeItem(BIRTHDAY_KEY); } catch (_) {} setShow(true); })
+      .catch(e => notify(e.message, "err"));
+  }, []);
+  useEffect(() => { if (o && o.owner_id === me.id && lsGet(BIRTHDAY_KEY, "") !== "1") setShow(true); }, [o && o.owner_id, me.id]);
+  useEffect(() => { const f = () => setShow(true); window.addEventListener("carnet-birthday", f); return () => window.removeEventListener("carnet-birthday", f); }, []);
+  if (!show) return null;
+  return <BirthdayOverlay me={me} onClose={() => { lsSet(BIRTHDAY_KEY, "1"); setShow(false); }} />;
+}
+function OwnerCard({ me }) {
+  const o = useOwnership();
+  if (!o) return null;
+  const mine = o.owner_id === me.id;
+  return (
+    <div data-owner-card className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+      <div style={{ fontWeight: 600, fontSize: 15 }}>🎂 {mine ? "Le Carnet est entre vos mains" : "Le Carnet est offert à " + o.name}</div>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", margin: "4px 0 0", lineHeight: 1.5 }}>{mine ? "Un cadeau de Noah, son créateur." : "Un cadeau de Noah Borget, son créateur, à " + o.name + "."} Remis le {new Date(o.since).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long", year: "numeric" })}.</div>
+      {mine && <button type="button" data-birthday-replay onClick={() => window.dispatchEvent(new Event("carnet-birthday"))} style={{ ...chipBtn, marginTop: 10 }}>Revoir la surprise</button>}
+    </div>
+  );
+}
 function SiteFooter({ floating }) {
+  const own = useOwnership();
   return (
     <div className="site-footer" style={{ textAlign: "center", fontSize: 12, color: "var(--text-dimmer)", padding: "22px 0 6px", ...(floating ? { position: "absolute", bottom: 10, left: 0, right: 0, padding: 0, zIndex: 1 } : {}) }}>
-      © 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget
+      © 2026 Le Carnet — Gestion de tâches. {own ? `Offert à ${own.name} par Noah Borget, son créateur` : "Produit par Noah Borget"}
     </div>
   );
 }
@@ -684,6 +757,7 @@ function App() {
   return (
     <Shell noAlert>
       <Workspace me={profile} session={session} onLogout={() => supabase.auth.signOut()} notify={notify} onProfileChanged={() => setReloadKey(k => k + 1)} />
+      <GiftHandler me={profile} session={session} notify={notify} />
       {toast && <Toast toast={toast} />}
     </Shell>
   );
@@ -2134,6 +2208,7 @@ function PersonalCard({ me, session, notify, onChanged, card }) {
       <PersonalizeCard notify={notify} />
       <A11yPrefs />
       <DisplayPrefs />
+      <OwnerCard me={me} />
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Mon anniversaire</div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Facultatif : il s'affiche dans le calendrier de votre équipe (jour et mois, jamais l'année).</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
