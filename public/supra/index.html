@@ -377,6 +377,7 @@ function computeReport({ tasks, meetings, attendees, accounts, projects, days, p
 }
 const PATCH_TECH = {
   "2026-11-08": [
+    "Lot K : TourOverlay (visite guidée en projecteur : boîte de box-shadow autour de l'élément ciblé par data-tab-id, repli au centre quand la cible est invisible, navigation clavier), démarrage unique par compte créé depuis moins de 14 jours (clé localStorage carnet-tour-<id>), relecture depuis le Centre d'aide et la palette. Lien YouTube lu dans public/tutoriel.json (champ « youtube », vide tant que la vidéo n'est pas publiée).",
     "Lot J (aucune migration) : ToolsModal (DrawTool avec crypto.getRandomValues, DatesTool en jours ouvrés, HolidaysTool, ClocksTool basé sur Intl.DateTimeFormat, TimerTool persistant via localStorage), cartes d'accueil EquipeAgenda (colonne profiles.birthday) et QuoteCard, raccourci G U, entrée dans la palette et le menu latéral.",
     "Jours fériés : calcul de Pâques (Meeus/Jones/Butcher) puis lundi de Pâques, Ascension (+39 j) et lundi de Pentecôte (+50 j) ; 11 jours légaux de la métropole.",
     "Remise symbolique du Carnet à Camélia Borget (15 novembre 2026, 00 h heure de Paris) : api/_gift.js (lien personnel signé par HMAC envoyé à son adresse après la date, claim-gift dans manage-account.js, Supra Admin accordé en conservant celui de Noah, e-mail unique aux membres approuvés non bannis), migration-33-proprietaire.sql (lecture publique de la seule ligne « ownership » de platform_settings), public/owner.js (mentions des pages statiques), animation d'anniversaire dans l'application.",
