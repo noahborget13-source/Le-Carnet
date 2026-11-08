@@ -1313,6 +1313,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [showPalette, setShowPalette] = useState(false);
   const [focusNote, setFocusNote] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [showTools, setShowTools] = useState(false);
   const [showHelpCenter, setShowHelpCenter] = useState(false);
   const [homeKey, setHomeKey] = useState(0);
   const [inviteFromUrl] = useState(() => { try { const t = new URLSearchParams(window.location.search).get("invite"); return t && t.length >= 20 ? t : ""; } catch (_) { return ""; } });
@@ -1452,6 +1453,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       if (Date.now() - gAt < 1500) {
         const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", b: "bookings", v: "appointments", i: "habits", l: "lists", d: "expenses", j: "ideas", k: "links", w: "workload", f: "activity", n: "notes", m: "messages", p: "profile", a: "admin" };
         gAt = 0;
+        if (k === "u") { setShowTools(true); ev.preventDefault(); return; }
         if (map[k] && (k !== "a" || isAdmin)) { setTab(map[k]); ev.preventDefault(); }
         return;
       }
@@ -1480,6 +1482,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
           <div style={{ color: "var(--text-dim)" }}>Le suivi du risque moustiques près de chez vous.</div>
         </a>
         <div className="app-sidebar-footer" style={{ marginTop: 0, paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
+          <button type="button" data-tools-open className="app-sidebar-footer-label" onClick={() => setShowTools(true)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", marginBottom: 6, background: "none", border: "none", borderRadius: 9, color: "var(--text-dim)", cursor: "pointer", font: "inherit", fontSize: 13.5, textAlign: "left" }}><span aria-hidden="true" style={{ width: 19, textAlign: "center", fontWeight: 700 }}>🧰</span> Boîte à outils</button>
           <button type="button" data-help-open className="app-sidebar-footer-label" onClick={() => setShowHelpCenter(true)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", marginBottom: 6, background: "none", border: "none", borderRadius: 9, color: "var(--text-dim)", cursor: "pointer", font: "inherit", fontSize: 13.5, textAlign: "left" }}><span aria-hidden="true" style={{ width: 19, textAlign: "center", fontWeight: 700 }}>?</span> Aide et retours</button>
           <button type="button" onClick={() => setTab("profile")} className="app-sidebar-footer-label" style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", marginBottom: 10, background: "none", border: "none", cursor: "pointer", textAlign: "left", color: "inherit" }}>
             <Avatar user={me} size={30} />
@@ -1530,10 +1533,12 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         { k: "theme", label: "Basculer thème clair / sombre", hint: "Changer l'apparence", run: () => { const n = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light"; try { localStorage.setItem(THEME_KEY, n); } catch (_) {} applyTheme(n); setShowPalette(false); } },
         { k: "print", label: "Imprimer ma journée", hint: "Agenda du jour sur papier", run: () => { setShowPalette(false); printAgenda({ me, tasks, meetings, attendees, from: parisDay(), days: 1, title: "Ma journée · " + fmtDay(parisDay(), { weekday: "long", day: "numeric", month: "long" }) }); } },
         { k: "review", label: "Imprimer le bilan de la semaine", hint: "Terminé, en retard, à venir", run: () => { setShowPalette(false); printWeekReview({ me, tasks, meetings, attendees }); } },
+        { k: "tools", label: "Ouvrir la boîte à outils", hint: "Tirage au sort, dates, jours fériés, horloges, minuteur", run: () => { setShowPalette(false); setShowTools(true); } },
         { k: "keys", label: "Raccourcis clavier", hint: "Afficher la liste", run: () => { setShowPalette(false); setShowHelp(true); } },
       ]} recents={recents} tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); pushRecent("note", id); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} onReview={() => { setShowPalette(false); setShowReview(true); }} />}
       {showReview && <WeeklyReview me={me} tasks={tasks} meetings={meetings} attendees={attendees} timeEntries={timeEntries} notify={notify} onClose={() => setShowReview(false)} onOpen={(id) => { setShowReview(false); setOpenId(id); }} />}
       {showHelpCenter && <HelpCenter me={me} session={session} tabId={tab} notify={notify} data={{ tasks, notes, timeEntries, habits, habitLogs, meetings, attendees, appointments, projects }} onClose={() => setShowHelpCenter(false)} onShortcuts={() => { setShowHelpCenter(false); setShowHelp(true); }} onRestoreStart={() => { try { const h = lsJson("carnet-home-" + me.id, []); lsSet("carnet-home-" + me.id, JSON.stringify((Array.isArray(h) ? h : []).filter(x => x !== "start"))); } catch (_) {} setShowHelpCenter(false); setTab("home"); setHomeKey(k => k + 1); }} />}
+      {showTools && <ToolsModal people={people} notify={notify} onClose={() => setShowTools(false)} />}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} />}
       {showServers && <ServersModal initialCode={inviteFromUrl} me={me} session={session} notify={notify} onClose={() => setShowServers(false)} />}
       {openTask && <TaskDetail pinned={pins.includes(openTask.id)} onPin={() => togglePin(openTask.id)} onFocus={startFocus} reactions={reactions} task={openTask} accounts={people} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} comments={comments.filter(c => c.task_id === openTask.id)} attachments={attachments.filter(a => a.task_id === openTask.id)} onAttachmentsChanged={reloadAttachments} timeEntries={timeEntries.filter(e => e.task_id === openTask.id)} notify={notify} onClose={() => setOpenId(null)} />}
@@ -2166,7 +2171,7 @@ function dayExtras(iso, events = [], accounts = []) {
   };
 }
 
-const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis L", "Listes"], ["G puis D", "Dépenses"], ["G puis J", "Idées"], ["G puis K", "Liens"], ["G puis W", "Charge de l'équipe"], ["G puis F", "Fil d'activité"], ["G puis V", "Rendez-vous"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
+const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis L", "Listes"], ["G puis D", "Dépenses"], ["G puis J", "Idées"], ["G puis K", "Liens"], ["G puis U", "Boîte à outils"], ["G puis W", "Charge de l'équipe"], ["G puis F", "Fil d'activité"], ["G puis V", "Rendez-vous"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
 function ShortcutsHelp({ onClose, isAdmin }) {
   return (
     <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
@@ -3702,6 +3707,8 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
       {show("countdown") && <Countdowns me={me} />}
       {show("podium") && <Podium tasks={tasks} accounts={accounts} />}
       {show("tip") && <TipCard />}
+      {show("quote") && <QuoteCard />}
+      {show("agenda") && <EquipeAgenda people={accounts} me={me} />}
 
       {show("recap") && <><div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>Récap de la semaine</div>
       <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 18px", display: "flex", gap: 28, flexWrap: "wrap", alignItems: "center" }}>
@@ -6356,6 +6363,187 @@ function printWeekReview({ me, tasks, meetings, attendees }) {
   printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Bilan de la semaine</title><style>body{font:14px/1.55 Georgia,serif;color:#111;margin:28px}h1{font-size:22px;margin:0}h2{font-size:15px;margin:18px 0 6px;border-bottom:1px solid #999}.sub{color:#555;font-size:12px;margin:2px 0 14px}ul{margin:0;padding-left:20px}.none{color:#777;font-style:italic;margin:4px 0}.k{display:flex;gap:24px;margin:10px 0}.k b{font-size:22px;display:block}@media print{body{margin:12mm}}</style></head><body><h1>Bilan de la semaine</h1><p class="sub">${escH(me.display_name)} · du ${escH(fmtDay(monday, { day: "numeric", month: "long" }))} au ${escH(fmtDay(sunday, { day: "numeric", month: "long", year: "numeric" }))}</p><div class="k"><div><b>${done.length}</b>tâche(s) terminée(s)</div><div><b>${meets}</b>réunion(s)</div><div><b>${escH(est ? fmtEst(est) : "—")}</b>travail estimé terminé</div></div><h2>Terminé cette semaine</h2>${ul(done, t => `<li>${escH(t.title)}</li>`)}<h2>En retard</h2>${ul(late, t => `<li>${escH(t.title)} <small>(échéance ${escH(fmtDay(t.due, { day: "numeric", month: "long" }))})</small></li>`)}<h2>À venir (7 jours)</h2>${ul(next, t => `<li>${escH(t.title)} <small>(${escH(fmtDay(t.due, { weekday: "long", day: "numeric", month: "long" }))})</small></li>`)}</body></html>`);
 }
 
+/* ---------------- Lot J : outils ---------------- */
+/* ===== Lot J : boîte à outils, anniversaires, jours fériés, pensée du jour ===== */
+const pad2 = (n) => String(n).padStart(2, "0");
+const dayToUtc = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
+const diffDays = (a, b) => Math.round((dayToUtc(b) - dayToUtc(a)) / 86400000);
+function easterOf(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${y}-${pad2(mo)}-${pad2(da)}`;
+}
+const FR_HOLIDAYS_CACHE = {};
+function frHolidays(y) {
+  if (FR_HOLIDAYS_CACHE[y]) return FR_HOLIDAYS_CACHE[y];
+  const e = easterOf(y);
+  const list = [[`${y}-01-01`, "Jour de l'An"], [shiftDay(e, 1), "Lundi de Pâques"], [`${y}-05-01`, "Fête du Travail"], [`${y}-05-08`, "Victoire 1945"], [shiftDay(e, 39), "Ascension"], [shiftDay(e, 50), "Lundi de Pentecôte"],
+    [`${y}-07-14`, "Fête nationale"], [`${y}-08-15`, "Assomption"], [`${y}-11-01`, "Toussaint"], [`${y}-11-11`, "Armistice 1918"], [`${y}-12-25`, "Noël"]].sort((a, b) => a[0].localeCompare(b[0]));
+  return (FR_HOLIDAYS_CACHE[y] = list);
+}
+const isHoliday = (d) => frHolidays(+d.slice(0, 4)).some(h => h[0] === d);
+const isWorkday = (d) => isoWd(d) <= 5 && !isHoliday(d);
+function nextHoliday(from) { for (let y = +from.slice(0, 4); y <= +from.slice(0, 4) + 1; y++) { const h = frHolidays(y).find(x => x[0] >= from); if (h) return h; } return null; }
+function workdaysBetween(a, b) { if (a > b) [a, b] = [b, a]; let n = 0; for (let d = a; d <= b; d = shiftDay(d, 1)) if (isWorkday(d)) n++; return n; }
+function addWorkdays(from, n) { let d = from, left = Math.abs(n); const s = n < 0 ? -1 : 1; while (left > 0) { d = shiftDay(d, s); if (isWorkday(d)) left--; } return d; }
+const randInt = (n) => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; };
+const ZONES = [["Europe/Paris", "Paris"], ["Europe/London", "Londres"], ["America/New_York", "New York"], ["America/Toronto", "Montréal"], ["America/Martinique", "Fort-de-France"], ["Africa/Casablanca", "Casablanca"], ["Africa/Abidjan", "Abidjan"], ["Africa/Dakar", "Dakar"], ["Asia/Dubai", "Dubaï"], ["Indian/Reunion", "Saint-Denis (La Réunion)"], ["Asia/Tokyo", "Tokyo"], ["Pacific/Noumea", "Nouméa"], ["Pacific/Tahiti", "Papeete"], ["Australia/Sydney", "Sydney"]];
+const QUOTES = ["Petit à petit, l'oiseau fait son nid.", "Chaque jour a sa peine, mais aussi sa petite victoire.", "Rome ne s'est pas faite en un jour.", "Qui va doucement va sûrement, et qui va sûrement va loin.", "À cœur vaillant, rien d'impossible.", "Mieux vaut tard que jamais.", "Un bon début est déjà la moitié du chemin.", "Aujourd'hui est le premier jour du reste de votre vie.", "On n'a jamais fini d'apprendre.", "Ce qui compte, c'est d'avancer, même d'un pas.", "La persévérance fait tomber les montagnes.", "Une tâche terminée vaut mieux que dix tâches rêvées.", "Prenez le temps : le temps pris est souvent du temps gagné.", "Les petites rivières font les grands fleuves.", "Un sourire ne coûte rien et rapporte beaucoup.", "Seul on va plus vite, ensemble on va plus loin.", "Après la pluie, le beau temps.", "L'important n'est pas la chute, c'est le rebond.", "Il n'y a pas de petit progrès.", "Demain se prépare aujourd'hui.", "Faites simple, faites bien, faites-le maintenant.", "Un pas après l'autre, la route se fait.", "La patience est amère, mais son fruit est doux.", "Commencer, c'est déjà réussir à moitié.", "Il vaut mieux allumer une bougie que maudire l'obscurité.", "Le courage n'est pas l'absence de peur, c'est d'avancer malgré elle.", "Une bonne pause aide à mieux repartir.", "Rien ne sert de courir, il faut partir à point.", "La gratitude transforme l'ordinaire en cadeau.", "Une journée bien commencée est à moitié gagnée.", "Les bons comptes font les bons amis.", "L'union fait la force.", "Quand on veut, on peut.", "Garder le cap, même par vent contraire.", "Aujourd'hui, une chose à la fois."];
+
+function EquipeAgenda({ people, me }) {
+  const today = parisDay(), yr = +today.slice(0, 4);
+  const upcoming = useMemo(() => people.filter(p => /^\d{2}-\d{2}$/.test(p.birthday || "")).map(p => {
+    let d = `${yr}-${p.birthday}`; if (d < today) d = `${yr + 1}-${p.birthday}`;
+    return { p, d, n: diffDays(today, d) };
+  }).filter(x => x.n <= 60).sort((a, b) => a.n - b.n).slice(0, 5), [people, today]);
+  const h = nextHoliday(today);
+  return (
+    <div data-agenda style={{ marginBottom: 26 }}>
+      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "13px 16px" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text-dimmer)", textTransform: "uppercase", marginBottom: 8 }}>Anniversaires et jours fériés</div>
+        {upcoming.length === 0
+          ? <div data-agenda-empty style={{ fontSize: 13.5, color: "var(--text-dim)", marginBottom: 6 }}>Aucun anniversaire dans les 60 prochains jours. Chacun peut renseigner le sien dans Profil.</div>
+          : upcoming.map(x => <div key={x.p.id} data-birthday-row={x.p.display_name} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 14, padding: "3px 0" }}>
+              <span aria-hidden="true">{x.n === 0 ? "🎂" : "🎈"}</span><strong style={{ fontWeight: 600 }}>{x.p.display_name}{x.p.id === me.id ? " (vous)" : ""}</strong>
+              <span style={{ color: "var(--text-dim)", marginLeft: "auto", fontSize: 13 }}>{x.n === 0 ? "aujourd'hui !" : x.n === 1 ? "demain" : `${fmtDay(x.d, { day: "numeric", month: "long" })} · dans ${x.n} jours`}</span></div>)}
+        {h && <div data-agenda-holiday style={{ display: "flex", gap: 10, fontSize: 14, padding: "6px 0 0", marginTop: 6, borderTop: "1px solid var(--border-soft)" }}>
+          <span aria-hidden="true">🗓️</span><span>Prochain jour férié : <strong style={{ fontWeight: 600 }}>{h[1]}</strong></span>
+          <span style={{ color: "var(--text-dim)", marginLeft: "auto", fontSize: 13 }}>{h[0] === today ? "aujourd'hui" : `${fmtDay(h[0], { weekday: "long", day: "numeric", month: "long" })} · dans ${diffDays(today, h[0])} j`}</span></div>}
+      </div>
+    </div>
+  );
+}
+function QuoteCard() {
+  const base = Math.floor(Date.now() / 86400000 + 7) % QUOTES.length; const [shift, setShift] = useState(0);
+  return (
+    <div data-quote style={{ marginBottom: 26 }}>
+      <div style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "13px 16px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <span aria-hidden="true" style={{ fontSize: 20 }}>🌿</span>
+        <div style={{ flex: 1, minWidth: 200 }}><div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text-dimmer)", textTransform: "uppercase", marginBottom: 2 }}>Pensée du jour</div><div data-quote-text style={{ fontFamily: "Literata, serif", fontStyle: "italic", fontSize: 15.5, lineHeight: 1.45 }}>« {QUOTES[(base + shift) % QUOTES.length]} »</div></div>
+        <button type="button" data-quote-next onClick={() => setShift(s => s + 1)} style={chipBtn}>Une autre</button>
+      </div>
+    </div>
+  );
+}
+
+function ToolsModal({ people, notify, onClose }) {
+  const [tool, setTool] = useState(lsGet("carnet-tool", "draw"));
+  const pick = (t) => { setTool(t); lsSet("carnet-tool", t); };
+  const TOOLS = [["draw", "Tirage au sort"], ["dates", "Dates"], ["holidays", "Jours fériés"], ["clocks", "Horloges"], ["timer", "Minuteur"]];
+  useEffect(() => { const k = (e) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, []);
+  return (
+    <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" role="dialog" aria-label="Boîte à outils" data-tools style={{ ...modalStyle, width: 600, maxHeight: "92vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}><h2 style={{ fontFamily: "Literata, serif", fontSize: 22, margin: 0, flex: 1 }}>Boîte à outils</h2><button type="button" onClick={onClose} aria-label="Fermer" style={iconBtn}>✕</button></div>
+        <div role="tablist" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+          {TOOLS.map(([id, label]) => <button key={id} type="button" role="tab" data-tool-tab={id} aria-selected={tool === id} onClick={() => pick(id)} style={{ ...chipBtn, background: tool === id ? "var(--panel-2)" : "transparent", fontWeight: tool === id ? 600 : 500 }}>{label}</button>)}
+        </div>
+        {tool === "draw" && <DrawTool people={people} />}
+        {tool === "dates" && <DatesTool />}
+        {tool === "holidays" && <HolidaysTool />}
+        {tool === "clocks" && <ClocksTool />}
+        {tool === "timer" && <TimerTool notify={notify} />}
+      </div>
+    </div>
+  );
+}
+function DrawTool({ people }) {
+  const pool = people.filter(p => p.role !== "guest");
+  const [off, setOff] = useState([]); const [shown, setShown] = useState(null); const [spin, setSpin] = useState(false); const [hist, setHist] = useState([]); const [order, setOrder] = useState(null);
+  const active = pool.filter(p => !off.includes(p.id));
+  const draw = () => {
+    if (spin || active.length === 0) return; setSpin(true); setOrder(null); let n = 0;
+    const iv = setInterval(() => { setShown(active[randInt(active.length)]); if (++n >= 14) { clearInterval(iv); const w = active[randInt(active.length)]; setShown(w); setHist(h => [w.display_name, ...h].slice(0, 5)); setSpin(false); } }, 110);
+  };
+  const shuffle = () => { const a = active.slice(); for (let i = a.length - 1; i > 0; i--) { const j = randInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } setShown(null); setOrder(a); };
+  return (
+    <div data-draw>
+      <p style={{ fontSize: 13.5, color: "var(--text-dim)", margin: "0 0 10px" }}>Qui prépare le café ? Qui ouvre la réunion ? Décochez les personnes absentes, puis laissez le hasard décider.</p>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>{pool.map(p => <label key={p.id} data-draw-person style={{ ...chipBtn, display: "inline-flex", gap: 6, alignItems: "center", cursor: "pointer", opacity: off.includes(p.id) ? 0.5 : 1 }}><input type="checkbox" checked={!off.includes(p.id)} onChange={() => setOff(o => o.includes(p.id) ? o.filter(x => x !== p.id) : [...o, p.id])} />{p.display_name}</label>)}</div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        <button type="button" data-draw-go disabled={spin || active.length === 0} onClick={draw} style={{ ...primaryBtn, width: "auto", padding: "10px 20px" }}>Tirer au sort</button>
+        <button type="button" data-draw-order disabled={spin || active.length < 2} onClick={shuffle} style={{ ...secondaryBtn, width: "auto", padding: "10px 18px" }}>Tirer un ordre de passage</button>
+      </div>
+      {shown && <div data-draw-result style={{ textAlign: "center", fontFamily: "Literata, serif", fontSize: 32, fontWeight: 600, padding: "18px 0", color: spin ? "var(--text-dim)" : "var(--accent)" }}>{spin ? "" : "🎉 "}{shown.display_name}</div>}
+      {order && <ol data-draw-list style={{ margin: "0 0 10px", paddingLeft: 22, fontSize: 15, lineHeight: 1.8 }}>{order.map(p => <li key={p.id}>{p.display_name}</li>)}</ol>}
+      {hist.length > 0 && <div style={{ fontSize: 12.5, color: "var(--text-dimmer)" }}>Derniers tirages : {hist.join(", ")}</div>}
+    </div>
+  );
+}
+function DatesTool() {
+  const today = parisDay();
+  const [a, setA] = useState(today), [b, setB] = useState(shiftDay(today, 30)), [from, setFrom] = useState(today), [n, setN] = useState(10);
+  const cal = diffDays(a, b), wk = workdaysBetween(a, b);
+  const res = addWorkdays(from, Number(n) || 0);
+  return (
+    <div data-dates>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>Entre deux dates</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}><input type="date" data-dates-a value={a} onChange={e => e.target.value && setA(e.target.value)} style={{ ...inputStyle, width: "auto" }} aria-label="Première date" /><input type="date" data-dates-b value={b} onChange={e => e.target.value && setB(e.target.value)} style={{ ...inputStyle, width: "auto" }} aria-label="Seconde date" /></div>
+      <div data-dates-diff style={{ fontSize: 15, marginBottom: 22 }}><strong>{Math.abs(cal)}</strong> jour{Math.abs(cal) > 1 ? "s" : ""} d'écart · <strong data-dates-work>{wk}</strong> jour{wk > 1 ? "s" : ""} ouvré{wk > 1 ? "s" : ""} (week-ends et jours fériés exclus, bornes comprises) · {(Math.abs(cal) / 7).toFixed(1).replace(".", ",")} semaines</div>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>Ajouter des jours ouvrés</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}><input type="date" data-dates-from value={from} onChange={e => e.target.value && setFrom(e.target.value)} style={{ ...inputStyle, width: "auto" }} aria-label="Date de départ" /><span>+</span><input type="number" data-dates-n value={n} min={-365} max={365} onChange={e => setN(e.target.value)} style={{ ...inputStyle, width: 90 }} aria-label="Nombre de jours ouvrés" /><span>jours ouvrés</span></div>
+      <div data-dates-result style={{ fontSize: 15 }}>→ <strong>{fmtDay(res, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</strong></div>
+    </div>
+  );
+}
+function HolidaysTool() {
+  const today = parisDay(); const [y, setY] = useState(+today.slice(0, 4));
+  return (
+    <div data-holidays>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}><button type="button" data-hol-prev onClick={() => setY(y - 1)} style={chipBtn} aria-label="Année précédente">‹</button><strong data-hol-year style={{ fontSize: 16 }}>{y}</strong><button type="button" data-hol-next onClick={() => setY(y + 1)} style={chipBtn} aria-label="Année suivante">›</button></div>
+      {frHolidays(y).map(([d, name]) => { const n = diffDays(today, d); return (
+        <div key={d} data-holiday={name} style={{ display: "flex", gap: 10, padding: "7px 0", borderTop: "1px solid var(--border-soft)", fontSize: 14, opacity: n < 0 ? 0.55 : 1 }}>
+          <strong style={{ fontWeight: 600, flex: 1 }}>{name}</strong><span>{fmtDay(d, { weekday: "long", day: "numeric", month: "long" })}</span>
+          <span style={{ width: 90, textAlign: "right", color: "var(--text-dim)", fontSize: 13 }}>{n === 0 ? "aujourd'hui" : n > 0 ? `dans ${n} j` : "passé"}</span></div>); })}
+      <p style={{ fontSize: 12, color: "var(--text-dimmer)", margin: "10px 0 0" }}>Jours fériés légaux en France métropolitaine (les 11 jours habituels).</p>
+    </div>
+  );
+}
+function ClocksTool() {
+  const [now, setNow] = useState(Date.now()); const [sel, setSel] = useState(lsJson("carnet-clocks", ["Europe/Paris", "America/New_York", "Asia/Tokyo"]));
+  useEffect(() => { const iv = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(iv); }, []);
+  const toggle = (z) => { const n = sel.includes(z) ? sel.filter(x => x !== z) : [...sel, z]; setSel(n); lsSet("carnet-clocks", JSON.stringify(n)); };
+  const fmt = (z, o) => new Intl.DateTimeFormat("fr-FR", { timeZone: z, ...o }).format(now);
+  const dayOf = (z) => new Intl.DateTimeFormat("sv-SE", { timeZone: z }).format(now);
+  const me0 = dayOf("Europe/Paris");
+  return (
+    <div data-clocks>
+      <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>{sel.map(z => { const label = (ZONES.find(x => x[0] === z) || [z, z])[1], dd = diffDays(me0, dayOf(z)); return (
+        <div key={z} data-clock={label} style={{ display: "flex", alignItems: "baseline", gap: 12, background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 14px" }}>
+          <span style={{ flex: 1, fontWeight: 600 }}>{label}</span><span style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{fmt(z, { weekday: "short", day: "numeric", month: "short" })}{dd ? (dd > 0 ? " (lendemain)" : " (veille)") : ""}</span>
+          <span data-clock-time style={{ fontFamily: "Literata, serif", fontSize: 24, fontVariantNumeric: "tabular-nums" }}>{fmt(z, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span></div>); })}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Afficher</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{ZONES.map(([z, l]) => <button key={z} type="button" data-clock-toggle={z} aria-pressed={sel.includes(z)} onClick={() => toggle(z)} style={{ ...chipBtn, background: sel.includes(z) ? "var(--panel-2)" : "transparent", fontWeight: sel.includes(z) ? 600 : 500 }}>{l}</button>)}</div>
+    </div>
+  );
+}
+function TimerTool({ notify }) {
+  const [endAt, setEndAt] = useState(Number(lsGet("carnet-timer-end", "0")) || 0); const [left, setLeft] = useState(0); const [custom, setCustom] = useState(20); const [paused, setPaused] = useState(0);
+  const beep = () => { try { const c = new (window.AudioContext || window.webkitAudioContext)(); [0, 0.25, 0.5].forEach(t => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; o.connect(g); g.connect(c.destination); g.gain.setValueAtTime(0.2, c.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + t + 0.2); o.start(c.currentTime + t); o.stop(c.currentTime + t + 0.22); }); } catch (_) {} };
+  useEffect(() => {
+    if (!endAt) { setLeft(0); return; }
+    const tick = () => { const l = endAt - Date.now(); if (l <= 0) { setEndAt(0); lsSet("carnet-timer-end", "0"); setLeft(0); beep(); notify("⏰ Le minuteur est terminé."); } else setLeft(l); };
+    tick(); const iv = setInterval(tick, 250); return () => clearInterval(iv);
+  }, [endAt]);
+  const start = (min) => { const e = Date.now() + min * 60000; lsSet("carnet-timer-end", String(e)); setPaused(0); setEndAt(e); };
+  const pause = () => { setPaused(left); lsSet("carnet-timer-end", "0"); setEndAt(0); };
+  const resume = () => { const e = Date.now() + paused; lsSet("carnet-timer-end", String(e)); setPaused(0); setEndAt(e); };
+  const reset = () => { lsSet("carnet-timer-end", "0"); setPaused(0); setEndAt(0); setLeft(0); };
+  const shown = endAt ? left : paused, s = Math.ceil(shown / 1000);
+  return (
+    <div data-timer>
+      <div data-timer-display style={{ textAlign: "center", fontFamily: "Literata, serif", fontSize: 64, fontVariantNumeric: "tabular-nums", padding: "10px 0 16px" }}>{pad2(Math.floor(s / 60))}:{pad2(s % 60)}</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", marginBottom: 12 }}>{[1, 5, 10, 15, 30].map(m => <button key={m} type="button" data-timer-preset={m} onClick={() => start(m)} style={chipBtn}>{m} min</button>)}
+        <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><input type="number" data-timer-custom min={1} max={600} value={custom} onChange={e => setCustom(e.target.value)} style={{ ...inputStyle, width: 74, padding: "6px 8px" }} aria-label="Durée en minutes" /><button type="button" data-timer-custom-go onClick={() => start(Math.min(600, Math.max(1, Number(custom) || 1)))} style={chipBtn}>Lancer</button></span></div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+        {endAt ? <button type="button" data-timer-pause onClick={pause} style={{ ...secondaryBtn, width: "auto", padding: "9px 18px" }}>Pause</button> : paused ? <button type="button" data-timer-resume onClick={resume} style={{ ...primaryBtn, width: "auto", padding: "9px 18px" }}>Reprendre</button> : null}
+        {(endAt || paused) ? <button type="button" data-timer-reset onClick={reset} style={{ ...secondaryBtn, width: "auto", padding: "9px 18px" }}>Réinitialiser</button> : null}</div>
+      <p style={{ fontSize: 12, color: "var(--text-dimmer)", textAlign: "center", margin: "14px 0 0" }}>Un signal sonore retentit à la fin tant que Le Carnet reste ouvert. Pour un minuteur lié à une tâche, utilisez le mode Focus.</p>
+    </div>
+  );
+}
+
 /* ---------------- Lot I : Idées et Liens ---------------- */
 /* ===== Boîte à idées ===== */
 const IDEA_STATUS = { new: ["Nouvelle", "var(--text-dim)"], kept: ["Retenue", "#5B8DEF"], done: ["Réalisée", "#1F9D6B"], dropped: ["Écartée", "var(--text-dimmer)"] };
@@ -6505,7 +6693,7 @@ function LinksView({ me, people, links, notify }) {
 }
 
 /* ---------------- Accueil : carte d'activité, bloc-notes rapide, personnalisation ---------------- */
-const HOME_SECTIONS = [["inbox", "Boîte de réception (tâches sans date)"], ["countdown", "Compte à rebours"], ["podium", "Podium de la semaine"], ["goal", "Objectif du jour"], ["evening", "Bilan du soir (après 17 h)"], ["start", "Guide « Premiers pas »"], ["tip", "Astuce du jour"], ["pins", "Tâches épinglées"], ["stats", "Mes statistiques"], ["heat", "Carte d'activité"], ["scratch", "Bloc-notes rapide"], ["recap", "Récap de la semaine"]];
+const HOME_SECTIONS = [["inbox", "Boîte de réception (tâches sans date)"], ["countdown", "Compte à rebours"], ["podium", "Podium de la semaine"], ["goal", "Objectif du jour"], ["evening", "Bilan du soir (après 17 h)"], ["start", "Guide « Premiers pas »"], ["tip", "Astuce du jour"], ["quote", "Pensée du jour"], ["agenda", "Anniversaires et jours fériés"], ["pins", "Tâches épinglées"], ["stats", "Mes statistiques"], ["heat", "Carte d'activité"], ["scratch", "Bloc-notes rapide"], ["recap", "Récap de la semaine"]];
 function ActivityHeat({ me, tasks }) {
   const WEEKS = 26;
   const { cells, total, best } = useMemo(() => {

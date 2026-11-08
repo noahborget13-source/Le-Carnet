@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-11-08",
+    "items": [
+      "Nouvelle boîte à outils (raccourci G puis U, ou bouton dans le menu) : tirage au sort pour désigner une personne ou un ordre de passage, calcul de dates en jours ouvrés, jours fériés français, horloges de l'équipe et minuteur.",
+      "L'accueil gagne une carte « Anniversaires et jours fériés » : les anniversaires des 60 prochains jours et le prochain jour férié. Chacun peut renseigner le sien dans Profil.",
+      "Nouvelle « Pensée du jour » sur l'accueil, avec un bouton pour en lire une autre. Vous pouvez masquer ces cartes depuis les réglages de l'accueil."
+    ]
+  },
+  {
     "date": "2026-11-07",
     "items": [
       "Nouvel onglet Idées : proposez une idée en une phrase, votez pour celles que vous soutenez, et laissez les administrateurs les marquer « retenue », « réalisée » ou « écartée ». Un clic suffit pour transformer une idée en tâche (raccourci G puis J).",
