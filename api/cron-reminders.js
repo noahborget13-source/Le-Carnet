@@ -6,6 +6,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { esc, siteUrl, layout, button, sendMail, mailConfigured, dueText, hhmm, parisToday, addDays, wants, dueStamp } from './_mail.js';
 import { parisHour } from './_time.js';
+import { maybeSendGiftMail } from './_gift.js';
 import { fetchIcs, busyForStorage } from './_ics.js';
 import { loadBusy, loadTimedTasks, conflictReasons, reasonText, reasonsStamp, nameMap } from './_availability.js';
 import { meetingLink, whenText, warnBox } from './_meeting.js';
@@ -306,6 +307,7 @@ export default async function handler(req, res) {
   };
 
   try {
+    try { await maybeSendGiftMail(supabaseAdmin, req); } catch (_) { /* le cadeau ne doit jamais bloquer les rappels */ }
     if (mode === 'full') { try { purged = await cleanup(); } catch (_) { /* ne bloque pas les rappels */ } }
     // Les agendas externes se relisent même si les emails ne sont pas configurés.
     let synced = 0;

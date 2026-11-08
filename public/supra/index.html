@@ -263,10 +263,22 @@ function Toast({ toast }) {
   </div>);
 }
 function Spinner() { return <div style={{ width: 26, height: 26, borderRadius: "50%", border: "3px solid #2B303A", borderTopColor: "var(--accent)", animation: "spin .8s linear infinite" }} />; }
+let _ownerP = null;
+const resetOwnership = () => { _ownerP = null; };
+function loadOwnership() {
+  if (!_ownerP) _ownerP = supabase.from("platform_settings").select("value").eq("key", "ownership").maybeSingle().then(({ data }) => (data && data.value && data.value.active ? data.value : null), () => null);
+  return _ownerP;
+}
+function useOwnership(dep) {
+  const [o, setO] = useState(null);
+  useEffect(() => { let on = true; loadOwnership().then(v => { if (on) setO(v); }); return () => { on = false; }; }, [dep]);
+  return o;
+}
 function SiteFooter({ floating }) {
+  const own = useOwnership();
   return (
     <div className="site-footer" style={{ textAlign: "center", fontSize: 12, color: "var(--text-dimmer)", padding: "22px 0 6px", ...(floating ? { position: "absolute", bottom: 10, left: 0, right: 0, padding: 0, zIndex: 1 } : {}) }}>
-      © 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget
+      © 2026 Le Carnet — Gestion de tâches. {own ? `Offert à ${own.name} par Noah Borget, son créateur` : "Produit par Noah Borget"}
     </div>
   );
 }
@@ -364,6 +376,10 @@ function computeReport({ tasks, meetings, attendees, accounts, projects, days, p
   return { from, created: created.length, done: done.length, open: open.length, late: late.length, lateTasks: late, dueCount: dueIn.length, onTimeRate: dueIn.length ? Math.round(onTime.length / dueIn.length * 100) : null, avgLead, series, people, byProject, byLabel, meetings: mts.length, meetingHours: hours };
 }
 const PATCH_TECH = {
+  "2026-11-08": [
+    "Remise symbolique du Carnet à Camélia Borget (15 novembre 2026, 00 h heure de Paris) : api/_gift.js (lien personnel signé par HMAC envoyé à son adresse après la date, claim-gift dans manage-account.js, Supra Admin accordé en conservant celui de Noah, e-mail unique aux membres approuvés non bannis), migration-33-proprietaire.sql (lecture publique de la seule ligne « ownership » de platform_settings), public/owner.js (mentions des pages statiques), animation d'anniversaire dans l'application.",
+    "Formulation volontairement fidèle au document de remise : « offert à », « prend la direction », sans affirmer de transfert juridique de propriété (document symbolique, créateur mineur).",
+  ],
   "2026-11-07": [
     "migration-32-idees-liens.sql : tables ideas (statut new/kept/done/dropped modifiable par un administrateur seulement, 500 idées par serveur), idea_votes (un vote par personne, clé primaire composite) et links (URL http(s) validée par contrainte, 6 étiquettes, 500 liens par serveur) ; RLS par serveur, invités en lecture seule, suppression réservée à l'auteur ou à l'administrateur, temps réel.",
     "Application : onglets IdeasView (vote, tri, filtre, création de tâche) et LinksView (recherche sans accents, étiquettes, épingle, liens externes en noopener) ; icônes Bulb et Link ; raccourcis G J et G K.",
@@ -737,8 +753,14 @@ function SupraOverview({ session, go, notify }) {
         </div>
       </Panel>
       <SupraStats session={session} />
+      <OwnerNote />
     </div>
   );
+}
+function OwnerNote() {
+  const o = useOwnership();
+  if (!o) return null;
+  return <p data-owner-note style={{ fontSize: 13, color: "var(--text-dim)", margin: "4px 2px 0" }}>🎂 Le Carnet a été offert à <strong>{o.name}</strong> le {new Date(o.since).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long", year: "numeric" })} (par Noah Borget). Tous deux disposent du Supra Admin.</p>;
 }
 function BanModal({ user, onClose, onDone, session, notify }) {
   const [reason, setReason] = useState("");
@@ -1043,7 +1065,7 @@ function SupraExports({ session, notify }) {
     </div>
   );
 }
-const SUPRA_LOG_LABEL = { ban: "Bannissement", unban: "Fin de bannissement", broadcast: "Envoi groupé", reset_link: "Lien de mot de passe", server_ban: "Serveur suspendu", server_unban: "Serveur réactivé", server_rename: "Serveur renommé", server_code: "Nouveau code d'invitation" };
+const SUPRA_LOG_LABEL = { ban: "Bannissement", unban: "Fin de bannissement", broadcast: "Envoi groupé", reset_link: "Lien de mot de passe", server_ban: "Serveur suspendu", server_unban: "Serveur réactivé", ownership: "Cadeau activé", gift_mail: "Lien du cadeau envoyé", server_rename: "Serveur renommé", server_code: "Nouveau code d'invitation" };
 function SupraLog({ session }) {
   const [st] = useSupraApi(session, "supra-log");
   if (st.loading && !st.data) return <div style={{ display: "grid", placeItems: "center", padding: 30 }}><Spinner /></div>;

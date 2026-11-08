@@ -327,10 +327,22 @@ function Toast({ toast }) {
   </div>);
 }
 function Spinner() { return <div style={{ width: 26, height: 26, borderRadius: "50%", border: "3px solid #2B303A", borderTopColor: "var(--accent)", animation: "spin .8s linear infinite" }} />; }
+let _ownerP = null;
+const resetOwnership = () => { _ownerP = null; };
+function loadOwnership() {
+  if (!_ownerP) _ownerP = supabase.from("platform_settings").select("value").eq("key", "ownership").maybeSingle().then(({ data }) => (data && data.value && data.value.active ? data.value : null), () => null);
+  return _ownerP;
+}
+function useOwnership(dep) {
+  const [o, setO] = useState(null);
+  useEffect(() => { let on = true; loadOwnership().then(v => { if (on) setO(v); }); return () => { on = false; }; }, [dep]);
+  return o;
+}
 function SiteFooter({ floating }) {
+  const own = useOwnership();
   return (
     <div className="site-footer" style={{ textAlign: "center", fontSize: 12, color: "var(--text-dimmer)", padding: "22px 0 6px", ...(floating ? { position: "absolute", bottom: 10, left: 0, right: 0, padding: 0, zIndex: 1 } : {}) }}>
-      © 2026 Le Carnet — Gestion de tâches. Produit par Noah Borget
+      © 2026 Le Carnet — Gestion de tâches. {own ? `Offert à ${own.name} par Noah Borget, son créateur` : "Produit par Noah Borget"}
     </div>
   );
 }
