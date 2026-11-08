@@ -460,7 +460,6 @@ const BIRTHDAY_KEY = "carnet-birthday-seen";
 const CONFETTI = Array.from({ length: 70 }, (_, i) => ({ left: (i * 37) % 100, delay: ((i * 53) % 40) / 10, dur: 3.2 + ((i * 29) % 30) / 10, size: 6 + (i * 7) % 8, color: ["#38C6B5", "#FFB648", "#7C96FF", "#FF6B8B", "#5FBF8B", "#FFFFFF"][i % 6], rot: (i * 47) % 360 }));
 function BirthdayOverlay({ me, onClose }) {
   const [video, setVideo] = useState(false);
-  const first = String(me.display_name || "Camélia").split(" ")[0];
   return (
     <div data-birthday role="dialog" aria-label="Joyeux anniversaire" aria-modal="true" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "radial-gradient(circle at 50% 30%, #17315F 0%, #0B1E3F 70%)", display: "grid", placeItems: "center", overflow: "hidden", padding: 20 }}>
       <style>{`@keyframes bd-fall{0%{transform:translateY(-12vh) rotate(0deg);opacity:1}100%{transform:translateY(112vh) rotate(720deg);opacity:.9}}
@@ -473,9 +472,9 @@ function BirthdayOverlay({ me, onClose }) {
       <div style={{ position: "relative", textAlign: "center", color: "#fff", maxWidth: 560 }}>
         <div aria-hidden="true" style={{ position: "relative", display: "inline-block", fontSize: 92, lineHeight: 1, animation: "bd-pop .9s ease-out both" }}>🎂
           <span style={{ position: "absolute", top: -14, left: "50%", marginLeft: -6, fontSize: 28, transformOrigin: "50% 100%", animation: "bd-flame .9s ease-in-out infinite" }}>🔥</span></div>
-        <h1 data-birthday-title style={{ fontFamily: "Literata, serif", fontSize: "clamp(30px, 6vw, 48px)", margin: "14px 0 6px", fontWeight: 600, animation: "bd-rise .8s ease-out .3s both" }}>Joyeux anniversaire, {first} !</h1>
-        <p style={{ fontSize: 18, lineHeight: 1.55, margin: "0 0 10px", color: "#DCE6FA", animation: "bd-rise .8s ease-out .6s both" }}>Noah a créé Le Carnet pour vous l'offrir.<br /><strong style={{ color: "#fff" }}>Il est désormais entre vos mains.</strong></p>
-        <p data-birthday-supra style={{ fontSize: 14.5, lineHeight: 1.55, margin: "0 0 22px", color: "#9FB3DB", animation: "bd-rise .8s ease-out .9s both" }}>Vous avez maintenant accès au Supra Admin, l'espace qui vous permet de veiller sur tous les serveurs, les comptes et les messages. Noah reste à vos côtés.</p>
+        <h1 data-birthday-title style={{ fontFamily: "Literata, serif", fontSize: "clamp(30px, 6vw, 48px)", margin: "14px 0 6px", fontWeight: 600, animation: "bd-rise .8s ease-out .3s both" }}>Joyeux anniversaire Maman !</h1>
+        <p style={{ fontSize: 18, lineHeight: 1.55, margin: "0 0 10px", color: "#DCE6FA", animation: "bd-rise .8s ease-out .6s both" }}>J'ai créé Le Carnet pour te l'offrir.<br /><strong style={{ color: "#fff" }}>Il est désormais entre vos mains.</strong></p>
+        <p data-birthday-supra style={{ fontSize: 14.5, lineHeight: 1.55, margin: "0 0 22px", color: "#9FB3DB", animation: "bd-rise .8s ease-out .9s both" }}>Tu as maintenant accès au Supra Admin, l'espace qui te permet de veiller sur tous les serveurs, les comptes et les messages. Je reste à tes côtés. — Noah</p>
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", animation: "bd-rise .8s ease-out 1.2s both" }}>
           <button type="button" data-birthday-video-open onClick={() => setVideo(true)} style={{ ...primaryBtn, width: "auto", padding: "12px 26px", fontSize: 15, background: "#FFB648", color: "#0B1E3F" }}>🎬 Lancer la surprise</button>
           <button type="button" data-birthday-close autoFocus onClick={onClose} style={{ ...primaryBtn, width: "auto", padding: "12px 26px", fontSize: 15 }}>Découvrir mon Carnet</button>
