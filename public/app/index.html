@@ -459,6 +459,7 @@ function useOwnership(dep) {
 const BIRTHDAY_KEY = "carnet-birthday-seen";
 const CONFETTI = Array.from({ length: 70 }, (_, i) => ({ left: (i * 37) % 100, delay: ((i * 53) % 40) / 10, dur: 3.2 + ((i * 29) % 30) / 10, size: 6 + (i * 7) % 8, color: ["#38C6B5", "#FFB648", "#7C96FF", "#FF6B8B", "#5FBF8B", "#FFFFFF"][i % 6], rot: (i * 47) % 360 }));
 function BirthdayOverlay({ me, onClose }) {
+  const [video, setVideo] = useState(false);
   const first = String(me.display_name || "Camélia").split(" ")[0];
   return (
     <div data-birthday role="dialog" aria-label="Joyeux anniversaire" aria-modal="true" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "radial-gradient(circle at 50% 30%, #17315F 0%, #0B1E3F 70%)", display: "grid", placeItems: "center", overflow: "hidden", padding: 20 }}>
@@ -476,10 +477,16 @@ function BirthdayOverlay({ me, onClose }) {
         <p style={{ fontSize: 18, lineHeight: 1.55, margin: "0 0 10px", color: "#DCE6FA", animation: "bd-rise .8s ease-out .6s both" }}>Noah a créé Le Carnet pour vous l'offrir.<br /><strong style={{ color: "#fff" }}>Il est désormais entre vos mains.</strong></p>
         <p data-birthday-supra style={{ fontSize: 14.5, lineHeight: 1.55, margin: "0 0 22px", color: "#9FB3DB", animation: "bd-rise .8s ease-out .9s both" }}>Vous avez maintenant accès au Supra Admin, l'espace qui vous permet de veiller sur tous les serveurs, les comptes et les messages. Noah reste à vos côtés.</p>
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", animation: "bd-rise .8s ease-out 1.2s both" }}>
+          <button type="button" data-birthday-video-open onClick={() => setVideo(true)} style={{ ...primaryBtn, width: "auto", padding: "12px 26px", fontSize: 15, background: "#FFB648", color: "#0B1E3F" }}>🎬 Lancer la surprise</button>
           <button type="button" data-birthday-close autoFocus onClick={onClose} style={{ ...primaryBtn, width: "auto", padding: "12px 26px", fontSize: 15 }}>Découvrir mon Carnet</button>
           <a data-birthday-supra-link href="/supra/" style={{ ...secondaryBtn, width: "auto", padding: "12px 22px", fontSize: 15, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Ouvrir le Supra Admin</a>
         </div>
       </div>
+      {video && (
+        <div data-birthday-video-box role="dialog" aria-label="Vidéo d'anniversaire" style={{ position: "absolute", inset: 0, background: "rgba(3,10,25,.96)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: 16, zIndex: 5 }}>
+          <video data-birthday-video src="/app/anniversaire.mp4" autoPlay controls playsInline preload="auto" style={{ width: "min(94vw, 900px)", maxHeight: "74vh", borderRadius: 14, background: "#000" }} />
+          <button type="button" data-birthday-video-close onClick={() => setVideo(false)} style={{ ...secondaryBtn, width: "auto", padding: "10px 22px" }}>Fermer la vidéo</button>
+        </div>)}
     </div>
   );
 }
