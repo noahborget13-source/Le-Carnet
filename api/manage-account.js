@@ -2,8 +2,8 @@
 //  • Actions de l'admin : delete, update, transfer-admin (même serveur uniquement).
 //  • Actions de chacun sur son propre compte : update-self, delete-self.
 import { createClient } from '@supabase/supabase-js';
-import { notifyOwner } from './_platform.js';
-import { claimGift } from './_gift.js';
+import { notifyOwner, realEmail } from './_platform.js';
+import { claimGift, maybeSendGiftMail, GIFT_EMAIL } from './_gift.js';
 import crypto from 'crypto';
 import { validateWorkHours } from './_availability.js';
 
@@ -301,6 +301,14 @@ export default async function handler(req, res) {
 
   try {
     if (['servers-list', 'servers-switch', 'servers-create', 'servers-join', 'set-password'].includes(action)) return await handleServers(req, res, body);
+    if (action === 'gift-ping') {
+      const tk = (req.headers.authorization || '').replace('Bearer ', '');
+      const { data: ud } = tk ? await supabaseAdmin.auth.getUser(tk) : { data: null };
+      if (!ud?.user) return res.status(401).json({ error: 'Session invalide' });
+      const { data: pr } = await supabaseAdmin.from('profiles').select('id, email, banned_at').eq('id', ud.user.id).single();
+      if (!pr || pr.banned_at || realEmail(pr.email) !== GIFT_EMAIL) return res.status(200).json({ ok: true, sent: false });
+      return res.status(200).json({ ok: true, sent: await maybeSendGiftMail(supabaseAdmin, req) });
+    }
     if (action === 'claim-gift') {
       const tk = (req.headers.authorization || '').replace('Bearer ', '');
       const { data: ud } = tk ? await supabaseAdmin.auth.getUser(tk) : { data: null };

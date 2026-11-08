@@ -501,6 +501,7 @@ function GiftHandler({ me, session, notify }) {
       .then(() => { resetOwnership(); window.dispatchEvent(new Event("carnet-ownership")); setTick(t => t + 1); try { localStorage.removeItem(BIRTHDAY_KEY); } catch (_) {} setShow(true); })
       .catch(e => notify(e.message, "err"));
   }, []);
+  useEffect(() => { if (String(me.email || "").toLowerCase().startsWith("cameliaborget") && Date.now() >= Date.parse("2026-11-15T00:00:00+01:00")) callApi("/api/manage-account", { action: "gift-ping" }, session).catch(() => {}); }, [me.id]);
   useEffect(() => { if (o && o.owner_id === me.id && lsGet(BIRTHDAY_KEY, "") !== "1") setShow(true); }, [o && o.owner_id, me.id]);
   useEffect(() => { const f = () => setShow(true); window.addEventListener("carnet-birthday", f); return () => window.removeEventListener("carnet-birthday", f); }, []);
   if (!show) return null;
