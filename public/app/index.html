@@ -177,7 +177,7 @@
 <script type="text/babel" data-presets="react">
 if (!window.__LE_CARNET_BOOTED__) {
 window.__LE_CARNET_BOOTED__ = true;
-const { useState, useEffect, useRef, useMemo } = React;
+const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
 const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 /* ============================================================
@@ -1314,6 +1314,16 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [focusNote, setFocusNote] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [showTools, setShowTools] = useState(false);
+  const [showTour, setShowTour] = useState(false);
+  const tutorial = useTutorial();
+  const tourKey = "carnet-tour-" + me.id;
+  const closeTour = () => { lsSet(tourKey, "1"); setShowTour(false); };
+  useEffect(() => {
+    const fresh = me.created_at && Date.now() - Date.parse(me.created_at) < 14 * 86400000;
+    if (!fresh || lsGet(tourKey, "")) return;
+    const t = setTimeout(() => { if (!document.querySelector("[data-birthday]")) setShowTour(true); }, 900);
+    return () => clearTimeout(t);
+  }, [me.id]);
   const [showHelpCenter, setShowHelpCenter] = useState(false);
   const [homeKey, setHomeKey] = useState(0);
   const [inviteFromUrl] = useState(() => { try { const t = new URLSearchParams(window.location.search).get("invite"); return t && t.length >= 20 ? t : ""; } catch (_) { return ""; } });
@@ -1472,7 +1482,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         <button type="button" className="app-sidebar-footer-label" data-servers-open onClick={() => setShowServers(true)} title="Changer de serveur, en créer ou en rejoindre un autre" style={{ display: "flex", alignItems: "center", gap: 8, margin: "-6px 0 0", padding: "8px 10px", background: "var(--bg-2)", border: "1px solid var(--border-soft)", borderRadius: 9, color: "var(--text)", fontSize: 13, cursor: "pointer", textAlign: "left" }}><span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>{serverName || "Mon serveur"}</span><span style={{ color: "var(--text-dimmer)" }}>⇄</span></button>
         <button type="button" className="app-sidebar-footer-label" data-palette-open onClick={() => setShowPalette(true)} title="Rechercher partout (Ctrl K)" style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 -6px", padding: "8px 10px", borderRadius: 9, background: "var(--bg-2)", border: "1px solid var(--border-soft)", color: "var(--text-dim)", cursor: "pointer", fontSize: 13 }}><I.Search size={14} /> <span style={{ flex: 1, textAlign: "left" }}>Rechercher…</span><kbd style={{ fontSize: 10.5, opacity: 0.7 }}>Ctrl K</kbd></button>
         <nav style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
-          {tabs.map(t => (<button key={t.id} className={t.secondary ? "tab-secondary" : undefined} onClick={() => goTab(t.id)} aria-current={tab === t.id ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: tab === t.id ? 600 : 500, cursor: "pointer", textAlign: "left" }}><t.icon size={17} /> {t.label}{t.id === "messages" && unreadTotal > 0 && <span data-unread-badge aria-label={unreadTotal + " message(s) non lu(s)"} style={{ background: "#FF6B5E", color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px", marginLeft: "auto" }}>{unreadTotal > 99 ? "99+" : unreadTotal}</span>}</button>))}
+          {tabs.map(t => (<button key={t.id} data-tab-id={t.id} className={t.secondary ? "tab-secondary" : undefined} onClick={() => goTab(t.id)} aria-current={tab === t.id ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: tab === t.id ? "var(--panel-2)" : "transparent", border: "none", color: tab === t.id ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: tab === t.id ? 600 : 500, cursor: "pointer", textAlign: "left" }}><t.icon size={17} /> {t.label}{t.id === "messages" && unreadTotal > 0 && <span data-unread-badge aria-label={unreadTotal + " message(s) non lu(s)"} style={{ background: "#FF6B5E", color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 7px", marginLeft: "auto" }}>{unreadTotal > 99 ? "99+" : unreadTotal}</span>}</button>))}
         
           <button type="button" className="tab-more" onClick={() => setMoreOpen(v => !v)} aria-expanded={moreOpen} aria-label="Plus" style={{ alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: (moreOpen || tabs.some(t => t.secondary && t.id === tab)) ? "var(--panel-2)" : "transparent", border: "none", color: (moreOpen || tabs.some(t => t.secondary && t.id === tab)) ? "var(--text)" : "var(--text-dim)", fontSize: 14, fontWeight: 500, cursor: "pointer" }}><I.More size={17} /> Plus</button>
         </nav>
@@ -1534,10 +1544,12 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         { k: "print", label: "Imprimer ma journée", hint: "Agenda du jour sur papier", run: () => { setShowPalette(false); printAgenda({ me, tasks, meetings, attendees, from: parisDay(), days: 1, title: "Ma journée · " + fmtDay(parisDay(), { weekday: "long", day: "numeric", month: "long" }) }); } },
         { k: "review", label: "Imprimer le bilan de la semaine", hint: "Terminé, en retard, à venir", run: () => { setShowPalette(false); printWeekReview({ me, tasks, meetings, attendees }); } },
         { k: "tools", label: "Ouvrir la boîte à outils", hint: "Tirage au sort, dates, jours fériés, horloges, minuteur", run: () => { setShowPalette(false); setShowTools(true); } },
+        { k: "tour", label: "Rejouer la visite guidée", hint: "Découvrir les onglets pas à pas", run: () => { setShowPalette(false); setShowTour(true); } },
         { k: "keys", label: "Raccourcis clavier", hint: "Afficher la liste", run: () => { setShowPalette(false); setShowHelp(true); } },
       ]} recents={recents} tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); pushRecent("note", id); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} onReview={() => { setShowPalette(false); setShowReview(true); }} />}
       {showReview && <WeeklyReview me={me} tasks={tasks} meetings={meetings} attendees={attendees} timeEntries={timeEntries} notify={notify} onClose={() => setShowReview(false)} onOpen={(id) => { setShowReview(false); setOpenId(id); }} />}
-      {showHelpCenter && <HelpCenter me={me} session={session} tabId={tab} notify={notify} data={{ tasks, notes, timeEntries, habits, habitLogs, meetings, attendees, appointments, projects }} onClose={() => setShowHelpCenter(false)} onShortcuts={() => { setShowHelpCenter(false); setShowHelp(true); }} onRestoreStart={() => { try { const h = lsJson("carnet-home-" + me.id, []); lsSet("carnet-home-" + me.id, JSON.stringify((Array.isArray(h) ? h : []).filter(x => x !== "start"))); } catch (_) {} setShowHelpCenter(false); setTab("home"); setHomeKey(k => k + 1); }} />}
+      {showHelpCenter && <HelpCenter tutorial={tutorial} onTour={() => { setShowHelpCenter(false); setShowTour(true); }} me={me} session={session} tabId={tab} notify={notify} data={{ tasks, notes, timeEntries, habits, habitLogs, meetings, attendees, appointments, projects }} onClose={() => setShowHelpCenter(false)} onShortcuts={() => { setShowHelpCenter(false); setShowHelp(true); }} onRestoreStart={() => { try { const h = lsJson("carnet-home-" + me.id, []); lsSet("carnet-home-" + me.id, JSON.stringify((Array.isArray(h) ? h : []).filter(x => x !== "start"))); } catch (_) {} setShowHelpCenter(false); setTab("home"); setHomeKey(k => k + 1); }} />}
+      {showTour && <TourOverlay tabs={tabs} tutorial={tutorial} onClose={closeTour} />}
       {showTools && <ToolsModal people={people} notify={notify} onClose={() => setShowTools(false)} />}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} />}
       {showServers && <ServersModal initialCode={inviteFromUrl} me={me} session={session} notify={notify} onClose={() => setShowServers(false)} />}
@@ -5631,7 +5643,7 @@ function tasksCsv(me, data) {
   ]);
   return "\uFEFF" + [head, ...rows].map(r => r.map(q).join(";")).join("\r\n");
 }
-function HelpCenter({ me, session, tabId, data, onClose, onShortcuts, onRestoreStart, notify }) {
+function HelpCenter({ me, session, tabId, data, onClose, onShortcuts, onRestoreStart, notify, tutorial, onTour }) {
   const [panel, setPanel] = useState("guide");
   const [q, setQ] = useState("");
   const [kind, setKind] = useState("idee");
@@ -5662,6 +5674,12 @@ function HelpCenter({ me, session, tabId, data, onClose, onShortcuts, onRestoreS
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>{seg("guide", "Guide")}{seg("feedback", "Un retour ?")}{seg("data", "Mes données")}</div>
         {panel === "guide" && (<div data-help-panel="guide">
+          <div data-help-tutorial style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            {tutorial && tutorial.youtube
+              ? <a data-help-video href={tutorial.youtube} target="_blank" rel="noopener noreferrer" style={{ ...primaryBtn, width: "auto", padding: "9px 16px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8 }}>▶ Voir la vidéo de présentation</a>
+              : <span data-help-video-soon style={{ fontSize: 13, color: "var(--text-dim)", alignSelf: "center" }}>🎬 Vidéo de présentation bientôt disponible.</span>}
+            {onTour && <button type="button" data-help-tour onClick={onTour} style={{ ...secondaryBtn, width: "auto", padding: "9px 16px" }}>Rejouer la visite guidée</button>}
+          </div>
           <input data-help-search type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher dans l'aide…" aria-label="Chercher dans l'aide" style={{ ...inputStyle, marginBottom: 10 }} />
           {faq.length === 0 && <div style={{ fontSize: 13.5, color: "var(--text-dim)", padding: "6px 0 12px" }}>Aucun résultat. Posez votre question dans l'onglet « Un retour ? » : nous vous répondrons.</div>}
           <div style={{ display: "grid", gap: 6 }}>
@@ -6361,6 +6379,95 @@ function printWeekReview({ me, tasks, meetings, attendees }) {
   const est = done.reduce((a, t) => a + (t.estimate_min || 0), 0);
   const ul = (arr, f) => arr.length ? `<ul>${arr.map(f).join("")}</ul>` : `<p class="none">Aucune.</p>`;
   printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Bilan de la semaine</title><style>body{font:14px/1.55 Georgia,serif;color:#111;margin:28px}h1{font-size:22px;margin:0}h2{font-size:15px;margin:18px 0 6px;border-bottom:1px solid #999}.sub{color:#555;font-size:12px;margin:2px 0 14px}ul{margin:0;padding-left:20px}.none{color:#777;font-style:italic;margin:4px 0}.k{display:flex;gap:24px;margin:10px 0}.k b{font-size:22px;display:block}@media print{body{margin:12mm}}</style></head><body><h1>Bilan de la semaine</h1><p class="sub">${escH(me.display_name)} · du ${escH(fmtDay(monday, { day: "numeric", month: "long" }))} au ${escH(fmtDay(sunday, { day: "numeric", month: "long", year: "numeric" }))}</p><div class="k"><div><b>${done.length}</b>tâche(s) terminée(s)</div><div><b>${meets}</b>réunion(s)</div><div><b>${escH(est ? fmtEst(est) : "—")}</b>travail estimé terminé</div></div><h2>Terminé cette semaine</h2>${ul(done, t => `<li>${escH(t.title)}</li>`)}<h2>En retard</h2>${ul(late, t => `<li>${escH(t.title)} <small>(échéance ${escH(fmtDay(t.due, { day: "numeric", month: "long" }))})</small></li>`)}<h2>À venir (7 jours)</h2>${ul(next, t => `<li>${escH(t.title)} <small>(${escH(fmtDay(t.due, { weekday: "long", day: "numeric", month: "long" }))})</small></li>`)}</body></html>`);
+}
+
+/* ---------------- Lot K : visite guidée ---------------- */
+/* ===== Lot K : visite guidée ===== */
+const TOUR_TEXT = {
+  home: ["Accueil", "Votre journée en un coup d'œil : tâches du jour, réunions, objectifs et petites cartes que vous pouvez masquer ou réordonner."],
+  tasks: ["Tâches", "Créez, assignez et priorisez vos tâches. Vues liste, tableau et semaine, étiquettes, sous-tâches, rappels. Astuce : la touche N crée une tâche en un instant."],
+  calendar: ["Calendrier", "Toutes vos échéances, réunions et congés sur un même calendrier, mois ou semaine."],
+  meetings: ["Réunions", "Planifiez une réunion, invitez l'équipe, suivez les réponses et gardez le compte rendu."],
+  reports: ["Rapports", "Votre activité en chiffres : tâches terminées, temps suivi, tendances de la semaine."],
+  team: ["Équipe", "Qui est là, qui est absent, et ce que chacun a en cours."],
+  activity: ["Activité", "Le fil de tout ce qui se passe dans votre serveur, en direct."],
+  bookings: ["Réservations", "Réservez une salle, une voiture ou tout autre équipement partagé sans conflit."],
+  appointments: ["Rendez-vous", "Proposez vos disponibilités : on réserve un créneau avec vous en deux clics."],
+  habits: ["Habitudes", "Suivez vos routines au quotidien et gardez votre série."],
+  lists: ["Listes", "Courses, valise, idées de cadeaux : des listes à cocher à plusieurs, mises à jour en direct."],
+  expenses: ["Dépenses", "Notez qui a payé quoi : Le Carnet calcule les soldes et propose les remboursements les plus simples."],
+  ideas: ["Idées", "Proposez une idée, votez pour celles que vous aimez, et transformez les meilleures en tâches."],
+  links: ["Liens", "La bibliothèque de liens utiles de votre équipe, avec recherche et étiquettes."],
+  workload: ["Charge", "Visualisez la charge de chacun pour répartir le travail équitablement."],
+  objectives: ["Objectifs", "Fixez des objectifs et des résultats clés, et suivez leur avancement."],
+  notes: ["Notes", "Vos notes privées ou partagées, retrouvables en un instant."],
+  messages: ["Messages", "Discutez avec l'équipe ou en privé, avec pièces jointes et réactions."],
+  profile: ["Profil", "Votre photo, votre anniversaire, vos préférences et l'apparence du site : thème, taille du texte, couleur d'accent."],
+  admin: ["Administration", "Réservée aux administrateurs : membres, rôles, invitations et réglages du serveur."],
+};
+function TourOverlay({ tabs, tutorial, onClose }) {
+  const steps = useMemo(() => {
+    const out = [{ id: "welcome", title: "Bienvenue sur Le Carnet", text: "Une visite rapide, en quelques étapes, pour découvrir ce que vous pouvez faire ici.", welcome: true }];
+    for (const t of tabs) if (TOUR_TEXT[t.id]) out.push({ id: t.id, sel: `[data-tab-id="${t.id}"]`, title: TOUR_TEXT[t.id][0], text: TOUR_TEXT[t.id][1] });
+    out.splice(1, 0, { id: "palette", sel: "[data-palette-open]:not([style*='display: none'])", title: "Recherche partout", text: "Tâches, notes, personnes, pages : tout se retrouve ici. Raccourci : Ctrl K." });
+    out.push({ id: "servers", sel: "[data-servers-open]", title: "Vos serveurs", text: "Un serveur, c'est un espace partagé (famille, équipe…). Vous pouvez en rejoindre ou en créer d'autres ici." });
+    out.push({ id: "help", sel: "[data-help-open]", title: "Le Centre d'aide", text: "Questions fréquentes, vos données, et un bouton pour nous écrire. Vous pouvez y rejouer cette visite et revoir la vidéo quand vous voulez.", last: true });
+    return out;
+  }, [tabs]);
+  const [i, setI] = useState(0); const [rect, setRect] = useState(null); const [vw, setVw] = useState(window.innerWidth);
+  const s = steps[i];
+  const measure = () => {
+    setVw(window.innerWidth);
+    if (!s.sel) { setRect(null); return; }
+    const els = Array.from(document.querySelectorAll(s.sel)).filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+    if (!els.length) { setRect(null); return; }
+    els[0].scrollIntoView({ block: "nearest" });
+    const r = els[0].getBoundingClientRect(); if (r.bottom > window.innerHeight || r.top < 0 || r.right > window.innerWidth) { setRect(null); return; } setRect({ x: r.left, y: r.top, w: r.width, h: r.height });
+  };
+  useLayoutEffect(() => { measure(); }, [i]);
+  useEffect(() => { window.addEventListener("resize", measure); return () => window.removeEventListener("resize", measure); }, [i]);
+  const next = () => (i < steps.length - 1 ? setI(i + 1) : onClose());
+  const prev = () => setI(Math.max(0, i - 1));
+  useEffect(() => {
+    const k = (e) => { if (e.key === "Escape") onClose(); else if (e.key === "ArrowRight" || e.key === "Enter") { e.preventDefault(); next(); } else if (e.key === "ArrowLeft") prev(); };
+    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
+  }, [i]);
+  const desktop = vw > 800, P = 6;
+  const boxW = Math.min(380, vw - 24);
+  let box = { left: "50%", top: "50%", transform: "translate(-50%, -50%)" };
+  if (rect) {
+    if (desktop && rect.x < vw / 2) box = { left: Math.min(rect.x + rect.w + 20, vw - boxW - 12), top: Math.max(12, Math.min(rect.y - 10, window.innerHeight - 280)) };
+    else if (desktop) box = { left: Math.max(12, rect.x - boxW - 20), top: Math.max(12, Math.min(rect.y, window.innerHeight - 280)) };
+    else box = { left: "50%", top: 16, transform: "translateX(-50%)" };
+  }
+  const url = tutorial && tutorial.youtube;
+  return (
+    <div data-tour role="dialog" aria-modal="true" aria-label="Visite guidée" style={{ position: "fixed", inset: 0, zIndex: 900 }}>
+      {rect
+        ? <div data-tour-spot style={{ position: "fixed", left: rect.x - P, top: rect.y - P, width: rect.w + P * 2, height: rect.h + P * 2, borderRadius: 12, boxShadow: "0 0 0 9999px rgba(6,10,22,.78), 0 0 0 3px var(--accent), 0 0 24px 4px color-mix(in srgb, var(--accent) 55%, transparent)", transition: "all .3s ease", pointerEvents: "none" }} />
+        : <div style={{ position: "fixed", inset: 0, background: "rgba(6,10,22,.78)" }} />}
+      <div data-tour-box style={{ position: "fixed", width: boxW, background: "var(--panel)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 16, padding: "18px 20px", boxShadow: "0 18px 50px rgba(0,0,0,.45)", transition: "all .3s ease", ...box }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: "var(--text-dimmer)", marginBottom: 6 }}>Étape {i + 1} sur {steps.length}</div>
+        <h3 data-tour-title style={{ fontFamily: "Literata, serif", fontSize: 20, margin: "0 0 8px" }}>{s.title}</h3>
+        <p data-tour-text style={{ fontSize: 14.5, lineHeight: 1.55, margin: "0 0 14px", color: "var(--text-dim)" }}>{s.text}</p>
+        {s.welcome && (url
+          ? <a data-tour-video href={url} target="_blank" rel="noopener noreferrer" style={{ ...secondaryBtn, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, textDecoration: "none", marginBottom: 14, width: "auto" }}>▶ Regarder la vidéo ({(tutorial && tutorial.titre) || "présentation du site"})</a>
+          : <div data-tour-video-soon style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 14 }}>🎬 Une vidéo de présentation sera bientôt disponible ici.</div>)}
+        <div style={{ display: "flex", gap: 3, marginBottom: 14, flexWrap: "wrap" }}>{steps.map((_, k) => <span key={k} style={{ width: k === i ? 18 : 6, height: 6, borderRadius: 3, background: k <= i ? "var(--accent)" : "var(--border)", transition: "width .2s" }} />)}</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button type="button" data-tour-skip onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-dimmer)", cursor: "pointer", fontSize: 13, padding: 0, fontFamily: "inherit" }}>Passer la visite</button>
+          <span style={{ flex: 1 }} />
+          {i > 0 && <button type="button" data-tour-prev onClick={prev} style={{ ...secondaryBtn, width: "auto", padding: "9px 16px" }}>Précédent</button>}
+          <button type="button" data-tour-next autoFocus onClick={next} style={{ ...primaryBtn, width: "auto", padding: "9px 20px" }}>{s.welcome ? "Commencer la visite" : s.last ? "Terminer" : "Suivant"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function useTutorial() {
+  const [t, setT] = useState(window.__TUTORIAL || null);
+  useEffect(() => { if (window.__TUTORIAL) return; let on = true; fetch("/tutoriel.json", { cache: "no-cache" }).then(r => r.ok ? r.json() : null).then(j => { if (on && j) setT(j); }).catch(() => {}); return () => { on = false; }; }, []);
+  return t;
 }
 
 /* ---------------- Lot J : outils ---------------- */
