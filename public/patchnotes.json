@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-11-11",
+    "items": [
+      "Nouvel onglet Contacts : le carnet d'adresses partagé de votre équipe (artisans, médecins, fournisseurs…), avec recherche, favoris, étiquettes, appel ou e-mail en un clic, et export vers votre téléphone (.vcf) ou Excel (.csv). Raccourci : G puis Y.",
+      "Nouvel onglet Remerciements : dites merci à quelqu'un en quelques mots, avec un emoji. La personne reçoit une notification, et l'accueil affiche les derniers mots reçus. Raccourci : G puis X.",
+      "Sur téléphone, la boîte à outils est désormais accessible depuis le menu « Plus », et l'écran des messages retrouve toute la hauteur pendant une conversation."
+    ]
+  },
+  {
     "date": "2026-11-08",
     "items": [
       "Nouvelle visite guidée : à la création d'un compte, l'écran s'assombrit et un projecteur éclaire chaque onglet, avec une courte explication et un bouton « Suivant ». Elle commence par le lien vers la vidéo de présentation du site. Vous pouvez la rejouer, et retrouver la vidéo, depuis le Centre d'aide.",

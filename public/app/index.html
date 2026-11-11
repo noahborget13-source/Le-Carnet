@@ -326,6 +326,8 @@ const I = {
   Chevron: p => <Icon {...p} path={<polyline points="6 9 12 15 18 9"/>} />,
   Wallet: p => <Icon {...p} path={<><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></>} />,
   Bulb: p => <Icon {...p} path={<><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.7.6 1 1.4 1 2.3h6c0-.9.3-1.7 1-2.3A7 7 0 0 0 12 2z"/></>} />,
+  Book: p => <Icon {...p} path={<><path d="M4 4h13a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z"/><circle cx="12" cy="10" r="2.2"/><path d="M8.5 16c.6-1.8 2-2.6 3.5-2.6s2.9.8 3.5 2.6"/></>} />,
+  Heart: p => <Icon {...p} path={<path d="M12 21s-7.5-4.6-9.5-9.2C1.2 8.6 3 5 6.6 5c2 0 3.5 1.1 5.4 3 1.9-1.9 3.4-3 5.4-3C21 5 22.8 8.6 21.5 11.8 19.5 16.4 12 21 12 21z"/>} />,
   Link: p => <Icon {...p} path={<><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></>} />,
   Gauge: p => <Icon {...p} path={<><path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></>} />,
   Target: p => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>} />,
@@ -552,7 +554,7 @@ function AnnouncementBanner({ items = [] }) {
   );
 }
 /** Cloche : notifications de la personne connectée (créées par des déclencheurs en base). */
-const NOTIF_ICONS = { assigned: "📌", comment: "💬", mention: "＠", dm: "✉️", meeting: "📹", leave_request: "🏖️", leave_decision: "🏖️", announcement: "📣" };
+const NOTIF_ICONS = { assigned: "📌", comment: "💬", mention: "＠", dm: "✉️", meeting: "📹", leave_request: "🏖️", leave_decision: "🏖️", announcement: "📣", kudos: "🌟" };
 const notifAgo = (iso) => {
   const m = Math.floor((Date.now() - Date.parse(iso)) / 60000);
   if (m < 1) return "à l'instant";
@@ -583,6 +585,7 @@ function NotificationBell({ me, items, onOpenTask, goTo, notify, variant = "side
     if (n.task_id) onOpenTask(n.task_id);
     else if (n.kind === "dm" || n.kind === "mention") goTo("messages");
     else if (n.kind === "meeting") goTo("meetings");
+    else if (n.kind === "kudos") goTo("kudos");
     else if (n.kind === "leave_request") { try { localStorage.setItem("carnet-admin-page", "leaves"); } catch (_) {} goTo("admin"); }
     else if (n.kind === "leave_decision") goTo("profile");
   };
@@ -1305,6 +1308,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [ideas, setIdeas] = useState([]);
   const [ideaVotes, setIdeaVotes] = useState([]);
   const [links, setLinks] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [kudos, setKudos] = useState([]);
   const [resources, setResources] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [availabilities, setAvailabilities] = useState([]);
@@ -1376,6 +1381,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   useLiveTable('ideas', setIdeas);
   useLiveTable('idea_votes', setIdeaVotes);
   useLiveTable('links', setLinks);
+  useLiveTable('contacts', setContacts);
+  useLiveTable('kudos', setKudos);
   useLiveTable('resources', setResources);
   useLiveTable('bookings', setBookings);
   useLiveTable('availabilities', setAvailabilities);
@@ -1418,6 +1425,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
     { id: "expenses", label: "Dépenses", icon: I.Wallet, secondary: true },
     { id: "ideas", label: "Idées", icon: I.Bulb, secondary: true },
     { id: "links", label: "Liens", icon: I.Link, secondary: true },
+    { id: "contacts", label: "Contacts", icon: I.Book, secondary: true },
+    { id: "kudos", label: "Remerciements", icon: I.Heart, secondary: true },
     { id: "workload", label: "Charge", icon: I.Gauge, secondary: true },
     { id: "objectives", label: "Objectifs", icon: I.Target, secondary: true },
     { id: "notes", label: "Notes", icon: I.Note, secondary: true },
@@ -1461,7 +1470,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       if (document.querySelector(".modal-card")) return;
       const k = ev.key.toLowerCase();
       if (Date.now() - gAt < 1500) {
-        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", b: "bookings", v: "appointments", i: "habits", l: "lists", d: "expenses", j: "ideas", k: "links", w: "workload", f: "activity", n: "notes", m: "messages", p: "profile", a: "admin" };
+        const map = { h: "home", t: "tasks", c: "calendar", r: "meetings", s: "reports", o: "objectives", e: "team", b: "bookings", v: "appointments", i: "habits", l: "lists", d: "expenses", j: "ideas", k: "links", y: "contacts", x: "kudos", w: "workload", f: "activity", n: "notes", m: "messages", p: "profile", a: "admin" };
         gAt = 0;
         if (k === "u") { setShowTools(true); ev.preventDefault(); return; }
         if (map[k] && (k !== "a" || isAdmin)) { setTab(map[k]); ev.preventDefault(); }
@@ -1517,7 +1526,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         <FocusSession me={me} tasks={tasks} focus={focus} setFocus={setFocus} onStart={startFocus} onOpen={openFromAnywhere} notify={notify} />
         {!(focus && focus.phase === "work") && <RunningTimer me={me} entries={timeEntries} tasks={tasks} onOpen={openFromAnywhere} notify={notify} />}
         <AlertBanner inline />
-        {tab === "home" && <HomeView key={homeKey} notes={notes} onHelp={() => setShowHelpCenter(true)} projects={projects} me={me} accounts={people} tasks={tasks} comments={comments} leaves={leaves} meetings={meetings} attendees={attendees} events={teamEvents} onOpen={openFromAnywhere} goTo={setTab} onReview={() => setShowReview(true)} pins={pins} onUnpin={togglePin} notify={notify} />}
+        {tab === "home" && <HomeView key={homeKey} notes={notes} onHelp={() => setShowHelpCenter(true)} projects={projects} me={me} accounts={people} tasks={tasks} comments={comments} leaves={leaves} meetings={meetings} attendees={attendees} events={teamEvents} onOpen={openFromAnywhere} goTo={setTab} onReview={() => setShowReview(true)} pins={pins} onUnpin={togglePin} notify={notify} kudos={kudos} />}
         {tab === "tasks" && <TasksView savedViews={savedViews} projects={projects} projectMembers={projectMembers} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} tasks={tasks} trashed={trashed} templates={templates} comments={comments} attachments={attachments} onOpen={openFromAnywhere} notify={notify} />}
         {tab === "calendar" && <CalendarView tasks={tasks} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} events={teamEvents} isAdmin={isAdmin} notify={notify} me={me} onOpen={openFromAnywhere} />}
         {tab === "meetings" && <MeetingsView meetingFiles={meetingFiles} onFilesChanged={reloadMeetingFiles} me={me} session={session} isAdmin={isAdmin} myPerms={myPerms} accounts={people} meetings={meetings} attendees={attendees} leaves={leaves} tasks={tasks} notify={notify} />}
@@ -1528,6 +1537,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         {tab === "lists" && <ListsView me={me} people={people} lists={lists} items={listItems} notify={notify} />}
         {tab === "ideas" && <IdeasView me={me} people={people} ideas={ideas} votes={ideaVotes} notify={notify} />}
         {tab === "links" && <LinksView me={me} people={people} links={links} notify={notify} />}
+        {tab === "contacts" && <ContactsView me={me} people={people} contacts={contacts} notify={notify} />}
+        {tab === "kudos" && <KudosView me={me} people={people} kudos={kudos} notify={notify} />}
         {tab === "expenses" && <ExpensesView me={me} people={people} expenses={expenses} settlements={settlements} notify={notify} />}
         {tab === "workload" && <WorkloadView me={me} people={people} tasks={tasks} meetings={meetings} attendees={attendees} leaves={leaves} onOpen={openFromAnywhere} />}
         {tab === "habits" && <HabitsView me={me} habits={habits} logs={habitLogs} notify={notify} />}
@@ -1545,6 +1556,8 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
         { k: "print", label: "Imprimer ma journée", hint: "Agenda du jour sur papier", run: () => { setShowPalette(false); printAgenda({ me, tasks, meetings, attendees, from: parisDay(), days: 1, title: "Ma journée · " + fmtDay(parisDay(), { weekday: "long", day: "numeric", month: "long" }) }); } },
         { k: "review", label: "Imprimer le bilan de la semaine", hint: "Terminé, en retard, à venir", run: () => { setShowPalette(false); printWeekReview({ me, tasks, meetings, attendees }); } },
         { k: "tools", label: "Ouvrir la boîte à outils", hint: "Tirage au sort, dates, jours fériés, horloges, minuteur", run: () => { setShowPalette(false); setShowTools(true); } },
+        { k: "kudos", label: "Remercier quelqu'un", hint: "Un petit mot, avec notification", run: () => { setShowPalette(false); setTab("kudos"); } },
+        { k: "contacts", label: "Ouvrir les contacts", hint: "Le carnet d'adresses de l'équipe", run: () => { setShowPalette(false); setTab("contacts"); } },
         { k: "tour", label: "Rejouer la visite guidée", hint: "Découvrir les onglets pas à pas", run: () => { setShowPalette(false); setShowTour(true); } },
         { k: "keys", label: "Raccourcis clavier", hint: "Afficher la liste", run: () => { setShowPalette(false); setShowHelp(true); } },
       ]} recents={recents} tasks={tasks} meetings={meetings} notes={notes} accounts={people} tabs={tabs} onClose={() => setShowPalette(false)} onTab={(id) => { setTab(id); setShowPalette(false); }} onTask={(id) => { setOpenId(id); setShowPalette(false); }} onNote={(id) => { setFocusNote(id); setTab("notes"); pushRecent("note", id); setShowPalette(false); }} onNewTask={() => { setShowPalette(false); window.__carnetNewTask = true; setTab("tasks"); setTimeout(() => window.dispatchEvent(new Event("carnet-new-task")), 60); }} canCreate={isAdmin || myPerms.createTasks} onReview={() => { setShowPalette(false); setShowReview(true); }} />}
@@ -2184,7 +2197,7 @@ function dayExtras(iso, events = [], accounts = []) {
   };
 }
 
-const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis L", "Listes"], ["G puis D", "Dépenses"], ["G puis J", "Idées"], ["G puis K", "Liens"], ["G puis U", "Boîte à outils"], ["G puis W", "Charge de l'équipe"], ["G puis F", "Fil d'activité"], ["G puis V", "Rendez-vous"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
+const SHORTCUTS = [["N", "Nouvelle tâche"], ["/", "Chercher une tâche"], ["G puis H", "Accueil"], ["G puis T", "Tâches"], ["G puis C", "Calendrier"], ["G puis R", "Réunions"], ["G puis S", "Rapports"], ["G puis E", "Équipe"], ["G puis B", "Réservations"], ["G puis I", "Habitudes"], ["G puis L", "Listes"], ["G puis D", "Dépenses"], ["G puis J", "Idées"], ["G puis K", "Liens"], ["G puis Y", "Contacts"], ["G puis X", "Remerciements"], ["G puis U", "Boîte à outils"], ["G puis W", "Charge de l'équipe"], ["G puis F", "Fil d'activité"], ["G puis V", "Rendez-vous"], ["G puis O", "Objectifs"], ["G puis N", "Notes"], ["Ctrl K", "Recherche globale"], ["G puis M", "Messages"], ["G puis P", "Profil"], ["G puis A", "Administration"], ["?", "Afficher / masquer cette aide"], ["Échap", "Fermer"]];
 function ShortcutsHelp({ onClose, isAdmin }) {
   return (
     <div style={overlayStyle} onMouseDown={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
@@ -3641,7 +3654,7 @@ function MyStats({ me, tasks, projects }) {
    Ici : l'onglet « Patch notes » de l'administrateur du site, qui ajoute des détails techniques par jour. */
 const frDate = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 /** Onglet réservé à l'administrateur du site : historique complet, avec les détails techniques. */
-function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], attendees = [], events = [], onOpen, goTo, projects = [], onReview, pins = [], onUnpin, notify = () => {}, notes = [], onHelp = () => {} }) {
+function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], attendees = [], events = [], onOpen, goTo, projects = [], onReview, pins = [], onUnpin, notify = () => {}, notes = [], onHelp = () => {}, kudos = [] }) {
   const [hidden, setHiddenRaw] = useState(() => { const v = lsJson("carnet-home-" + me.id, []); return Array.isArray(v) ? v : []; });
   const setHidden = (h) => { setHiddenRaw(h); lsSet("carnet-home-" + me.id, JSON.stringify(h)); };
   const [showPrefs, setShowPrefs] = useState(false);
@@ -3721,6 +3734,7 @@ function HomeView({ me, accounts, tasks, comments, leaves = [], meetings = [], a
       {show("podium") && <Podium tasks={tasks} accounts={accounts} />}
       {show("tip") && <TipCard />}
       {show("quote") && <QuoteCard />}
+      {show("kudos") && <KudosCard me={me} people={accounts} kudos={kudos} goTo={goTo} />}
       {show("agenda") && <EquipeAgenda people={accounts} me={me} />}
 
       {show("recap") && <><div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>Récap de la semaine</div>
@@ -5597,6 +5611,8 @@ function GettingStarted({ me, tasks, notes, goTo, onHelp, onHide }) {
 
 /* Centre d'aide : guide, retours à l'équipe, export des données */
 const FAQ = [
+  ["À quoi servent les Contacts ?", "C'est un carnet d'adresses partagé par tout le serveur : chacun peut y ajouter un artisan, un médecin, un fournisseur. Vous pouvez chercher, mettre en favori, et exporter la liste (.vcf pour votre téléphone, .csv pour Excel)."],
+  ["Comment remercier quelqu'un ?", "Ouvrez l'onglet Remerciements (G puis X), choisissez la personne, un emoji et écrivez quelques mots. Elle reçoit une notification et le mot apparaît sur le mur de l'équipe. Vous pouvez en envoyer 20 par jour."],
   ["Comment ajouter une tâche rapidement ?", "Utilisez l'ajout rapide en haut de « Tâches » (ou la touche N). Écrivez par exemple « Appeler Paul demain 14h #famille !urgente @bob » : la date, l'heure, l'étiquette, la priorité et la personne sont reconnues. Vous pouvez aussi la dicter avec le bouton 🎤."],
   ["Qui voit mes tâches ?", "Les membres de votre serveur voient les tâches du serveur, sauf celles d'un projet privé : celles-ci ne sont visibles que par les membres du projet et l'administrateur."],
   ["Comment inviter quelqu'un ?", "Dans l'onglet Admin, créez un code d'invitation et transmettez-le. La personne le saisit à l'inscription, ou dans « Mes serveurs » si elle a déjà un compte."],
@@ -6399,6 +6415,8 @@ const TOUR_TEXT = {
   expenses: ["Dépenses", "Notez qui a payé quoi : Le Carnet calcule les soldes et propose les remboursements les plus simples."],
   ideas: ["Idées", "Proposez une idée, votez pour celles que vous aimez, et transformez les meilleures en tâches."],
   links: ["Liens", "La bibliothèque de liens utiles de votre équipe, avec recherche et étiquettes."],
+  contacts: ["Contacts", "Le carnet d'adresses partagé : numéros, e-mails, adresses, avec recherche et export vers votre téléphone."],
+  kudos: ["Remerciements", "Dites merci à quelqu'un en un message : la personne est prévenue et tout le monde voit le mur des remerciements."],
   workload: ["Charge", "Visualisez la charge de chacun pour répartir le travail équitablement."],
   objectives: ["Objectifs", "Fixez des objectifs et des résultats clés, et suivez leur avancement."],
   notes: ["Notes", "Vos notes privées ou partagées, retrouvables en un instant."],
@@ -6801,7 +6819,168 @@ function LinksView({ me, people, links, notify }) {
 }
 
 /* ---------------- Accueil : carte d'activité, bloc-notes rapide, personnalisation ---------------- */
-const HOME_SECTIONS = [["inbox", "Boîte de réception (tâches sans date)"], ["countdown", "Compte à rebours"], ["podium", "Podium de la semaine"], ["goal", "Objectif du jour"], ["evening", "Bilan du soir (après 17 h)"], ["start", "Guide « Premiers pas »"], ["tip", "Astuce du jour"], ["quote", "Pensée du jour"], ["agenda", "Anniversaires et jours fériés"], ["pins", "Tâches épinglées"], ["stats", "Mes statistiques"], ["heat", "Carte d'activité"], ["scratch", "Bloc-notes rapide"], ["recap", "Récap de la semaine"]];
+/* ===== Lot L : Contacts et Remerciements ===== */
+const vEsc = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\;");
+const toVCard = (cs) => cs.map(c => ["BEGIN:VCARD", "VERSION:3.0", "FN:" + vEsc(c.name), "N:" + vEsc(c.name) + ";;;;", c.org ? "ORG:" + vEsc(c.org) : null, c.phone ? "TEL:" + vEsc(c.phone) : null, c.email ? "EMAIL:" + vEsc(c.email) : null, c.address ? "ADR:;;" + vEsc(c.address) + ";;;;" : null, c.notes ? "NOTE:" + vEsc(c.notes) : null, (c.tags || []).length ? "CATEGORIES:" + c.tags.map(vEsc).join(",") : null, "END:VCARD"].filter(Boolean).join("\r\n")).join("\r\n") + "\r\n";
+const ctCell = (v) => { let s = String(v == null ? "" : v); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+const toContactsCsv = (cs) => "\uFEFF" + [["Nom", "Téléphone", "E-mail", "Organisation", "Adresse", "Notes", "Étiquettes"].map(ctCell).join(";")].concat(cs.map(c => [c.name, c.phone, c.email, c.org, c.address, c.notes, (c.tags || []).join(", ")].map(ctCell).join(";"))).join("\r\n") + "\r\n";
+const telHref = (p) => "tel:" + String(p || "").replace(/[^\d+]/g, "");
+const EMPTY_CONTACT = { name: "", phone: "", email: "", org: "", address: "", notes: "", tags: "" };
+function ContactsView({ me, people, contacts, notify }) {
+  const canWrite = me.role !== "guest", isAdmin = me.role === "admin";
+  const [q, setQ] = useState(""), [tag, setTag] = useState(""), [favOnly, setFavOnly] = useState(false);
+  const [modal, setModal] = useState(null), [f, setF] = useState(EMPTY_CONTACT);
+  const canEdit = (c) => c.created_by === me.id || isAdmin;
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const allTags = [...new Set(contacts.flatMap(c => c.tags || []))].sort((a, b) => a.localeCompare(b, "fr"));
+  const shown = contacts.filter(c => (!favOnly || c.favorite) && (!tag || (c.tags || []).includes(tag)) && (!q.trim() || norm([c.name, c.org, c.phone, String(c.phone || "").replace(/\D/g, ""), c.email, c.address, c.notes, (c.tags || []).join(" ")].join(" ")).includes(norm(q.trim()))))
+    ;
+  const letterOf = (c) => { const l = norm(c.name).trim().charAt(0).toUpperCase(); return /[A-Z]/.test(l) ? l : "#"; };
+  shown.sort((a, b) => (letterOf(a) === "#") - (letterOf(b) === "#") || a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+  const groups = []; for (const c of shown) { const l = letterOf(c); if (!groups.length || groups[groups.length - 1][0] !== l) groups.push([l, []]); groups[groups.length - 1][1].push(c); }
+  const tagsOf = (s) => [...new Set(String(s).split(/[,;]/).map(t => t.trim().toLowerCase().slice(0, 20)).filter(Boolean))].slice(0, 6);
+  const openNew = () => { setF(EMPTY_CONTACT); setModal({}); };
+  const openEdit = (c) => { setF({ name: c.name, phone: c.phone || "", email: c.email || "", org: c.org || "", address: c.address || "", notes: c.notes || "", tags: (c.tags || []).join(", ") }); setModal({ id: c.id }); };
+  const save = async () => {
+    const name = f.name.trim(); if (!name) { notify("Le nom est obligatoire.", "err"); return; }
+    const email = f.email.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { notify("Cette adresse e-mail ne semble pas valide.", "err"); return; }
+    const row = { name: name.slice(0, 100), phone: f.phone.trim().slice(0, 30), email: email.slice(0, 120), org: f.org.trim().slice(0, 100), address: f.address.trim().slice(0, 200), notes: f.notes.trim().slice(0, 500), tags: tagsOf(f.tags) };
+    const { error } = modal.id ? await supabase.from("contacts").update(row).eq("id", modal.id) : await supabase.from("contacts").insert({ ...row, server_id: me.server_id, created_by: me.id });
+    if (error) { notify(error.message, "err"); return; }
+    setModal(null); notify(modal.id ? "Contact modifié." : "Contact ajouté.");
+  };
+  const fav = async (c) => { const { error } = await supabase.from("contacts").update({ favorite: !c.favorite }).eq("id", c.id); if (error) notify(error.message, "err"); };
+  const remove = async (c) => { if (!window.confirm(`Supprimer le contact « ${c.name} » ?`)) return; const { error } = await supabase.from("contacts").delete().eq("id", c.id); if (error) notify(error.message, "err"); else notify("Contact supprimé."); };
+  const copy = async (c) => { await copyText([c.name, c.org, c.phone, c.email, c.address].filter(Boolean).join("\n")); notify("Fiche copiée."); };
+  const exportAs = (kind) => {
+    if (!shown.length) { notify("Aucun contact à exporter.", "err"); return; }
+    if (kind === "vcf") downloadText("contacts-le-carnet.vcf", "text/vcard", toVCard(shown)); else downloadText("contacts-le-carnet.csv", "text/csv", toContactsCsv(shown));
+    notify(shown.length + " contact" + (shown.length > 1 ? "s exportés" : " exporté") + ".");
+  };
+  return (
+    <div data-contacts-view>
+      {pageTitle("Contacts", "Le carnet d'adresses partagé de votre équipe : artisans, médecins, fournisseurs, voisins… tout le monde y retrouve les bons numéros.", canWrite && <button type="button" data-contact-new onClick={openNew} style={{ ...primaryBtn, width: "auto", padding: "10px 18px" }}>+ Ajouter un contact</button>)}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
+        <input data-contact-search type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher un nom, un numéro, une société…" aria-label="Rechercher un contact" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+        <button type="button" data-contact-favonly aria-pressed={favOnly} onClick={() => setFavOnly(v => !v)} style={{ ...chipBtn, background: favOnly ? "var(--panel-2)" : "transparent", fontWeight: favOnly ? 600 : 500 }}>★ Favoris</button>
+        <button type="button" data-contact-export-vcf onClick={() => exportAs("vcf")} style={chipBtn} title="Importable dans le carnet d'adresses de votre téléphone">Exporter (.vcf)</button>
+        <button type="button" data-contact-export-csv onClick={() => exportAs("csv")} style={chipBtn} title="Ouvrable dans Excel">Exporter (.csv)</button>
+      </div>
+      {allTags.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+        <button type="button" data-contact-tag="" aria-pressed={!tag} onClick={() => setTag("")} style={{ ...chipBtn, background: !tag ? "var(--panel-2)" : "transparent", fontWeight: !tag ? 600 : 500 }}>Tous</button>
+        {allTags.map(t => <button key={t} type="button" data-contact-tag={t} aria-pressed={tag === t} onClick={() => setTag(tag === t ? "" : t)} style={{ ...chipBtn, background: tag === t ? "var(--panel-2)" : "transparent", fontWeight: tag === t ? 600 : 500 }}>#{t}</button>)}
+      </div>}
+      {shown.length === 0 && <div data-contacts-empty className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "30px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14, lineHeight: 1.6 }}>{contacts.length === 0 ? "Aucun contact pour l'instant. Ajoutez le premier : le plombier, le pédiatre, la voisine qui a les clés…" : "Aucun contact ne correspond à votre recherche."}</div>}
+      {groups.map(([letter, list]) => (
+        <section key={letter} data-contact-group={letter} style={{ marginBottom: 18 }}>
+          <h2 style={{ fontFamily: "Literata, serif", fontSize: 16, color: "var(--text-dim)", margin: "0 0 8px" }}>{letter}</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+            {list.map(c => (
+              <div key={c.id} data-contact={c.name} className="paper" style={{ border: "1px solid " + (c.favorite ? "var(--accent)" : "var(--border-soft)"), borderRadius: 14, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 3 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                  <strong style={{ fontSize: 15.5, overflowWrap: "anywhere", flex: 1 }}>{c.name}</strong>
+                  {canEdit(c) && <button type="button" data-contact-fav aria-pressed={c.favorite} aria-label={c.favorite ? "Retirer des favoris" : "Ajouter aux favoris"} onClick={() => fav(c)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 17, color: c.favorite ? "var(--accent)" : "var(--text-dimmer)", padding: 0 }}>{c.favorite ? "★" : "☆"}</button>}
+                </div>
+                {c.org && <div style={{ fontSize: 13, color: "var(--text-dim)", overflowWrap: "anywhere" }}>{c.org}</div>}
+                {c.phone && <a data-contact-phone href={telHref(c.phone)} style={{ fontSize: 14, color: "var(--text)" }}>📞 {c.phone}</a>}
+                {c.email && <a data-contact-email href={"mailto:" + c.email} style={{ fontSize: 14, color: "var(--text)", overflowWrap: "anywhere" }}>✉️ {c.email}</a>}
+                {c.address && <div style={{ fontSize: 13.5, color: "var(--text-dim)", overflowWrap: "anywhere" }}>📍 {c.address}</div>}
+                {c.notes && <div style={{ fontSize: 13, color: "var(--text-dim)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.45 }}>{c.notes}</div>}
+                {(c.tags || []).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{c.tags.map(t => <span key={t} style={{ fontSize: 11.5, color: "var(--text-dim)" }}>#{t}</span>)}</div>}
+                <div style={{ fontSize: 11.5, color: "var(--text-dimmer)" }}>Ajouté par {nameOfPerson(people, c.created_by).split(" ")[0]}</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                  <button type="button" data-contact-copy onClick={() => copy(c)} style={chipBtn}>Copier</button>
+                  {canEdit(c) && <button type="button" data-contact-edit onClick={() => openEdit(c)} style={chipBtn}>Modifier</button>}
+                  {canEdit(c) && <button type="button" data-contact-delete onClick={() => remove(c)} style={{ ...chipBtn, color: "var(--late)" }}>Supprimer</button>}
+                </div>
+              </div>))}
+          </div>
+        </section>))}
+      {modal && (
+        <div style={overlayStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) setModal(null); }}>
+          <div className="modal-card" role="dialog" aria-label={modal.id ? "Modifier le contact" : "Nouveau contact"} style={{ ...modalStyle, width: 480, maxHeight: "90vh", overflowY: "auto" }}>
+            <h2 style={{ fontFamily: "Literata, serif", fontSize: 20, margin: "0 0 14px" }}>{modal.id ? "Modifier le contact" : "Nouveau contact"}</h2>
+            <Field label="Nom"><input data-contact-name autoFocus value={f.name} onChange={e => setF({ ...f, name: e.target.value })} maxLength={100} style={inputStyle} /></Field>
+            <Field label="Société ou fonction (facultatif)"><input data-contact-org value={f.org} onChange={e => setF({ ...f, org: e.target.value })} maxLength={100} style={inputStyle} /></Field>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Field label="Téléphone"><input data-contact-phone-in type="tel" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} maxLength={30} style={inputStyle} /></Field>
+              <Field label="E-mail"><input data-contact-email-in type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} maxLength={120} style={inputStyle} /></Field>
+            </div>
+            <Field label="Adresse (facultatif)"><input data-contact-address value={f.address} onChange={e => setF({ ...f, address: e.target.value })} maxLength={200} style={inputStyle} /></Field>
+            <Field label="Notes (facultatif)"><textarea data-contact-notes value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} maxLength={500} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></Field>
+            <Field label="Étiquettes, séparées par des virgules"><input data-contact-tags value={f.tags} onChange={e => setF({ ...f, tags: e.target.value })} placeholder="santé, travaux, école" style={inputStyle} /></Field>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}><button type="button" onClick={() => setModal(null)} style={{ ...secondaryBtn, flex: 1 }}>Annuler</button><button type="button" data-contact-save onClick={save} disabled={!f.name.trim()} style={{ ...primaryBtn, flex: 1 }}>Enregistrer</button></div>
+          </div>
+        </div>)}
+    </div>
+  );
+}
+
+const KUDOS_EMOJIS = ["👏", "🙏", "🌟", "💪", "❤️", "🎉", "🧠", "☕"];
+function KudosView({ me, people, kudos, notify }) {
+  const canWrite = me.role !== "guest", isAdmin = me.role === "admin";
+  const [filter, setFilter] = useState("all"), [to, setTo] = useState(""), [emoji, setEmoji] = useState(KUDOS_EMOJIS[0]), [msg, setMsg] = useState(""), [busy, setBusy] = useState(false);
+  const others = people.filter(p => p.id !== me.id).sort((a, b) => a.display_name.localeCompare(b.display_name, "fr"));
+  const first = (id) => nameOfPerson(people, id).split(" ")[0];
+  const sorted = [...kudos].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const shown = sorted.filter(k => filter === "all" || (filter === "received" ? k.to_user === me.id : k.from_user === me.id));
+  const month = parisDay().slice(0, 7);
+  const tally = {}; for (const k of kudos) if (parisDay(new Date(k.created_at)).slice(0, 7) === month) tally[k.to_user] = (tally[k.to_user] || 0) + 1;
+  const top = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const submit = async (ev) => {
+    ev.preventDefault(); const m = msg.trim(); if (!to || !m || busy) return; setBusy(true);
+    const { error } = await supabase.from("kudos").insert({ server_id: me.server_id, from_user: me.id, to_user: to, emoji, message: m.slice(0, 280) });
+    setBusy(false);
+    if (error) { notify(error.message, "err"); return; }
+    setMsg(""); notify("Merci d'avoir remercié " + first(to) + " !");
+  };
+  const remove = async (k) => { if (!window.confirm("Supprimer ce remerciement ?")) return; const { error } = await supabase.from("kudos").delete().eq("id", k.id); if (error) notify(error.message, "err"); else notify("Remerciement supprimé."); };
+  const chip = (id, label) => <button key={id} type="button" data-kudos-filter={id} aria-pressed={filter === id} onClick={() => setFilter(id)} style={{ ...chipBtn, background: filter === id ? "var(--panel-2)" : "transparent", fontWeight: filter === id ? 600 : 500 }}>{label}</button>;
+  return (
+    <div data-kudos-view>
+      {pageTitle("Remerciements", "Un petit mot pour dire merci : la personne est prévenue, et tout le monde voit ce qui se passe de bien dans l'équipe.")}
+      {canWrite ? (
+        <form onSubmit={submit} className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: 14, marginBottom: 16, display: "grid", gap: 10 }}>
+          <select data-kudos-to value={to} onChange={e => setTo(e.target.value)} aria-label="Personne à remercier" style={inputStyle}><option value="">Qui voulez-vous remercier ?</option>{others.map(p => <option key={p.id} value={p.id}>{p.display_name}</option>)}</select>
+          <div role="group" aria-label="Emoji" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{KUDOS_EMOJIS.map(e => <button key={e} type="button" data-kudos-emoji={e} aria-pressed={emoji === e} onClick={() => setEmoji(e)} style={{ ...chipBtn, fontSize: 18, padding: "4px 10px", background: emoji === e ? "var(--panel-2)" : "transparent", border: "1px solid " + (emoji === e ? "var(--accent)" : "var(--border)") }}>{e}</button>)}</div>
+          <textarea data-kudos-message value={msg} onChange={e => setMsg(e.target.value)} maxLength={280} rows={2} placeholder="Merci pour…" aria-label="Votre message" style={{ ...inputStyle, resize: "vertical" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}><button type="submit" data-kudos-submit disabled={!to || !msg.trim() || busy} style={{ ...primaryBtn, width: "auto", padding: "9px 18px" }}>Envoyer le remerciement</button><span style={{ fontSize: 12, color: "var(--text-dimmer)" }}>{msg.length}/280</span></div>
+        </form>) : <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>En tant qu'invité, vous pouvez lire les remerciements mais pas en envoyer.</p>}
+      {top.length > 0 && <div data-kudos-top className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "12px 16px", marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text-dimmer)", textTransform: "uppercase", marginBottom: 6 }}>Les plus remerciés ce mois-ci</div>
+        <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>{top.map(([id, n], i) => <span key={id} data-kudos-top-item style={{ fontSize: 14.5 }}>{["🥇", "🥈", "🥉"][i]} <strong>{first(id)}</strong> · {n}</span>)}</div>
+      </div>}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>{chip("all", "Tous")}{chip("received", "Reçus")}{chip("given", "Envoyés")}</div>
+      {shown.length === 0 && <div data-kudos-empty className="paper" style={{ border: "1px dashed var(--border-soft)", borderRadius: 14, padding: "30px 22px", textAlign: "center", color: "var(--text-dim)", fontSize: 14, lineHeight: 1.6 }}>{kudos.length === 0 ? "Aucun remerciement pour l'instant. Soyez le premier : un « merci » fait toujours plaisir." : "Rien dans cette catégorie."}</div>}
+      <div style={{ display: "grid", gap: 10 }}>
+        {shown.map(k => (
+          <div key={k.id} data-kudo className="paper" style={{ display: "flex", gap: 14, border: "1px solid var(--border-soft)", borderRadius: 14, padding: "12px 16px" }}>
+            <span aria-hidden="true" style={{ fontSize: 28, lineHeight: 1 }}>{k.emoji}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, color: "var(--text-dim)" }}><strong style={{ color: "var(--text)" }}>{first(k.from_user)}</strong> remercie <strong data-kudo-to style={{ color: "var(--text)" }}>{k.to_user === me.id ? "vous" : first(k.to_user)}</strong></div>
+              <div style={{ fontSize: 15, margin: "4px 0", whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.5 }}>{k.message}</div>
+              <div style={{ fontSize: 12, color: "var(--text-dimmer)" }}>{fmtDay(parisDay(new Date(k.created_at)))}{(k.from_user === me.id || isAdmin) && <> · <button type="button" data-kudo-delete onClick={() => remove(k)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--late)", font: "inherit", fontSize: 12, padding: 0 }}>Supprimer</button></>}</div>
+            </div>
+          </div>))}
+      </div>
+    </div>
+  );
+}
+function KudosCard({ me, people, kudos, goTo }) {
+  const since = Date.now() - 30 * 864e5;
+  const mine = kudos.filter(k => k.to_user === me.id && Date.parse(k.created_at) >= since).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 2);
+  if (!mine.length) return null;
+  return (
+    <div data-kudos-card className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "14px 18px", marginBottom: 26 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5, color: "var(--text-dimmer)", textTransform: "uppercase", marginBottom: 8 }}>On vous a remercié</div>
+      {mine.map(k => <div key={k.id} style={{ fontSize: 14.5, lineHeight: 1.5, marginBottom: 6 }}>{k.emoji} <strong>{nameOfPerson(people, k.from_user).split(" ")[0]}</strong> : « {k.message} »</div>)}
+      <button type="button" data-kudos-card-open onClick={() => goTo("kudos")} style={chipBtn}>Voir le mur des remerciements</button>
+    </div>
+  );
+}
+
+const HOME_SECTIONS = [["inbox", "Boîte de réception (tâches sans date)"], ["countdown", "Compte à rebours"], ["podium", "Podium de la semaine"], ["goal", "Objectif du jour"], ["evening", "Bilan du soir (après 17 h)"], ["start", "Guide « Premiers pas »"], ["tip", "Astuce du jour"], ["quote", "Pensée du jour"], ["kudos", "Remerciements reçus"], ["agenda", "Anniversaires et jours fériés"], ["pins", "Tâches épinglées"], ["stats", "Mes statistiques"], ["heat", "Carte d'activité"], ["scratch", "Bloc-notes rapide"], ["recap", "Récap de la semaine"]];
 function ActivityHeat({ me, tasks }) {
   const WEEKS = 26;
   const { cells, total, best } = useMemo(() => {
