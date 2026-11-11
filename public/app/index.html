@@ -142,10 +142,10 @@
     .show-mobile { display: grid !important; }
 
     /* Conversation ouverte : plein écran, sans barre de navigation ni pied de page */
-    body.chat-open .app-sidebar, body.chat-open .site-footer, body.chat-open .chat-title, body.chat-open .alert-banner { display: none !important; }
+    body.chat-open .app-sidebar, body.chat-open .site-footer, body.chat-open .chat-title, body.chat-open .alert-banner, body.chat-open .app-topbar { display: none !important; }
     body.chat-open .app-shell { height: 100dvh; min-height: 0 !important; }
     body.chat-open .app-main { padding: 0 !important; display: flex; flex-direction: column; min-height: 0; overflow: hidden !important; }
-    body.chat-open .app-main > div { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    body.chat-open .app-main > div:not(.app-topbar) { flex: 1; display: flex; flex-direction: column; min-height: 0; }
     body.chat-open .chat-wrap { flex: 1; height: auto !important; min-height: 0; border-radius: 0 !important; border: none !important; }
   }
   .show-mobile { display: none; }
@@ -1507,6 +1507,7 @@ function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
       {moreOpen && <div className="more-backdrop" onClick={() => setMoreOpen(false)} />}
       {moreOpen && <div className="more-sheet" role="menu">
         {tabs.filter(t => t.secondary).map(t => (<button key={t.id} type="button" role="menuitem" aria-current={tab === t.id ? "true" : undefined} onClick={() => goTab(t.id)}><t.icon size={19} /> {t.label}</button>))}
+        <button type="button" role="menuitem" data-tools-open-mobile onClick={() => { setMoreOpen(false); setShowTools(true); }}><span aria-hidden="true" style={{ width: 19, textAlign: "center" }}>🧰</span> Boîte à outils</button>
         <button type="button" role="menuitem" data-servers-open-mobile onClick={() => { setMoreOpen(false); setShowServers(true); }}><span style={{ width: 19, textAlign: "center" }}>⇄</span> Mes serveurs{serverName ? " · " + serverName : ""}</button>
         <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onLogout(); }} style={{ color: "var(--text-dim)" }}><I.LogOut size={19} /> Déconnexion · {me.display_name}</button>
       </div>}
