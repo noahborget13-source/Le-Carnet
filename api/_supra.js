@@ -24,7 +24,7 @@ async function authInfo(sb) {
   return map;
 }
 const DAY = 86400000;
-const FEATURE_TABLES = [['tasks', 'Tâches'], ['meetings', 'Réunions'], ['notes', 'Notes'], ['habits', 'Habitudes'], ['lists', 'Listes'], ['expenses', 'Dépenses'], ['ideas', 'Idées'], ['links', 'Liens'], ['objectives', 'Objectifs'], ['bookings', 'Réservations'], ['appointments', 'Rendez-vous'], ['time_entries', 'Suivi du temps'], ['projects', 'Projets']];
+const FEATURE_TABLES = [['tasks', 'Tâches'], ['meetings', 'Réunions'], ['notes', 'Notes'], ['habits', 'Habitudes'], ['lists', 'Listes'], ['expenses', 'Dépenses'], ['ideas', 'Idées'], ['links', 'Liens'], ['contacts', 'Contacts'], ['kudos', 'Remerciements'], ['objectives', 'Objectifs'], ['bookings', 'Réservations'], ['appointments', 'Rendez-vous'], ['time_entries', 'Suivi du temps'], ['projects', 'Projets']];
 async function setBanned(sb, id, ban, reason, by) {
   const patch = ban ? { banned_at: new Date().toISOString(), ban_reason: reason, banned_by: by } : { banned_at: null, ban_reason: '', banned_by: null };
   const { error } = await sb.from('profiles').update(patch).eq('id', id);
