@@ -480,7 +480,7 @@ function BirthdayOverlay({ me, onClose }) {
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", animation: "bd-rise .8s ease-out 1.2s both" }}>
           <button type="button" data-birthday-video-open onClick={() => setVideo(true)} style={{ ...primaryBtn, width: "auto", padding: "12px 26px", fontSize: 15, background: "#FFB648", color: "#0B1E3F" }}>🎬 Lancer la surprise</button>
           <button type="button" data-birthday-close autoFocus onClick={onClose} style={{ ...primaryBtn, width: "auto", padding: "12px 26px", fontSize: 15 }}>Découvrir mon Carnet</button>
-          <a data-birthday-supra-link href="/panel/" style={{ ...secondaryBtn, width: "auto", padding: "12px 22px", fontSize: 15, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Ouvrir le panel</a>
+          <a data-birthday-supra-link href="/panel/" target="_blank" rel="noopener" style={{ ...secondaryBtn, width: "auto", padding: "12px 22px", fontSize: 15, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Ouvrir le panel</a>
         </div>
       </div>
       {video && (
