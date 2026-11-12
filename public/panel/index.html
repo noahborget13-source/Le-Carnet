@@ -1186,8 +1186,8 @@ function SupraWorkspace({ me, session, notify, onLogout }) {
         <button type="button" className="adm-burger" aria-label="Menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}>☰</button>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}><I.Shield size={20} color="var(--admin)" /><strong style={{ fontFamily: "Literata, serif", fontSize: 16 }}>Le Carnet — Panel</strong></div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <a href="/admin/" style={{ ...chipBtn, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Espace administrateur</a>
-          <a href="/app/" style={{ ...chipBtn, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>← Application</a>
+          <a href="/admin/" target="_blank" rel="noopener" style={{ ...chipBtn, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Espace administrateur</a>
+          <a href="/app/" target="_blank" rel="noopener" data-panel-app-link style={{ ...chipBtn, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Application ↗</a>
           <button type="button" onClick={onLogout} style={chipBtn} title="Se déconnecter">⎋</button>
         </div>
       </header>
