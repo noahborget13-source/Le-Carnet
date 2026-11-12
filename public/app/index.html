@@ -476,11 +476,11 @@ function BirthdayOverlay({ me, onClose }) {
           <span style={{ position: "absolute", top: -14, left: "50%", marginLeft: -6, fontSize: 28, transformOrigin: "50% 100%", animation: "bd-flame .9s ease-in-out infinite" }}>🔥</span></div>
         <h1 data-birthday-title style={{ fontFamily: "Literata, serif", fontSize: "clamp(30px, 6vw, 48px)", margin: "14px 0 6px", fontWeight: 600, animation: "bd-rise .8s ease-out .3s both" }}>Joyeux anniversaire Maman !</h1>
         <p style={{ fontSize: 18, lineHeight: 1.55, margin: "0 0 10px", color: "#DCE6FA", animation: "bd-rise .8s ease-out .6s both" }}>J'ai créé Le Carnet pour te l'offrir.<br /><strong style={{ color: "#fff" }}>Il est désormais entre tes mains.</strong></p>
-        <p data-birthday-supra style={{ fontSize: 14.5, lineHeight: 1.55, margin: "0 0 22px", color: "#9FB3DB", animation: "bd-rise .8s ease-out .9s both" }}>Tu as maintenant accès au Supra Admin, l'espace qui te permet de veiller sur tous les serveurs, les comptes et les messages. Je reste à tes côtés. — Noah</p>
+        <p data-birthday-supra style={{ fontSize: 14.5, lineHeight: 1.55, margin: "0 0 22px", color: "#9FB3DB", animation: "bd-rise .8s ease-out .9s both" }}>Tu as maintenant accès au panel de gestion, l'espace qui te permet de veiller sur tous les serveurs, les comptes et les messages. Je reste à tes côtés. — Noah</p>
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", animation: "bd-rise .8s ease-out 1.2s both" }}>
           <button type="button" data-birthday-video-open onClick={() => setVideo(true)} style={{ ...primaryBtn, width: "auto", padding: "12px 26px", fontSize: 15, background: "#FFB648", color: "#0B1E3F" }}>🎬 Lancer la surprise</button>
           <button type="button" data-birthday-close autoFocus onClick={onClose} style={{ ...primaryBtn, width: "auto", padding: "12px 26px", fontSize: 15 }}>Découvrir mon Carnet</button>
-          <a data-birthday-supra-link href="/supra/" style={{ ...secondaryBtn, width: "auto", padding: "12px 22px", fontSize: 15, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Ouvrir le Supra Admin</a>
+          <a data-birthday-supra-link href="/panel/" style={{ ...secondaryBtn, width: "auto", padding: "12px 22px", fontSize: 15, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Ouvrir le panel</a>
         </div>
       </div>
       {video && (
