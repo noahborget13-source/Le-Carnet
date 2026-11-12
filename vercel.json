@@ -3,5 +3,8 @@
   "crons": [
     { "path": "/api/cron-reminders", "schedule": "0 7 * * *" }
   ],
-  "redirects": []
+  "redirects": [
+    { "source": "/supra", "destination": "/panel/", "permanent": false },
+    { "source": "/supra/", "destination": "/panel/", "permanent": false }
+  ]
 }

@@ -1355,7 +1355,7 @@ function AdminWorkspace({ me, session, notify, onLogout }) {
         <button type="button" className="adm-burger" aria-label="Menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}>☰</button>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}><I.Shield size={20} color="var(--admin)" /><strong style={{ fontFamily: "Literata, serif", fontSize: 16 }}>Le Carnet — Espace Administrateur</strong></div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          {siteAdmin && <a href="/supra/" data-supra-link style={{ ...chipBtn, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>🛡️ Supra Admin</a>}
+          {siteAdmin && <a href="/panel/" data-supra-link style={{ ...chipBtn, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>🛠️ Panel</a>}
           <a href="/app/" data-back-app style={{ ...chipBtn, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>← Retour à l'application</a>
           <button type="button" onClick={onLogout} style={chipBtn} title="Se déconnecter">⎋</button>
         </div>

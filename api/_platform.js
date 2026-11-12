@@ -41,6 +41,6 @@ export async function notifyOwner(sb, req, setting, subject, lines) {
     if (!to.length) return;
     const text = lines.join('\n');
     const html = layout(`<p style="margin:0 0 12px"><strong>${esc(subject)}</strong></p>` + lines.map(l => `<p style="margin:0 0 8px;line-height:1.5">${esc(l)}</p>`).join('') + `<p style="margin:16px 0 0"><a href="${esc(siteUrl(req))}/supra/">Ouvrir le Supra Admin</a></p>`);
-    await Promise.allSettled(to.map(t => sendMail({ to: t, subject: `Le Carnet · ${subject}`.slice(0, 120), text: `${text}\n\n${siteUrl(req)}/supra/`, html })));
+    await Promise.allSettled(to.map(t => sendMail({ to: t, subject: `Le Carnet · ${subject}`.slice(0, 120), text: `${text}\n\n${siteUrl(req)}/panel/`, html })));
   } catch (_) { /* jamais bloquant */ }
 }

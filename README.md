@@ -11,7 +11,7 @@ Ce document explique **comment le site est organisé et comment il fonctionne**.
 | `/` | tout le monde | Page d'accueil : présentation, nouveautés, connexion. |
 | `/app/` | membres d'un serveur | L'application elle-même (tâches, calendrier, messages, notes…). |
 | `/admin/` | administrateurs d'un serveur | Espace administrateur : membres, congés, annonces, rapports, données, journal. |
-| `/supra/` | propriétaire de la plateforme uniquement | Supra Admin : comptes et bannissements, serveurs, emails, patch notes, maintenance. |
+| `/panel/` | propriétaire de la plateforme uniquement | Panel (ex-Supra Admin, `/supra/` y redirige) : tableau de bord de maintenance (lancer, programmer, prolonger, terminer), comptes, serveurs, emails, annonces, patch notes, santé, exports. Page séparée de l'application : reste accessible pendant une maintenance. |
 
 Les quatre partagent la même connexion : on se connecte une fois, dans le même navigateur.
 
