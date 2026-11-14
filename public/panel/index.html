@@ -376,6 +376,7 @@ function computeReport({ tasks, meetings, attendees, accounts, projects, days, p
   return { from, created: created.length, done: done.length, open: open.length, late: late.length, lateTasks: late, dueCount: dueIn.length, onTimeRate: dueIn.length ? Math.round(onTime.length / dueIn.length * 100) : null, avgLead, series, people, byProject, byLabel, meetings: mts.length, meetingHours: hours };
 }
 const PATCH_TECH = {
+  "2026-11-14": ["Panel, page Comptes : bouton « Se connecter en tant que » (supra-impersonate dans api/_supra.js : lien magique généré côté serveur, jeton à usage unique renvoyé au seul propriétaire, refusé pour un compte banni ou un autre propriétaire). L'application l'échange dans un nouvel onglet (#impersonate=…) avec une session en sessionStorage, donc la session du panel n'est jamais modifiée ; bandeau rouge permanent et bouton « Quitter ce compte » ; chaque connexion est inscrite au journal (action impersonate)."],
   "2026-11-12": [
     "Le Supra Admin devient le Panel : public/panel/index.html (ancienne adresse /supra/ : page de redirection + règle dans vercel.json). Page séparée de l'application, sans la redirection de maintenance : elle reste accessible pendant une maintenance.",
     "Nouvelle page d'ouverture « Maintenance » (MaintenancePanel) : état en direct (site en ligne / maintenance en cours avec compte à rebours et barre de progression / prochaine maintenance), lancement immédiat avec durée au choix (15 min à 4 h), prolongation de 15 min, 30 min ou 1 h, fin immédiate, programmation avec fin automatique (+30 min à +4 h), motifs prêts à l'emploi, annulation, historique. Toute action destructive demande une confirmation. Aucune migration : mêmes colonnes system_alerts (is_maintenance, maint_start, maint_end), vue maintenance_active et règles d'écriture réservées à is_platform_admin().",
@@ -894,6 +895,19 @@ function SupraAccounts({ session, notify }) {
     if (!window.confirm(`Envoyer à ${u.display_name} un lien pour choisir un nouveau mot de passe ?`)) return;
     try { const r = await callApi("/api/admin-tools", { action: "supra-reset-password", userId: u.id }, session); notify(`Lien envoyé à ${r.to}.`); } catch (e) { notify(e.message, "err"); }
   };
+  const [asBusy, setAsBusy] = useState("");
+  const loginAs = async (u) => {
+    if (asBusy) return;
+    if (!window.confirm(`Se connecter en tant que ${u.display_name} ?\n\nL'application s'ouvre dans un nouvel onglet, avec un bandeau visible. Vous verrez ses données et vos actions seront faites en son nom. Cette connexion est inscrite au journal.`)) return;
+    setAsBusy(u.id);
+    const w = window.open("", "_blank");
+    try {
+      const r = await callApi("/api/admin-tools", { action: "supra-impersonate", userId: u.id }, session);
+      const url = "/app/#impersonate=" + encodeURIComponent(r.token_hash) + "&as=" + encodeURIComponent(r.name);
+      if (w) { w.opener = null; w.location.href = url; } else window.location.href = url;
+    } catch (e) { if (w) w.close(); notify(e.message, "err"); }
+    setAsBusy("");
+  };
   const exportCsv = async () => {
     try {
       const r = await callApi("/api/admin-tools", { action: "supra-users", q: dq, filter, all: true }, session);
@@ -927,6 +941,7 @@ function SupraAccounts({ session, notify }) {
               <div data-supra-seen style={{ fontSize: 12, color: "var(--text-dimmer)" }}>{seen(u)}</div>
               {u.banned_at && <div style={{ fontSize: 12.5, color: "var(--late)", marginTop: 2 }}>Banni le {supraDate(u.banned_at)}{u.ban_reason ? " — " + u.ban_reason : ""}</div>}
             </div>
+            {!u.banned_at && <button type="button" data-login-as onClick={() => loginAs(u)} disabled={!!asBusy} title="Ouvre l'application connectée à ce compte, dans un nouvel onglet" style={chipBtn}>👤 Se connecter en tant que</button>}
             {!u.banned_at && <button type="button" data-reset-password onClick={() => resetPw(u)} title="Envoie un email avec un lien pour choisir un nouveau mot de passe" style={chipBtn}>🔑 Lien de mot de passe</button>}
             {u.banned_at
               ? <button type="button" data-unban onClick={() => unban(u)} style={chipBtn}>Débannir</button>
@@ -1155,7 +1170,7 @@ function SupraExports({ session, notify }) {
     </div>
   );
 }
-const SUPRA_LOG_LABEL = { ban: "Bannissement", unban: "Fin de bannissement", broadcast: "Envoi groupé", reset_link: "Lien de mot de passe", server_ban: "Serveur suspendu", server_unban: "Serveur réactivé", ownership: "Cadeau activé", gift_mail: "Lien du cadeau envoyé", server_rename: "Serveur renommé", server_code: "Nouveau code d'invitation" };
+const SUPRA_LOG_LABEL = { ban: "Bannissement", unban: "Fin de bannissement", broadcast: "Envoi groupé", reset_link: "Lien de mot de passe", impersonate: "Connexion à un compte", server_ban: "Serveur suspendu", server_unban: "Serveur réactivé", ownership: "Cadeau activé", gift_mail: "Lien du cadeau envoyé", server_rename: "Serveur renommé", server_code: "Nouveau code d'invitation" };
 function SupraLog({ session }) {
   const [st] = useSupraApi(session, "supra-log");
   if (st.loading && !st.data) return <div style={{ display: "grid", placeItems: "center", padding: 30 }}><Spinner /></div>;
