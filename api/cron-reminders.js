@@ -8,6 +8,7 @@ import { esc, siteUrl, layout, button, sendMail, mailConfigured, dueText, hhmm, 
 import { parisHour } from './_time.js';
 import { maybeSendGiftMail } from './_gift.js';
 import { fetchIcs, busyForStorage } from './_ics.js';
+import { fetchGoogleBusy } from './_gcal.js';
 import { loadBusy, loadTimedTasks, conflictReasons, reasonText, reasonsStamp, nameMap } from './_availability.js';
 import { meetingLink, whenText, warnBox } from './_meeting.js';
 import { planReminders, minutesLabel, assigneesOf, DIGEST_FROM_HOUR, DIGEST_UNTIL_HOUR } from './_reminders.js';
@@ -118,14 +119,14 @@ async function taskReminders(link, room, skipDigest = new Set()) {
 // ------------------------------------------------------------------
 async function syncFeeds() {
   const stale = Date.now() - 25 * 60000;
-  const { data: feeds } = await supabaseAdmin.from('calendar_feeds').select('user_id, ics_url, last_sync').limit(300);
+  const { data: feeds } = await supabaseAdmin.from('calendar_feeds').select('user_id, ics_url, source, google_refresh_token, last_sync').limit(300);
   const due = (feeds || []).filter(f => !f.last_sync || Date.parse(f.last_sync) < stale)
     .sort((a, b) => (Date.parse(a.last_sync || 0) || 0) - (Date.parse(b.last_sync || 0) || 0)).slice(0, 15);
   let ok = 0;
   for (let i = 0; i < due.length; i += 5) {
     await Promise.all(due.slice(i, i + 5).map(async (f) => {
       try {
-        const busy = busyForStorage(await fetchIcs(f.ics_url));
+        const busy = f.source === 'google' ? await fetchGoogleBusy(f.google_refresh_token) : busyForStorage(await fetchIcs(f.ics_url));
         await supabaseAdmin.from('calendar_feeds').update({ busy, last_sync: new Date().toISOString(), last_error: null }).eq('user_id', f.user_id);
         ok++;
       } catch (e) {
