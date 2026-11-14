@@ -200,6 +200,7 @@ export function normalizeIcsUrl(input) {
   if (u.protocol !== 'https:') return { error: 'L\'adresse doit commencer par https:// (ou webcal://).' };
   if (!ALLOWED_HOSTS.some(re => re.test(u.hostname))) return { error: 'Seuls les agendas Google, Outlook et Apple (iCloud) sont acceptés pour le moment.' };
   if (u.username || u.password) return { error: "Cette adresse n'est pas valide." };
+  if (/^calendar\.google\.com$/.test(u.hostname) && !/\/ical\/.+\.ics$/i.test(u.pathname)) return { error: "Ce n'est pas l'adresse iCal : vous avez copié l'adresse de partage ou d'intégration. Cherchez « Adresse secrète au format iCal » (elle se termine par .ics)." };
   return { url: u.toString() };
 }
 

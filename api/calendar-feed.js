@@ -2,13 +2,37 @@
 //   { action: 'connect', url }   → vérifie le lien, lit l'agenda, l'enregistre
 //   { action: 'sync' }           → relit l'agenda tout de suite
 //   { action: 'disconnect' }     → supprime le lien et les créneaux enregistrés
+//   { action: 'config' }         → { google: true|false } : le bouton « Se connecter avec Google » est-il disponible ?
+//   { action: 'google-start' }   → { url } : adresse d'autorisation Google (retour par GET sur cette même fonction)
 // Le lien secret n'est jamais renvoyé au navigateur ; les autres membres ne voient que « occupé / libre », jamais les titres.
 import { createClient } from '@supabase/supabase-js';
 import { normalizeIcsUrl, fetchIcs, busyForStorage } from './_ics.js';
+import { googleConfigured, makeState, checkState, authUrl, exchangeCode, fetchGoogleBusy, revokeToken } from './_gcal.js';
+import { siteUrl } from './_mail.js';
 
 const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+const redirectUri = (req) => `${siteUrl(req)}/api/calendar-feed`;
+
+/** Retour de Google (GET ?code=…&state=…) : enregistre l'autorisation puis renvoie vers l'application. */
+async function googleCallback(req, res) {
+  const back = (r) => { res.setHeader('Location', `/app/?calendar=${r}`); return res.status(302).end(); };
+  try {
+    const { code, state, error } = req.query || {};
+    if (error) return back('refuse');
+    const userId = checkState(state);
+    if (!userId || !code || !googleConfigured()) return back('erreur');
+    const { data: me } = await supabaseAdmin.from('profiles').select('id, status, banned_at').eq('id', userId).single();
+    if (!me || me.status !== 'approved' || me.banned_at) return back('erreur');
+    const refresh = await exchangeCode(String(code), redirectUri(req));
+    const busy = await fetchGoogleBusy(refresh);
+    const { error: e2 } = await supabaseAdmin.from('calendar_feeds').upsert({ user_id: me.id, source: 'google', google_refresh_token: refresh, ics_url: null, busy, last_sync: new Date().toISOString(), last_error: null }, { onConflict: 'user_id' });
+    return back(e2 ? 'erreur' : 'ok');
+  } catch (_) { return back('erreur'); }
+}
+
 export default async function handler(req, res) {
+  if (req.method === 'GET') return googleCallback(req, res);
   if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' });
   try {
     const token = (req.headers.authorization || '').replace('Bearer ', '');
@@ -19,11 +43,31 @@ export default async function handler(req, res) {
     if (!me || me.status !== 'approved') return res.status(403).json({ error: 'Accès refusé.' });
 
     const { action, url } = req.body || {};
+    if (action === 'config') return res.status(200).json({ ok: true, google: googleConfigured() });
+    if (action === 'google-start') {
+      if (!googleConfigured()) return res.status(503).json({ error: "La connexion avec Google n'est pas encore activée sur ce site. Utilisez le lien iCal ci-dessous." });
+      return res.status(200).json({ ok: true, url: authUrl(redirectUri(req), makeState(me.id)) });
+    }
     if (action === 'disconnect') {
+      const { data: old } = await supabaseAdmin.from('calendar_feeds').select('source, google_refresh_token').eq('user_id', me.id).maybeSingle();
+      if (old && old.source === 'google' && old.google_refresh_token) await revokeToken(old.google_refresh_token);
       await supabaseAdmin.from('calendar_feeds').delete().eq('user_id', me.id);
       return res.status(200).json({ ok: true });
     }
     let icsUrl;
+    if (action === 'sync') {
+      const { data: g } = await supabaseAdmin.from('calendar_feeds').select('source, google_refresh_token').eq('user_id', me.id).maybeSingle();
+      if (g && g.source === 'google') {
+        try {
+          const busy = await fetchGoogleBusy(g.google_refresh_token);
+          await supabaseAdmin.from('calendar_feeds').update({ busy, last_sync: new Date().toISOString(), last_error: null }).eq('user_id', me.id);
+          return res.status(200).json({ ok: true, slots: busy.length });
+        } catch (e) {
+          await supabaseAdmin.from('calendar_feeds').update({ last_error: String(e.message || e).slice(0, 200) }).eq('user_id', me.id);
+          return res.status(400).json({ error: e.message || 'Lecture impossible.' });
+        }
+      }
+    }
     if (action === 'connect') {
       const n = normalizeIcsUrl(url);
       if (n.error) return res.status(400).json({ error: n.error });
@@ -40,7 +84,7 @@ export default async function handler(req, res) {
       if (action === 'sync') await supabaseAdmin.from('calendar_feeds').update({ last_error: e.message }).eq('user_id', me.id);
       return res.status(400).json({ error: e.message || 'Lecture impossible.' });
     }
-    const row = { user_id: me.id, ics_url: icsUrl, busy, last_sync: new Date().toISOString(), last_error: null };
+    const row = { user_id: me.id, source: 'ics', google_refresh_token: null, ics_url: icsUrl, busy, last_sync: new Date().toISOString(), last_error: null };
     const { error } = await supabaseAdmin.from('calendar_feeds').upsert(row, { onConflict: 'user_id' });
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json({ ok: true, slots: busy.length });

@@ -702,6 +702,16 @@ function App() {
     notify._t = setTimeout(() => setToast(null), action ? 8000 : 3200);
   };
 
+  // Retour de Google après la liaison de l'agenda (/app/?calendar=ok|refuse|erreur)
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(location.search); const r = sp.get("calendar");
+      if (!r) return;
+      sp.delete("calendar"); history.replaceState(null, "", location.pathname + (sp.toString() ? "?" + sp : ""));
+      setTimeout(() => notify(r === "ok" ? "Agenda Google connecté." : r === "refuse" ? "Connexion annulée : vous n'avez pas autorisé l'accès." : "La connexion à Google a échoué. Réessayez, ou utilisez le lien iCal.", r === "ok" ? "ok" : "err"), 600);
+    } catch (_) {}
+  }, []);
+
   useEffect(() => {
     impReady.then(() => { if (impError) notify("Connexion au compte impossible : " + impError + " (le lien est à usage unique et expire vite : relancez-la depuis le panel).", "err"); return supabase.auth.getSession(); }).then(({ data }) => setSession(data.session || null));
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => { if (event === "PASSWORD_RECOVERY") setRecovery(true); setSession(s); });
@@ -1832,47 +1842,86 @@ function HoursCard({ me, session, notify, onChanged, card }) {
   );
 }
 
-/* ---------------- Profil : agenda Google (lien secret iCal) ---------------- */
+/* ---------------- Profil : agenda Google (autorisation Google ou lien secret iCal) ---------------- */
+/** Analyse ce que la personne a collé : { ok, url } ou { error }. Même logique que le serveur, pour répondre avant d'envoyer. */
+function checkIcsInput(raw) {
+  const t = String(raw || "").trim();
+  if (!t) return { empty: true };
+  let u; try { u = new URL(t.replace(/^webcal:\/\//i, "https://")); } catch (_) { return { error: "Ce texte n'est pas une adresse. Copiez le lien en entier, de « https:// » jusqu'à « .ics »." }; }
+  if (u.protocol !== "https:") return { error: "L'adresse doit commencer par https:// ou webcal://." };
+  const h = u.hostname;
+  if (!(h === "calendar.google.com" || /^outlook\.(live|office365|office)\.com$/.test(h) || /(^|\.)icloud\.com$/.test(h))) return { error: "Seuls les agendas Google, Outlook et Apple (iCloud) sont acceptés." };
+  if (h === "calendar.google.com" && !/\/ical\/.+\.ics$/i.test(u.pathname)) return { error: "Ce n'est pas l'adresse iCal : c'est un lien de partage ou d'intégration. Cherchez « Adresse secrète au format iCal » (elle se termine par .ics)." };
+  return { ok: true, url: u.toString() };
+}
 function CalendarFeedCard({ session, notify, card }) {
   const [st, setSt] = useState(undefined);      // undefined : chargement · false : indisponible · null : non connecté
   const [url, setUrl] = useState(""); const [busy, setBusy] = useState(false);
+  const [google, setGoogle] = useState(false);  // le bouton « Se connecter avec Google » est-il activé sur ce site ?
+  const [more, setMore] = useState(false);
   const load = () => supabase.rpc("my_calendar_status").then(({ data, error }) => setSt(error ? false : ((data && data[0]) || null)));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); callApi("/api/calendar-feed", { action: "config" }, session).then(r => setGoogle(Boolean(r && r.google))).catch(() => {}); }, []);
   const run = async (body, okMsg) => {
     setBusy(true);
     try { const r = await callApi("/api/calendar-feed", body, session); notify(okMsg(r)); setUrl(""); await load(); }
     catch (e) { notify(e.message, "err"); await load(); }
     setBusy(false);
   };
+  const startGoogle = async () => {
+    setBusy(true);
+    try { const r = await callApi("/api/calendar-feed", { action: "google-start" }, session); window.location.href = r.url; return; }
+    catch (e) { notify(e.message, "err"); }
+    setBusy(false);
+  };
+  const paste = async () => { try { const t = await navigator.clipboard.readText(); setUrl(t.trim()); } catch (_) { notify("Collez le lien avec Ctrl+V (ou un appui long) dans la case.", "err"); } };
   const ago = (iso) => { if (!iso) return "jamais"; const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)); return m < 2 ? "à l'instant" : m < 90 ? `il y a ${m} min` : m < 2880 ? `il y a ${Math.round(m / 60)} h` : `il y a ${Math.round(m / 1440)} j`; };
   if (st === false) return null;
+  const chk = checkIcsInput(url);
+  const showIcs = more || !google;
   return (
-    <div style={card}>
+    <div style={card} data-calendar-card>
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><I.Calendar size={16} /> Agenda Google (ou Outlook, Apple)</div>
       <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 12px", lineHeight: 1.5 }}>Reliez votre agenda pour que Le Carnet sache quand vous êtes occupé(e). Si une tâche ou une réunion tombe pendant un de vos rendez-vous, vous recevez un email « deux événements se chevauchent ». Lecture seule : rien n'est écrit dans votre agenda, et les autres voient seulement « occupé », jamais le titre.</p>
       {st ? (<>
         <div style={{ background: "var(--bg)", borderRadius: 10, padding: "10px 12px", fontSize: 13.5, marginBottom: 12 }}>
-          <div style={{ fontWeight: 600, color: "#5FBF8B" }}>✓ Agenda connecté</div>
+          <div style={{ fontWeight: 600, color: "#5FBF8B" }}>✓ Agenda connecté{st.source === "google" ? " avec Google" : " par lien iCal"}</div>
           <div style={{ color: "var(--text-dim)", fontSize: 12.5, marginTop: 2 }}>{st.slots} créneau(x) occupé(s) dans les 45 prochains jours · mis à jour {ago(st.last_sync)}</div>
           {st.last_error && <div style={{ color: "var(--late)", fontSize: 12.5, marginTop: 4 }}>⚠️ {st.last_error}</div>}
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {st.source === "google" && st.last_error && google && <button type="button" data-calendar-google disabled={busy} onClick={startGoogle} style={{ ...primaryBtn, width: "auto", padding: "8px 16px" }}>Reconnecter avec Google</button>}
           <button type="button" disabled={busy} onClick={() => run({ action: "sync" }, r => `Agenda relu : ${r.slots} créneau(x).`)} style={{ ...secondaryBtn, width: "auto", padding: "8px 16px" }}>{busy ? "…" : "Synchroniser maintenant"}</button>
           <button type="button" disabled={busy} onClick={() => run({ action: "disconnect" }, () => "Agenda déconnecté.")} style={{ ...secondaryBtn, width: "auto", padding: "8px 16px", color: "var(--late)", borderColor: "#6A3532" }}>Déconnecter</button>
         </div>
       </>) : (<>
-        <Field label="Adresse secrète au format iCal"><input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://calendar.google.com/calendar/ical/…/private-…/basic.ics" style={inputStyle} aria-label="Adresse iCal" /></Field>
-        <button type="button" disabled={busy || !url.trim()} onClick={() => run({ action: "connect", url: url.trim() }, r => `Agenda connecté : ${r.slots} créneau(x) occupé(s).`)} style={{ ...primaryBtn, padding: "10px 22px", opacity: busy || !url.trim() ? 0.5 : 1 }}>{busy ? "Connexion…" : "Connecter mon agenda"}</button>
-        <details style={{ marginTop: 14, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6 }}>
-          <summary style={{ cursor: "pointer", color: "var(--accent-2)", fontWeight: 600 }}>Où trouver ce lien dans Google Agenda ?</summary>
-          <ol style={{ margin: "8px 0 0", paddingLeft: 20 }}>
-            <li>Ouvrez <strong>Google Agenda sur ordinateur</strong> (calendar.google.com). L'application mobile ne montre pas ce lien.</li>
-            <li>Cliquez sur la roue ⚙ → <strong>Paramètres</strong>.</li>
-            <li>À gauche, sous « Paramètres de mes agendas », cliquez sur votre agenda.</li>
-            <li>Descendez jusqu'à <strong>Intégrer l'agenda</strong> et copiez <strong>Adresse secrète au format iCal</strong>.</li>
-            <li>Collez-la ici. Ne la partagez avec personne : quiconque l'a peut lire votre agenda. Vous pouvez la réinitialiser dans Google à tout moment.</li>
-          </ol>
-        </details>
+        {google && (<>
+          <button type="button" data-calendar-google disabled={busy} onClick={startGoogle} style={{ ...primaryBtn, padding: "11px 22px", opacity: busy ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.5 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+            {busy ? "Ouverture de Google…" : "Se connecter avec Google"}
+          </button>
+          <p style={{ fontSize: 12, color: "var(--text-dimmer)", margin: "8px 0 0", lineHeight: 1.5 }}>Google vous demande une seule autorisation : voir <em>quand</em> vous êtes occupé(e). Le Carnet ne lit ni les titres, ni les lieux, ni les participants. Vous pouvez la retirer à tout moment ici ou dans votre compte Google.</p>
+          {!more && <button type="button" data-calendar-more onClick={() => setMore(true)} style={{ background: "none", border: 0, padding: 0, marginTop: 12, color: "var(--accent-2)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Autre méthode : coller un lien iCal (Outlook, Apple, Google)</button>}
+        </>)}
+        {showIcs && (<div style={{ marginTop: google ? 14 : 0 }}>
+          <Field label="Adresse secrète au format iCal">
+            <div style={{ display: "flex", gap: 8 }}>
+              <input data-calendar-ics value={url} onChange={e => setUrl(e.target.value)} placeholder="https://calendar.google.com/calendar/ical/…/private-…/basic.ics" style={{ ...inputStyle, flex: 1 }} aria-label="Adresse iCal" />
+              <button type="button" data-calendar-paste onClick={paste} style={{ ...chipBtn, whiteSpace: "nowrap" }}>📋 Coller</button>
+            </div>
+          </Field>
+          {chk.error && <div data-calendar-hint role="alert" style={{ color: "var(--late)", fontSize: 12.5, margin: "-6px 0 10px", lineHeight: 1.45 }}>⚠️ {chk.error}</div>}
+          {chk.ok && <div data-calendar-hint style={{ color: "#5FBF8B", fontSize: 12.5, margin: "-6px 0 10px" }}>✓ Adresse reconnue</div>}
+          <button type="button" data-calendar-connect disabled={busy || !chk.ok} onClick={() => run({ action: "connect", url: chk.url }, r => `Agenda connecté : ${r.slots} créneau(x) occupé(s).`)} style={{ ...(google ? secondaryBtn : primaryBtn), width: "auto", padding: "10px 22px", opacity: busy || !chk.ok ? 0.5 : 1 }}>{busy ? "Connexion…" : "Connecter mon agenda"}</button>
+          <details style={{ marginTop: 14, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6 }}>
+            <summary style={{ cursor: "pointer", color: "var(--accent-2)", fontWeight: 600 }}>Où trouver ce lien dans Google Agenda ?</summary>
+            <ol style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+              <li><a href="https://calendar.google.com/calendar/u/0/r/settings" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-2)" }}>Ouvrez les paramètres de Google Agenda</a> sur ordinateur. L'application mobile ne montre pas ce lien.</li>
+              <li>À gauche, sous « Paramètres de mes agendas », cliquez sur votre agenda.</li>
+              <li>Descendez jusqu'à <strong>Intégrer l'agenda</strong> et copiez <strong>Adresse secrète au format iCal</strong> (elle se termine par .ics).</li>
+              <li>Revenez ici, appuyez sur « Coller » : l'adresse est vérifiée tout de suite. Ne la partagez avec personne : quiconque l'a peut lire votre agenda. Vous pouvez la réinitialiser dans Google à tout moment.</li>
+            </ol>
+          </details>
+        </div>)}
       </>)}
     </div>
   );
