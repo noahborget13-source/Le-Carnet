@@ -726,6 +726,14 @@ function App() {
 
   const [profileChecked, setProfileChecked] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [signingUp, setSigningUp] = useState(false);
+  // L'inscription crée d'abord le compte puis le profil : pendant ce temps on affiche un chargement (pas « Aucun accès »),
+  // et dès que le profil existe on le recharge tout de suite au lieu d'attendre la vérification suivante.
+  useEffect(() => {
+    const on = (e) => { const start = e.detail === "start"; setSigningUp(start); if (!start) setReloadKey(k => k + 1); };
+    window.addEventListener("carnet-signup", on);
+    return () => window.removeEventListener("carnet-signup", on);
+  }, []);
   const [recovery, setRecovery] = useState(false);
 
   useEffect(() => {
@@ -757,6 +765,10 @@ function App() {
 
   if (!profile && ((session.user.app_metadata && session.user.app_metadata.providers) || []).includes("google")) {
     return <Shell footer><CompleteProfile session={session} notify={notify} onDone={() => setReloadKey(k => k + 1)} onLogout={() => supabase.auth.signOut()} />{toast && <Toast toast={toast} />}</Shell>;
+  }
+
+  if (!profile && signingUp) {
+    return <Shell><div data-signup-wait style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><Spinner /></div>{toast && <Toast toast={toast} />}</Shell>;
   }
 
   if (!profile) {
@@ -1174,6 +1186,7 @@ function Signup({ notify }) {
   const createServer = async () => {
     if (!serverName.trim() || !username.trim() || !displayName.trim() || !email.trim() || !password) return;
     setBusy(true); setErr("");
+    window.dispatchEvent(new CustomEvent("carnet-signup", { detail: "start" }));
     try {
       const session = await doSignupCore();
       const { data: server, error: sErr } = await supabase.from('servers').insert({ name: serverName.trim(), owner_id: session.user.id }).select().single();
@@ -1185,12 +1198,14 @@ function Signup({ notify }) {
       if (pErr) throw pErr;
       notify("Votre serveur est prêt !");
     } catch (e) { setErr(e.message); }
+    window.dispatchEvent(new CustomEvent("carnet-signup", { detail: "end" }));
     setBusy(false);
   };
 
   const joinServer = async () => {
     if (!joinCode.trim() || !username.trim() || !displayName.trim() || !email.trim() || !password) return;
     setBusy(true); setErr("");
+    window.dispatchEvent(new CustomEvent("carnet-signup", { detail: "start" }));
     try {
       const session = await doSignupCore();
       const { data: found, error: sErr } = await supabase.rpc('server_for_code', { p_code: joinCode });
@@ -1203,6 +1218,7 @@ function Signup({ notify }) {
       if (pErr) throw pErr;
       setStep("done-pending");
     } catch (e) { setErr(e.message); }
+    window.dispatchEvent(new CustomEvent("carnet-signup", { detail: "end" }));
     setBusy(false);
   };
 
