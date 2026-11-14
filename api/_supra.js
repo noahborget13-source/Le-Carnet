@@ -2,7 +2,7 @@
 // Appelées par /api/admin-tools : Vercel gratuit = 12 fonctions maximum, donc pas de nouveau fichier de fonction.
 import crypto from 'node:crypto';
 import { esc, siteUrl, layout, button, sendMail, mailConfigured } from './_mail.js';
-import { realEmail, isShadowEmail, logPlatform, ownerEmails } from './_platform.js';
+import { realEmail, isShadowEmail, logPlatform, ownerEmails, isPlatformAdmin } from './_platform.js';
 
 const clip = (s, n) => String(s || '').replace(/[\r\n]+/g, ' ').trim().slice(0, n);
 
@@ -93,6 +93,22 @@ export async function handleSupra({ req, res, sb, user, action }) {
     } catch (e) { return res.status(502).json({ error: "L'envoi a échoué : " + (e.message || 'erreur inconnue') }); }
     await logPlatform(sb, me, 'reset_link', userId, target.display_name, 'Lien de réinitialisation envoyé');
     return res.status(200).json({ ok: true, to: realEmail(target.email).replace(/^(.).*(@.*)$/, '$1•••$2') });
+  }
+
+  if (action === 'supra-impersonate') {
+    // Connexion au compte d'un membre (assistance, vérification). Le jeton à usage unique n'est renvoyé qu'au propriétaire,
+    // il est échangé par l'application dans un onglet à part (session isolée) et chaque usage est inscrit au journal.
+    const userId = String(body.userId || '');
+    if (userId === me) return res.status(400).json({ error: 'C\'est déjà votre compte.' });
+    const { data: target } = await sb.from('profiles').select('id, display_name, username, email, banned_at').eq('id', userId).maybeSingle();
+    if (!target) return res.status(404).json({ error: 'Compte introuvable.' });
+    if (target.banned_at) return res.status(400).json({ error: 'Ce compte est banni : débannissez-le d\'abord.' });
+    if (await isPlatformAdmin(sb, userId)) return res.status(403).json({ error: 'Il n\'est pas possible de se connecter au compte d\'un autre propriétaire de la plateforme.' });
+    const { data, error } = await sb.auth.admin.generateLink({ type: 'magiclink', email: target.email });
+    const token = data && data.properties && data.properties.hashed_token;
+    if (error || !token) return res.status(500).json({ error: (error && error.message) || 'Impossible de créer la connexion.' });
+    await logPlatform(sb, me, 'impersonate', userId, target.display_name, 'Connexion au compte depuis le panel');
+    return res.status(200).json({ ok: true, token_hash: token, name: target.display_name });
   }
 
   if (action === 'supra-server-ban') {

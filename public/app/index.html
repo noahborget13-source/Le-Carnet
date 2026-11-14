@@ -178,7 +178,36 @@
 if (!window.__LE_CARNET_BOOTED__) {
 window.__LE_CARNET_BOOTED__ = true;
 const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
-const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+/* Connexion au compte d'un membre par le propriétaire (depuis le panel) : jeton dans l'adresse (#impersonate=…),
+   session gardée dans sessionStorage (propre à cet onglet) pour ne jamais toucher à la session du panel. */
+const IMP_KEY = "carnet-impersonating";
+let impName = ""; let impToken = ""; let impError = "";
+try {
+  const hp = new URLSearchParams(location.hash.replace(/^#/, ""));
+  if (hp.get("impersonate")) {
+    impToken = hp.get("impersonate"); impName = (hp.get("as") || "ce compte").slice(0, 100);
+    sessionStorage.setItem(IMP_KEY, impName);
+    history.replaceState(null, "", location.pathname + location.search);
+  } else { impName = sessionStorage.getItem(IMP_KEY) || ""; }
+} catch (_) {}
+const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, impName ? { auth: { storage: window.sessionStorage, storageKey: "sb-carnet-impersonation", persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } } : undefined);
+const impReady = impToken
+  ? supabase.auth.signOut({ scope: "local" }).catch(() => {}).then(() => supabase.auth.verifyOtp({ token_hash: impToken, type: "magiclink" })).then(({ error }) => { if (error) { impError = error.message; try { sessionStorage.removeItem(IMP_KEY); } catch (_) {} } }).catch((e) => { impError = String((e && e.message) || e); })
+  : Promise.resolve();
+if (impName) {
+  const mount = () => {
+    if (document.querySelector("[data-imp-banner]")) return;
+    const bar = document.createElement("div");
+    bar.setAttribute("data-imp-banner", "1"); bar.setAttribute("role", "status");
+    bar.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:99999;background:#B3261E;color:#fff;font:600 13.5px/1.4 system-ui,sans-serif;padding:7px 12px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center";
+    const t = document.createElement("span"); t.textContent = "Mode propriétaire : vous êtes connecté en tant que " + impName + ". Vos actions sont faites en son nom.";
+    const b = document.createElement("button"); b.type = "button"; b.setAttribute("data-imp-quit", "1"); b.textContent = "Quitter ce compte";
+    b.style.cssText = "background:#fff;color:#B3261E;border:0;border-radius:6px;padding:4px 12px;font:700 13px system-ui,sans-serif;cursor:pointer";
+    b.onclick = async () => { try { await supabase.auth.signOut(); } catch (_) {} try { sessionStorage.removeItem(IMP_KEY); } catch (_) {} window.close(); setTimeout(() => { location.href = "/panel/"; }, 300); };
+    bar.append(t, b); document.body.appendChild(bar); document.documentElement.style.setProperty("--imp-bar", "40px"); document.body.style.paddingTop = "40px";
+  };
+  if (document.body) mount(); else document.addEventListener("DOMContentLoaded", mount);
+}
 
 /* ============================================================
    LE CARNET — version hébergée (Supabase + Vercel)
@@ -674,7 +703,7 @@ function App() {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
+    impReady.then(() => { if (impError) notify("Connexion au compte impossible : " + impError + " (le lien est à usage unique et expire vite : relancez-la depuis le panel).", "err"); return supabase.auth.getSession(); }).then(({ data }) => setSession(data.session || null));
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => { if (event === "PASSWORD_RECOVERY") setRecovery(true); setSession(s); });
     return () => sub.subscription.unsubscribe();
   }, []);
