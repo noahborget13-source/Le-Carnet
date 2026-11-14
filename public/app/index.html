@@ -175,6 +175,23 @@
   window.SUPABASE_URL = "https://ovkjhtqzbgdlylxhhkjc.supabase.co";
   window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92a2podHF6YmdkbHlseGhoa2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0OTU4MTksImV4cCI6MjEwNjA3MTgxOX0.NQO0H7ZktUqfcot_eW6ApKSHOLaaS2Qc9xajCqeYjA4";
 </script>
+<script>
+/* Statistiques d'usage anonymes (PostHog, hébergées en Europe). Sans cookie ni stockage (persistence « memory »), sans enregistrement
+   d'écran, sans capture automatique des clics ni des saisies : seulement les pages vues et le nom de l'onglet ouvert.
+   Désactivées si la personne les refuse (profil), si le navigateur envoie « Do Not Track », en mode propriétaire (connexion à un compte) et en local. */
+(function () {
+  var off = false;
+  try { off = localStorage.getItem("carnet-no-analytics") === "1" || sessionStorage.getItem("carnet-impersonating") || navigator.doNotTrack === "1" || /^(localhost|127\.)/.test(location.hostname) || /[#&]impersonate=/.test(location.hash); } catch (e) {}
+  window.carnetTrack = function () {};
+  if (off) return;
+  !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(t.head||t.documentElement).appendChild(p);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once unregister identify reset opt_in_capturing opt_out_capturing has_opted_out_capturing set_config debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+  window.posthog.init("phc_wzDJYsEGZYT8RoyZjzV7yVtJCxPFUjmk2r2HRiR4DBmd", {
+    api_host: "https://eu.i.posthog.com", persistence: "memory", autocapture: false, capture_pageview: true, capture_pageleave: false,
+    disable_session_recording: true, person_profiles: "identified_only", ip: false, respect_dnt: true, disable_surveys: true,
+  });
+  window.carnetTrack = function (name, props) { try { window.posthog.capture(name, props); } catch (e) {} };
+})();
+</script>
 <script type="text/babel" data-presets="react">
 if (!window.__LE_CARNET_BOOTED__) {
 window.__LE_CARNET_BOOTED__ = true;
@@ -1334,6 +1351,7 @@ function useLiveTable(table, setRows, shape) {
 
 function Workspace({ me, session, onLogout, notify, onProfileChanged }) {
   const [tab, setTab] = useState("home");
+  useEffect(() => { if (window.carnetTrack) window.carnetTrack("onglet", { onglet: tab }); }, [tab]);
   const [tasksAll, setTasksAll] = useState([]);
   const [messages, setMessages] = useState([]);
   const [channelMsgs, setChannelMsgs] = useState([]);
@@ -1937,6 +1955,20 @@ function CalendarFeedCard({ session, notify, card }) {
           </details>
         </div>)}
       </>)}
+    </div>
+  );
+}
+
+/** Choix de la personne : statistiques d'usage anonymes (PostHog). Mémorisé sur cet appareil. */
+function AnalyticsCard({ card }) {
+  const [off, setOff] = useState(() => { try { return localStorage.getItem("carnet-no-analytics") === "1"; } catch (_) { return false; } });
+  const toggle = (v) => { setOff(v); try { if (v) localStorage.setItem("carnet-no-analytics", "1"); else localStorage.removeItem("carnet-no-analytics"); } catch (_) {} try { if (window.posthog && window.posthog.opt_out_capturing && v) window.posthog.opt_out_capturing(); } catch (_) {} };
+  return (
+    <div style={card} data-analytics-card>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Statistiques d'usage</div>
+      <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 12px", lineHeight: 1.5 }}>Pour améliorer Le Carnet, nous comptons, de façon anonyme, quels onglets sont ouverts. Sans cookie, sans enregistrement d'écran, sans lire vos tâches ni vos messages.</p>
+      <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, cursor: "pointer" }}><input type="checkbox" data-analytics-off checked={off} onChange={e => toggle(e.target.checked)} /> Ne pas compter mes visites (cet appareil)</label>
+      {off && <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 6 }}>C'est noté : plus rien n'est compté dès le prochain chargement de la page.</div>}
     </div>
   );
 }
@@ -3965,6 +3997,8 @@ function ProfileView({ me, session, isAdmin, myPerms, tasks, leaves = [], notify
       <HoursCard me={me} session={session} notify={notify} onChanged={onChanged} card={card} />
 
       <CalendarFeedCard session={session} notify={notify} card={card} />
+
+      <AnalyticsCard card={card} />
 
       <InstallCard card={card} />
 
