@@ -49,7 +49,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.28.4/babel.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="/posthog-init.js"></script>
 <script>try{var m=localStorage.getItem("carnet-theme");var t=(m==="light"||m==="dark")?m:((window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark");document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <style>
   /* Identité visuelle « papier quadrillé » : papier pâle, encre bleue, marge rouge ; thème sombre « ardoise ». */
@@ -735,19 +734,6 @@ function App() {
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => { if (event === "PASSWORD_RECOVERY") setRecovery(true); setSession(s); });
     return () => sub.subscription.unsubscribe();
   }, []);
-
-  useEffect(() => {
-    const syncPostHogIdentity = () => {
-      if (!window.posthog) return;
-      try {
-        if (session && session.user && session.user.id) window.posthog.identify(session.user.id, { email: session.user.email });
-        else if (session === null) window.posthog.reset();
-      } catch (_) {}
-    };
-    syncPostHogIdentity();
-    window.addEventListener("posthog:ready", syncPostHogIdentity);
-    return () => window.removeEventListener("posthog:ready", syncPostHogIdentity);
-  }, [session && session.user && session.user.id]);
 
   // Maintenance programmée : si elle démarre pendant qu'on utilise l'appli, on est envoyé sur la page de maintenance
   // (vérification chaque minute et au retour sur l'onglet). Une erreur réseau ne bloque jamais l'appli.
@@ -2086,13 +2072,6 @@ function MeetingForm({ meetings = [], template = null, fileCount = 0, initial, m
         if (e2) throw new Error(e2.message);
       }
       // La réunion est enregistrée : la fenêtre se ferme tout de suite ; fichiers et e-mails partent ensuite, en arrière-plan.
-      if (!initial) {
-        window.posthog?.capture("meeting_created", {
-          attendee_count: people.length + 1,
-          is_recurring: occDays.length > 1,
-          has_video_call: Boolean(row.room),
-        });
-      }
       notify(initial ? (seriesScope ? "Réunions mises à jour." : "Réunion mise à jour.") : seriesScope ? `Série créée : ${occDays.length} réunions.` : "Réunion créée.");
       onSaved();
       const filesToSend = pendingFiles, wasEdit = Boolean(initial), hasGuests = people.length > 0;
@@ -2769,11 +2748,7 @@ function TimeTracker({ task, me, isAdmin, entries, accounts, notify, onFocus }) 
     for (const r of running || []) await stopEntry(r);
     const { error } = await supabase.from("time_entries").insert({ server_id: me.server_id, task_id: task.id, user_id: me.id, started_at: new Date().toISOString() });
     setBusy(false);
-    if (error) notify(error.message, "err");
-    else {
-      window.posthog?.capture("time_entry_started", { source: "task_time_tracker" });
-      notify("Chrono démarré.");
-    }
+    if (error) notify(error.message, "err"); else notify("Chrono démarré.");
   };
   const stop = async () => { if (!mine || busy) return; setBusy(true); const { error } = await stopEntry(mine); setBusy(false); notify(error ? error.message : "Chrono arrêté : " + fmtDur(entryMs({ ...mine, ended_at: new Date().toISOString() })) + " enregistrés."); };
   const addManual = async () => {
@@ -3087,13 +3062,6 @@ function ObjectiveModal({ me, accounts, projects, initial, onClose, notify }) {
       : await supabase.from("objectives").insert({ ...row, server_id: me.server_id, created_by: me.id });
     setBusy(false);
     if (error) { notify(error.message, "err"); return; }
-    if (!initial) {
-      window.posthog?.capture("objective_created", {
-        has_due_date: Boolean(due),
-        has_project: Boolean(projectId),
-        has_owner: Boolean(ownerId),
-      });
-    }
     notify(initial ? "Objectif modifié." : "Objectif créé. Ajoutez-lui des résultats clés pour mesurer l'avancement.");
     onClose();
   };
@@ -3329,7 +3297,6 @@ function NotesView({ me, accounts, notes, projects, focusId, onFocused, notify }
     const { data, error } = await supabase.from("notes").insert({ server_id: me.server_id, created_by: me.id, title: "Nouvelle note", body: "" }).select().single();
     setBusy(false);
     if (error || !data) { notify(error ? error.message : "Création refusée.", "err"); return; }
-    window.posthog?.capture("note_created", { source: "notes_workspace" });
     setSelId(data.id); setDraft({ title: data.title, body: "", project_id: "" }); setLoadedAt(data.updated_at); setEditing(true);
   };
   const save = async () => {
@@ -4325,12 +4292,6 @@ function TasksView({ savedViews = [], me, session, isAdmin, myPerms, accounts, t
       taskId = created ? created.id : null;
       toNotify = created ? (data.assignees || []).filter(x => x !== me.id) : [];
       message = "Tâche créée.";
-      window.posthog?.capture("task_created", {
-        has_due_date: Boolean(data.due),
-        assignee_count: (data.assignees || []).length,
-        has_project: Boolean(data.project_id),
-        source: "task_form",
-      });
     }
     if (saveAsTemplate) {
       const err = await saveTemplate(data, saveAsTemplate);
@@ -4402,13 +4363,6 @@ function TasksView({ savedViews = [], me, session, isAdmin, myPerms, accounts, t
     const patch = status === "done" ? { done: true } : status === "doing" ? { done: false, doing: true } : { done: false, doing: false };
     const { error } = await supabase.from('tasks').update(patch).eq('id', t.id);
     if (error) { notify(error.message, "err"); return; }
-    if (status === "done" && !t.done) {
-      window.posthog?.capture("task_completed", {
-        has_due_date: Boolean(t.due),
-        has_project: Boolean(t.project_id),
-        is_recurring: Boolean(t.recurrence),
-      });
-    }
     if (status === "done" && !t.done && t.recurrence) {
       const { next, error: e2 } = await spawnNext(t);
       notify(e2 ? "Terminée, mais la prochaine occurrence n'a pas pu être créée." : `Terminée · prochaine échéance : ${formatDue(next, daysUntil(next))}.`, e2 ? "err" : "ok");
@@ -5093,10 +5047,6 @@ function BookingModal({ me, resources, bookings, day0, resourceId, onClose, noti
     const { error } = await supabase.from("bookings").insert({ resource_id: rid, server_id: me.server_id, user_id: me.id, title: title.trim().slice(0, 80), starts_at: new Date(s).toISOString(), ends_at: new Date(e).toISOString() });
     setBusy(false);
     if (error) { notify(error.message, "err"); return; }
-    window.posthog?.capture("booking_created", {
-      duration_minutes: Math.round((e - s) / 60000),
-      has_title: Boolean(title.trim()),
-    });
     notify("Réservation enregistrée."); onClose();
   };
   return (
@@ -5292,11 +5242,6 @@ function AppointmentsView({ me, accounts, availabilities, appointments, notify }
     const { error } = await supabase.from("appointments").insert({ server_id: me.server_id, host_id: hostId, guest_id: me.id, starts_at: new Date(pick.s).toISOString(), ends_at: new Date(pick.e).toISOString(), mode, note: note.trim().slice(0, 300) });
     setSaving(false);
     if (error) { notify(error.message, "err"); setRefresh(r => r + 1); setPick(null); return; }
-    window.posthog?.capture("appointment_booked", {
-      mode,
-      duration_minutes: Math.round((pick.e - pick.s) / 60000),
-      has_note: Boolean(note.trim()),
-    });
     notify("Rendez-vous confirmé."); setPick(null); setNote(""); setPanel("mine");
   };
   const who = (id) => (accounts.find(a => a.id === id) || {}).display_name || "Ancien membre";
@@ -6271,10 +6216,6 @@ function ExpensesView({ me, people, expenses, settlements, notify }) {
     const { error } = await supabase.from("expenses").insert({ server_id: me.server_id, title: title.trim(), amount_cents: cents, paid_by: payer, split_among: parts, spent_on: day, created_by: me.id });
     setBusy(false);
     if (error) { notify(error.message, "err"); return; }
-    window.posthog?.capture("expense_recorded", {
-      split_participant_count: parts.length,
-      is_self_paid: payer === me.id,
-    });
     setModal(false); notify("Dépense ajoutée.");
   };
   const delExpense = async (e) => { if (!window.confirm(`Supprimer la dépense « ${e.title} » ?`)) return; const { error } = await supabase.from("expenses").delete().eq("id", e.id); if (error) notify(error.message, "err"); };
@@ -7459,13 +7400,6 @@ function ProjectsModal({ projects, members, accounts, me, isAdmin, canCreate, no
         if (e2) throw e2;
         made = rows.length;
       }
-      if (!form.id) {
-        window.posthog?.capture("project_created", {
-          is_private: form.is_private,
-          member_count: keep.size,
-          template_task_count: made,
-        });
-      }
       notify(form.id ? "Projet mis à jour." : made ? `Projet créé avec ${made} tâches.` : "Projet créé.");
       setForm(null); setTpl("");
     } catch (e) { notify(e.message, "err"); }
@@ -8281,11 +8215,6 @@ function MessagesView({ unread = {}, markRead = () => {}, messageFiles = [], me,
       if (data) await sendFiles(data.id);
       if (data) callApi('/api/notify-dm', { messageId: data.id }, session).catch(() => {});
     }
-    window.posthog?.capture("message_sent", {
-      conversation_type: isChannel ? "channel" : "direct",
-      has_attachments: files.length > 0,
-      has_text: Boolean(typed),
-    });
     setSending(false);
   };
   const startCall = async () => {
