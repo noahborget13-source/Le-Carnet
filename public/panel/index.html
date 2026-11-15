@@ -26,7 +26,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.28.4/babel.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="/posthog-init.js"></script>
 <script>try{var m=localStorage.getItem("carnet-theme");var t=(m==="light"||m==="dark")?m:((window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark");document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <style>
   /* Identité visuelle « papier quadrillé » : papier pâle, encre bleue, marge rouge ; thème sombre « ardoise ». */
@@ -1246,18 +1245,6 @@ function SupraApp() {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
-  useEffect(() => {
-    const syncPostHogIdentity = () => {
-      if (!window.posthog) return;
-      try {
-        if (session && session.user && session.user.id) window.posthog.identify(session.user.id, { email: session.user.email });
-        else if (session === null) window.posthog.reset();
-      } catch (_) {}
-    };
-    syncPostHogIdentity();
-    window.addEventListener("posthog:ready", syncPostHogIdentity);
-    return () => window.removeEventListener("posthog:ready", syncPostHogIdentity);
-  }, [session && session.user && session.user.id]);
   useEffect(() => {
     let cancelled = false;
     if (session === undefined) return;

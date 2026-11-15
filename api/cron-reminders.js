@@ -14,7 +14,6 @@ import { meetingLink, whenText, warnBox } from './_meeting.js';
 import { planReminders, minutesLabel, assigneesOf, DIGEST_FROM_HOUR, DIGEST_UNTIL_HOUR } from './_reminders.js';
 import { buildWeeklyMail, mondayOf, isoWeekday } from './_weekly.js';
 import { parisInstant as parisInstantSafe } from './_time.js';
-import { emitPosthogLog, flushPosthogLogs } from './posthog-logs.js';
 
 const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const MAX_EMAILS_PER_RUN = 40; // reste sous les limites de Gmail ; le reste part au passage suivant
@@ -302,12 +301,9 @@ export default async function handler(req, res) {
   if ((req.headers.authorization || '') !== `Bearer ${secret}`) return res.status(401).json({ error: 'Non autorisé' });
 
   const mode = (req.query && req.query.mode) === 'tick' ? 'tick' : 'full';
-  emitPosthogLog('info', 'cron reminders started', { mode });
   let sent = 0, purged = 0;
   const finish = async (extra = {}) => {
     try { await supabaseAdmin.from('cron_runs').insert({ mode, sent }); } catch (_) { /* le journal ne doit jamais bloquer */ }
-    emitPosthogLog('info', 'cron reminders finished', { mode, emails_sent: sent, records_purged: purged });
-    await flushPosthogLogs();
     return res.status(200).json({ ok: true, mode, sent, purged, ...extra });
   };
 
@@ -335,8 +331,6 @@ export default async function handler(req, res) {
     }
     return await finish({ synced });
   } catch (e) {
-    emitPosthogLog('error', 'cron reminders failed', { mode });
-    await flushPosthogLogs();
     return res.status(500).json({ error: e.message || 'Erreur serveur' });
   }
 }
