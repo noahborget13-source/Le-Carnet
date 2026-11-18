@@ -563,23 +563,10 @@ function GiftHandler({ me, session, notify }) {
   if (!show) return null;
   return <BirthdayOverlay me={me} onClose={() => { lsSet(BIRTHDAY_KEY, "1"); setShow(false); }} />;
 }
-function OwnerCard({ me }) {
-  const o = useOwnership();
-  if (!o) return null;
-  const mine = o.owner_id === me.id;
-  return (
-    <div data-owner-card className="paper" style={{ border: "1px solid var(--border-soft)", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
-      <div style={{ fontWeight: 600, fontSize: 15 }}>🎂 {mine ? "Le Carnet est entre vos mains" : "Le Carnet est offert à " + o.name}</div>
-      <div style={{ fontSize: 13, color: "var(--text-dim)", margin: "4px 0 0", lineHeight: 1.5 }}>{mine ? "Un cadeau de Noah, son créateur." : "Un cadeau de Noah Borget, son créateur, à " + o.name + "."} Remis le {new Date(o.since).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long", year: "numeric" })}.</div>
-      {mine && <button type="button" data-birthday-replay onClick={() => window.dispatchEvent(new Event("carnet-birthday"))} style={{ ...chipBtn, marginTop: 10 }}>Revoir la surprise</button>}
-    </div>
-  );
-}
 function SiteFooter({ floating }) {
-  const own = useOwnership();
   return (
     <div className="site-footer" style={{ textAlign: "center", fontSize: 12, color: "var(--text-dimmer)", padding: "22px 0 6px", ...(floating ? { position: "absolute", bottom: 10, left: 0, right: 0, padding: 0, zIndex: 1 } : {}) }}>
-      © 2026 Le Carnet — Gestion de tâches. {own ? `Offert à ${own.name} par Noah Borget, son créateur` : "Produit par Noah Borget"}
+      © 2026 Camélia Borget — Le Carnet, gestion de tâches.
     </div>
   );
 }
@@ -2382,7 +2369,6 @@ function PersonalCard({ me, session, notify, onChanged, card }) {
       <PersonalizeCard notify={notify} />
       <A11yPrefs />
       <DisplayPrefs />
-      <OwnerCard me={me} />
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Mon anniversaire</div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>Facultatif : il s'affiche dans le calendrier de votre équipe (jour et mois, jamais l'année).</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>

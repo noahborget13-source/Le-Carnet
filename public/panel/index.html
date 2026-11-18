@@ -275,10 +275,9 @@ function useOwnership(dep) {
   return o;
 }
 function SiteFooter({ floating }) {
-  const own = useOwnership();
   return (
     <div className="site-footer" style={{ textAlign: "center", fontSize: 12, color: "var(--text-dimmer)", padding: "22px 0 6px", ...(floating ? { position: "absolute", bottom: 10, left: 0, right: 0, padding: 0, zIndex: 1 } : {}) }}>
-      © 2026 Le Carnet — Gestion de tâches. {own ? `Offert à ${own.name} par Noah Borget, son créateur` : "Produit par Noah Borget"}
+      © 2026 Camélia Borget — Le Carnet, gestion de tâches.
     </div>
   );
 }
@@ -844,14 +843,8 @@ function SupraOverview({ session, go, notify }) {
         </div>
       </Panel>
       <SupraStats session={session} />
-      <OwnerNote />
     </div>
   );
-}
-function OwnerNote() {
-  const o = useOwnership();
-  if (!o) return null;
-  return <p data-owner-note style={{ fontSize: 13, color: "var(--text-dim)", margin: "4px 2px 0" }}>🎂 Le Carnet a été offert à <strong>{o.name}</strong> le {new Date(o.since).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long", year: "numeric" })} (par Noah Borget). Tous deux disposent du Supra Admin.</p>;
 }
 function BanModal({ user, onClose, onDone, session, notify }) {
   const [reason, setReason] = useState("");
