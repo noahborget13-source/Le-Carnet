@@ -623,9 +623,11 @@ function MaintenancePanel({ notify }) {
   const [dur, setDur] = useState(30), [nowMsg, setNowMsg] = useState(""), [nowConfirm, setNowConfirm] = useState(false);
   const [mStart, setMStart] = useState(""), [mEnd, setMEnd] = useState(""), [mMsg, setMMsg] = useState(""), [mMsgEdited, setMMsgEdited] = useState(false), [mConfirm, setMConfirm] = useState(false);
   const [endConfirm, setEndConfirm] = useState(false);
+  const [nowDrive, setNowDrive] = useState(false), [mDrive, setMDrive] = useState(false);   // « appliquer aussi au Drive »
   const load = async () => {
     const q = (cols) => supabase.from("system_alerts").select(cols).eq("is_maintenance", true).order("display_at", { ascending: false }).limit(60);
-    let { data, error } = await q("id,message,display_at,is_maintenance,maint_start,maint_end");
+    let { data, error } = await q("id,message,display_at,is_maintenance,maint_start,maint_end,applies_to_drive");
+    if (error) ({ data, error } = await q("id,message,display_at,is_maintenance,maint_start,maint_end"));   // migration 36 pas encore lancée
     if (error) ({ data, error } = await q("id,message,display_at,is_maintenance"));
     if (error) notify(error.message, "err");
     setRows(data || []);
@@ -646,12 +648,14 @@ function MaintenancePanel({ notify }) {
   const startNow = async () => {
     if (!nowConfirm) { setNowConfirm(true); return; }
     const start = new Date(Date.now() - 5000), end = new Date(Date.now() + dur * 60000);
-    const ok = await run(() => supabase.from("system_alerts").insert({ is_maintenance: true, maint_start: start.toISOString(), maint_end: end.toISOString(), message: nowMsg.trim().slice(0, 300) || null, display_at: new Date().toISOString() }), "Maintenance lancée.");
+    const ok = await run(() => supabase.from("system_alerts").insert({ is_maintenance: true, maint_start: start.toISOString(), maint_end: end.toISOString(), message: nowMsg.trim().slice(0, 300) || null, display_at: new Date().toISOString(), applies_to_drive: nowDrive }), "Maintenance lancée.");
     setNowConfirm(false); if (ok) setNowMsg("");
   };
   const endNow = async () => { if (!endConfirm) { setEndConfirm(true); return; } setEndConfirm(false); await run(() => supabase.from("system_alerts").update({ maint_end: new Date().toISOString() }).eq("id", active.id), "Maintenance terminée : le site est de nouveau accessible."); };
   const extend = async (min) => { const base = Math.max(T(active.maint_end) || Date.now(), Date.now()); const end = new Date(base + min * 60000); if (active.maint_start && end.getTime() - T(active.maint_start) > 48 * 3600000) { notify("Une maintenance dure 48 h au maximum.", "err"); return; } await run(() => supabase.from("system_alerts").update({ maint_end: end.toISOString() }).eq("id", active.id), `Maintenance prolongée de ${min >= 60 ? min / 60 + " h" : min + " min"}.`); };
   const remove = async (r, msg) => { await run(() => supabase.from("system_alerts").delete().eq("id", r.id), msg); };
+  const toggleDrive = async (r) => { await run(() => supabase.from("system_alerts").update({ applies_to_drive: !r.applies_to_drive }).eq("id", r.id), r.applies_to_drive ? "Le Drive n'est plus concerné par cette maintenance." : "Le Drive est aussi concerné par cette maintenance."); };
+  const driveCheck = (checked, onChange, key) => (<label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, margin: "0 0 12px", cursor: "pointer", lineHeight: 1.45 }}><input type="checkbox" data-maint-drive={key} checked={checked} onChange={e => onChange(e.target.checked)} style={{ marginTop: 3 }} /><span>Appliquer aussi au <strong>Drive</strong> <span style={{ color: "var(--text-dimmer)" }}>(mêmes comptes). Sans la case, seul Le Carnet est coupé et le Drive reste accessible.</span></span></label>);
   // programmation
   const startD = mStart ? new Date(mStart) : null, endD = mEnd ? new Date(mEnd) : null;
   const mError = !startD || !endD ? null : startD.getTime() < Date.now() + 60000 ? "Le début doit être dans le futur (au moins une minute)." : endD <= startD ? "La fin doit être après le début." : endD.getTime() - startD.getTime() > 48 * 3600000 ? "Une maintenance programmée dure 48 h au maximum." : null;
@@ -662,7 +666,7 @@ function MaintenancePanel({ notify }) {
   const setEndFromStart = (min) => { if (!startD) { notify("Choisissez d'abord le début.", "err"); return; } setMEnd(toLocalInput(new Date(startD.getTime() + min * 60000))); setMConfirm(false); };
   const schedule = async () => {
     if (!mValid) return; if (!mConfirm) { setMConfirm(true); return; }
-    const ok = await run(() => supabase.from("system_alerts").insert({ is_maintenance: true, maint_start: startD.toISOString(), maint_end: endD.toISOString(), message: shownMsg.trim().slice(0, 300) || null, display_at: new Date().toISOString() }), "Maintenance programmée.");
+    const ok = await run(() => supabase.from("system_alerts").insert({ is_maintenance: true, maint_start: startD.toISOString(), maint_end: endD.toISOString(), message: shownMsg.trim().slice(0, 300) || null, display_at: new Date().toISOString(), applies_to_drive: mDrive }), "Maintenance programmée.");
     setMConfirm(false); if (ok) { setMStart(""); setMEnd(""); setMMsg(""); setMMsgEdited(false); }
   };
   const chip = { ...chipBtn, fontSize: 12.5 };
@@ -694,6 +698,7 @@ function MaintenancePanel({ notify }) {
             {[15, 30, 60].map(m => <button key={m} type="button" data-maint-extend={m} onClick={() => extend(m)} disabled={busy} style={chip}>{m >= 60 ? m / 60 + " h" : m + " min"}</button>)}
           </div>)}
         {state === "active" && active.message && <div style={{ fontSize: 12.5, color: "var(--text-dimmer)", marginTop: 10 }}>Bandeau : {active.message}</div>}
+        {state === "active" && <div data-maint-drive-line style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>Drive : <strong data-maint-drive-state>{active.applies_to_drive ? "en maintenance aussi" : "reste accessible"}</strong><button type="button" data-maint-drive-toggle onClick={() => toggleDrive(active)} disabled={busy} style={chip}>{active.applies_to_drive ? "Rouvrir le Drive" : "Couper aussi le Drive"}</button></div>}
         {upcoming.length > 0 && state === "active" && <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 10 }}>Ensuite : {fmtDate(upcoming[0].maint_start)} → {fmtHour(upcoming[0].maint_end)}</div>}
       </div>
 
@@ -706,6 +711,7 @@ function MaintenancePanel({ notify }) {
                 <div style={{ fontSize: 14 }}>{fmtDate(r.maint_start)} → {fmtDate(r.maint_end)} <span style={{ color: "var(--text-dimmer)", fontSize: 12.5 }}>({span(T(r.maint_end) - T(r.maint_start))})</span></div>
                 <div style={{ fontSize: 12, color: "var(--text-dimmer)", marginTop: 3 }}>heure de Paris · commence dans {span(T(r.maint_start) - now)}{r.message ? " · " + r.message : ""}</div>
               </div>
+              <button type="button" data-maint-drive-toggle onClick={() => toggleDrive(r)} disabled={busy} style={chip} title="Inclure ou non le Drive dans cette maintenance">{r.applies_to_drive ? "Drive : inclus" : "Drive : non"}</button>
               <button type="button" data-maint-cancel onClick={() => remove(r, "Maintenance annulée.")} disabled={busy} style={{ ...chip, color: "var(--late)" }}>Annuler</button>
             </div>))}
         </div>)}
@@ -718,8 +724,9 @@ function MaintenancePanel({ notify }) {
             {[[15, "15 min"], [30, "30 min"], [60, "1 h"], [120, "2 h"], [240, "4 h"]].map(([m, l]) => <button key={m} type="button" data-maint-dur={m} aria-pressed={dur === m} onClick={() => { setDur(m); setNowConfirm(false); }} style={{ ...chip, background: dur === m ? "var(--panel-2)" : "transparent", fontWeight: dur === m ? 700 : 500, borderColor: dur === m ? "var(--accent)" : undefined }}>{l}</button>)}
           </div>
           <Field label="Bandeau d'avertissement (facultatif, 300 caractères maximum)"><textarea data-maint-now-msg value={nowMsg} maxLength={300} rows={2} onChange={e => { setNowMsg(e.target.value); setNowConfirm(false); }} placeholder="Mise à jour en cours, retour dans quelques minutes." style={{ ...inputStyle, resize: "vertical" }} /></Field>
+          {driveCheck(nowDrive, v => { setNowDrive(v); setNowConfirm(false); }, "now")}
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button type="button" data-maint-start-now onClick={startNow} disabled={busy} style={nowConfirm ? dangerBtn : { ...primaryBtn, width: "auto", padding: "10px 20px" }}>{nowConfirm ? `Confirmer : couper le site pendant ${dur >= 60 ? dur / 60 + " h" : dur + " min"}` : "Lancer la maintenance"}</button>
+            <button type="button" data-maint-start-now onClick={startNow} disabled={busy} style={nowConfirm ? dangerBtn : { ...primaryBtn, width: "auto", padding: "10px 20px" }}>{nowConfirm ? `Confirmer : couper le site${nowDrive ? " et le Drive" : ""} pendant ${dur >= 60 ? dur / 60 + " h" : dur + " min"}` : "Lancer la maintenance"}</button>
             {nowConfirm && <button type="button" onClick={() => setNowConfirm(false)} style={{ ...secondaryBtn, width: "auto", padding: "9px 14px" }}>Annuler</button>}
           </div>
         </div>)}
@@ -734,6 +741,7 @@ function MaintenancePanel({ notify }) {
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "-4px 0 12px", alignItems: "center" }}><span style={{ fontSize: 12.5, color: "var(--text-dim)" }}>Fin automatique</span>{[[30, "+30 min"], [60, "+1 h"], [120, "+2 h"], [240, "+4 h"]].map(([m, l]) => <button key={m} type="button" data-maint-plus={m} onClick={() => setEndFromStart(m)} style={chip}>{l}</button>)}</div>
         <Field label="Bandeau d'avertissement (300 caractères maximum, laissez vide pour ne rien afficher)"><textarea data-maint-msg value={shownMsg} maxLength={300} rows={2} onChange={e => { setMMsg(e.target.value); setMMsgEdited(true); setMConfirm(false); }} placeholder="Choisissez un début et une fin : le message est proposé automatiquement." style={{ ...inputStyle, resize: "vertical" }} /></Field>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "-4px 0 12px", alignItems: "center" }}><span style={{ fontSize: 12.5, color: "var(--text-dim)" }}>Ajouter le motif</span>{MAINT_REASONS.map((t, i) => <button key={i} type="button" data-maint-reason={i} onClick={() => { const base = shownMsg.trim(); setMMsg((base ? base + " " : "") + t); setMMsgEdited(true); setMConfirm(false); }} style={chip}>{t.replace(/\.$/, "").split(" ").slice(0, 3).join(" ")}…</button>)}</div>
+        {driveCheck(mDrive, v => { setMDrive(v); setMConfirm(false); }, "schedule")}
         {mError && <div data-maint-error style={{ fontSize: 12.5, color: "var(--late)", marginBottom: 10 }}>{mError}</div>}
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button type="button" data-maint-schedule onClick={schedule} disabled={!mValid || busy} style={{ ...(mConfirm ? dangerBtn : { ...primaryBtn, width: "auto", padding: "10px 20px" }), opacity: mValid && !busy ? 1 : 0.5 }}>{mConfirm ? "Confirmer la programmation" : "Programmer la maintenance"}</button>
