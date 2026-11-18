@@ -339,10 +339,9 @@ function useOwnership(dep) {
   return o;
 }
 function SiteFooter({ floating }) {
-  const own = useOwnership();
   return (
     <div className="site-footer" style={{ textAlign: "center", fontSize: 12, color: "var(--text-dimmer)", padding: "22px 0 6px", ...(floating ? { position: "absolute", bottom: 10, left: 0, right: 0, padding: 0, zIndex: 1 } : {}) }}>
-      © 2026 Le Carnet — Gestion de tâches. {own ? `Offert à ${own.name} par Noah Borget, son créateur` : "Produit par Noah Borget"}
+      © 2026 Camélia Borget — Le Carnet, gestion de tâches.
     </div>
   );
 }
