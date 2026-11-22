@@ -1047,25 +1047,54 @@ function CompleteProfile({ session, notify, onDone, onLogout }) {
   </div>);
 }
 
+/* ---------------- Découvrir : présentation avant connexion ---------------- */
+function DiscoverPanel({ onStart }) {
+  const items = [
+    [I.Check, "Tâches et priorités", "Échéances, sous-tâches, récurrence, rappels par email."],
+    [I.Calendar, "Calendrier et réunions", "Les échéances du mois et les réunions de l'équipe, au même endroit."],
+    [I.Users, "Équipe et disponibilités", "Qui fait quoi, qui est là, et quand prendre rendez-vous."],
+    [I.Message, "Messages et commentaires", "Salons, messages privés et échanges sous chaque tâche."],
+    [I.Note, "Notes, listes et dépenses", "Les notes partagées et les petites dépenses du groupe."],
+    [I.Chart, "Rapports", "Charge de travail, avancement et temps suivi."],
+  ];
+  return (
+    <div data-discover style={{ width: "100%", background: "var(--panel-2)", border: "1px solid var(--border-soft)", borderRadius: 16, padding: "30px 28px", boxShadow: "0 30px 60px rgba(0,0,0,.45)" }}>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><NotebookMark size={38} /></div>
+      <h1 style={{ fontFamily: "Literata, serif", fontWeight: 600, fontSize: 22, textAlign: "center", margin: "0 0 4px" }}>Le Carnet, en bref</h1>
+      <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 13, margin: "0 0 20px" }}>Vos tâches, votre calendrier et vos échanges, dans un espace à vous.</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 22 }}>
+        {items.map(([Icon, title, text]) => (
+          <div key={title} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, background: "var(--bg)", border: "1px solid var(--border-soft)", display: "grid", placeItems: "center", flexShrink: 0 }}><Icon size={16} /></div>
+            <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 600 }}>{title}</div><div style={{ fontSize: 12.5, color: "var(--text-dim)", lineHeight: 1.45 }}>{text}</div></div>
+          </div>
+        ))}
+      </div>
+      <button type="button" data-discover-start onClick={onStart} style={{ ...primaryBtn, width: "100%" }}>Créer mon espace</button>
+      <a href="/" style={{ ...secondaryBtn, display: "block", width: "100%", marginTop: 8, textAlign: "center", textDecoration: "none", boxSizing: "border-box" }}>Voir le site</a>
+    </div>
+  );
+}
+
 /* ---------------- Porte d'entrée : connexion ou création de compte ---------------- */
 function AuthGate({ notify }) {
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") === "signup" ? "signup" : "login"); // login | signup
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") === "signup" ? "signup" : "login"); // login | signup | discover
+  const AUTH_TABS = [["login", "Se connecter"], ["signup", "Créer un compte"], ["discover", "Découvrir"]];
 
   return (
     <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, position: "absolute", top: 28, left: 32 }}><NotebookMark size={26} /><span style={{ fontFamily: "Literata, serif", fontSize: 19 }}>Le Carnet</span></div>
       <div style={{ width: 400, maxWidth: "92vw" }}>
         <div style={{ display: "flex", gap: 6, marginBottom: 16, background: "var(--bg-2)", padding: 4, borderRadius: 11 }}>
-          <button onClick={() => setTab("login")} style={{
-            flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 600,
-            background: tab === "login" ? "var(--panel-2)" : "transparent", color: tab === "login" ? "var(--text)" : "var(--text-dim)",
-          }}>Se connecter</button>
-          <button onClick={() => setTab("signup")} style={{
-            flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 600,
-            background: tab === "signup" ? "var(--panel-2)" : "transparent", color: tab === "signup" ? "var(--text)" : "var(--text-dim)",
-          }}>Créer un compte</button>
+          {AUTH_TABS.map(([id, label]) => (
+            <button key={id} type="button" data-auth-tab={id} aria-selected={tab === id} onClick={() => setTab(id)} style={{
+              flex: "1 1 0", minWidth: 0, padding: "9px 6px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit",
+              fontSize: "clamp(11.5px, 3.4vw, 13.5px)", fontWeight: 600, whiteSpace: "nowrap",
+              background: tab === id ? "var(--panel-2)" : "transparent", color: tab === id ? "var(--text)" : "var(--text-dim)",
+            }}>{label}</button>
+          ))}
         </div>
-        {tab === "login" ? <Login notify={notify} /> : <Signup notify={notify} />}
+        {tab === "login" ? <Login notify={notify} /> : tab === "signup" ? <Signup notify={notify} /> : <DiscoverPanel onStart={() => setTab("signup")} />}
       </div>
     </div>
   );
@@ -5622,7 +5651,7 @@ function printAgenda({ me, tasks, meetings, attendees, from, days, title }) {
     body{font:14px/1.5 Georgia,serif;color:#111;margin:28px} h1{font-size:22px;margin:0 0 2px} .sub{color:#555;margin:0 0 18px;font-size:12px}
     h2{font-size:15px;margin:18px 0 6px;padding-bottom:3px;border-bottom:1px solid #999;text-transform:capitalize} h2 small{font-weight:400;color:#555;text-transform:none}
     ul{list-style:none;margin:0;padding:0} li{padding:4px 0;border-bottom:1px dotted #ccc} .box{display:inline-block;width:11px;height:11px;border:1.5px solid #333;border-radius:2px;margin-right:8px;vertical-align:-1px}
-    .none{color:#777;font-style:italic;margin:4px 0} small{color:#555} @media print{body{margin:12mm}}</style></head><body>
+    .none{color:#777;font-style:italic;margin:4px 0} small{color:#555} @media print{body{margin:12mm}}</style><\/head><body>
     <h1>${escH(title)}</h1><p class="sub">${escH(me.display_name)} · Le Carnet · imprimé le ${escH(fmtDay(today, { day: "numeric", month: "long", year: "numeric" }))}</p>${body}</body></html>`;
   if (typeof window.__printHook === "function") { window.__printHook(html); return; }
   const f = document.createElement("iframe");
@@ -6063,7 +6092,7 @@ function printHtml(html) {
 }
 const slugName = (s) => String(s || "note").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase().slice(0, 50) || "note";
 function printNote(n) {
-  printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escH(n.title)}</title><style>body{font:15px/1.6 Georgia,serif;color:#111;margin:28px}h1{font-size:24px;margin:0 0 14px}.b{white-space:pre-wrap}@media print{body{margin:12mm}}</style></head><body><h1>${escH(n.title)}</h1><div class="b">${escH(n.body)}</div></body></html>`);
+  printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escH(n.title)}</title><style>body{font:15px/1.6 Georgia,serif;color:#111;margin:28px}h1{font-size:24px;margin:0 0 14px}.b{white-space:pre-wrap}@media print{body{margin:12mm}}</style><\/head><body><h1>${escH(n.title)}</h1><div class="b">${escH(n.body)}</div></body></html>`);
 }
 
 /* ---------------- Lot H : Listes, Dépenses, Charge + extras ---------------- */
@@ -6316,7 +6345,7 @@ function WorkloadView({ me, people, tasks, meetings, attendees, leaves, onOpen }
   const bg = (c) => c.leave ? "repeating-linear-gradient(45deg, var(--bg-2), var(--bg-2) 6px, transparent 6px, transparent 12px)" : c.total === 0 ? "transparent" : c.total / cap >= 1 ? "rgba(255,100,95,.42)" : c.total / cap >= 0.5 ? "rgba(255,182,72,.38)" : "rgba(95,191,139,.34)";
   const grid = people.map(p => ({ p, cells: days.map(d => cell(p.id, d)) }));
   const sel = pick ? cell(pick.uid, pick.day) : null;
-  const doPrint = () => printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Charge de l'équipe</title><style>body{font:12px/1.4 Georgia,serif;margin:20px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:4px 6px;text-align:center}th:first-child,td:first-child{text-align:left}.o{background:#ffd1ce}.m{background:#ffe7b8}.g{background:#cfeedd}</style></head><body><h1>Charge de l'équipe</h1><p>Heures estimées (tâches + réunions), ${range} prochains jours.</p><table><tr><th></th>${days.map(d => `<th>${escH(fmtDay(d, { weekday: "short", day: "numeric" }))}</th>`).join("")}</tr>${grid.map(r => `<tr><td>${escH(r.p.display_name)}</td>${r.cells.map(c => `<td class="${c.total / cap >= 1 ? "o" : c.total / cap >= 0.5 ? "m" : c.total ? "g" : ""}">${c.leave ? "congé" : c.total ? escH(fmtEst(c.total)) : ""}</td>`).join("")}</tr>`).join("")}</table></body></html>`);
+  const doPrint = () => printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Charge de l'équipe</title><style>body{font:12px/1.4 Georgia,serif;margin:20px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:4px 6px;text-align:center}th:first-child,td:first-child{text-align:left}.o{background:#ffd1ce}.m{background:#ffe7b8}.g{background:#cfeedd}</style><\/head><body><h1>Charge de l'équipe</h1><p>Heures estimées (tâches + réunions), ${range} prochains jours.</p><table><tr><th></th>${days.map(d => `<th>${escH(fmtDay(d, { weekday: "short", day: "numeric" }))}</th>`).join("")}</tr>${grid.map(r => `<tr><td>${escH(r.p.display_name)}</td>${r.cells.map(c => `<td class="${c.total / cap >= 1 ? "o" : c.total / cap >= 0.5 ? "m" : c.total ? "g" : ""}">${c.leave ? "congé" : c.total ? escH(fmtEst(c.total)) : ""}</td>`).join("")}</tr>`).join("")}</table></body></html>`);
   return (
     <div data-workload-view>
       {pageTitle("Charge", "Qui est surchargé, qui a de la marge ? Chaque case additionne le temps estimé des tâches et les réunions du jour (huit heures = journée pleine).", <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{[7, 14, 28].map(n => <button key={n} type="button" data-workload-range={n} aria-pressed={range === n} onClick={() => setRange(n)} style={{ ...chipBtn, borderColor: range === n ? "var(--accent)" : undefined, background: range === n ? "var(--panel-2)" : "transparent" }}>{n} jours</button>)}<button type="button" data-workload-print onClick={doPrint} style={chipBtn}>🖨 Imprimer</button></div>)}
@@ -6519,7 +6548,7 @@ function printWeekReview({ me, tasks, meetings, attendees }) {
   const meets = meetings.filter(m => { const d = parisDay(Date.parse(m.starts_at)); return d >= monday && d <= sunday && (m.created_by === me.id || attendees.some(a => a.meeting_id === m.id && a.user_id === me.id && a.response !== "declined")); }).length;
   const est = done.reduce((a, t) => a + (t.estimate_min || 0), 0);
   const ul = (arr, f) => arr.length ? `<ul>${arr.map(f).join("")}</ul>` : `<p class="none">Aucune.</p>`;
-  printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Bilan de la semaine</title><style>body{font:14px/1.55 Georgia,serif;color:#111;margin:28px}h1{font-size:22px;margin:0}h2{font-size:15px;margin:18px 0 6px;border-bottom:1px solid #999}.sub{color:#555;font-size:12px;margin:2px 0 14px}ul{margin:0;padding-left:20px}.none{color:#777;font-style:italic;margin:4px 0}.k{display:flex;gap:24px;margin:10px 0}.k b{font-size:22px;display:block}@media print{body{margin:12mm}}</style></head><body><h1>Bilan de la semaine</h1><p class="sub">${escH(me.display_name)} · du ${escH(fmtDay(monday, { day: "numeric", month: "long" }))} au ${escH(fmtDay(sunday, { day: "numeric", month: "long", year: "numeric" }))}</p><div class="k"><div><b>${done.length}</b>tâche(s) terminée(s)</div><div><b>${meets}</b>réunion(s)</div><div><b>${escH(est ? fmtEst(est) : "—")}</b>travail estimé terminé</div></div><h2>Terminé cette semaine</h2>${ul(done, t => `<li>${escH(t.title)}</li>`)}<h2>En retard</h2>${ul(late, t => `<li>${escH(t.title)} <small>(échéance ${escH(fmtDay(t.due, { day: "numeric", month: "long" }))})</small></li>`)}<h2>À venir (7 jours)</h2>${ul(next, t => `<li>${escH(t.title)} <small>(${escH(fmtDay(t.due, { weekday: "long", day: "numeric", month: "long" }))})</small></li>`)}</body></html>`);
+  printHtml(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Bilan de la semaine</title><style>body{font:14px/1.55 Georgia,serif;color:#111;margin:28px}h1{font-size:22px;margin:0}h2{font-size:15px;margin:18px 0 6px;border-bottom:1px solid #999}.sub{color:#555;font-size:12px;margin:2px 0 14px}ul{margin:0;padding-left:20px}.none{color:#777;font-style:italic;margin:4px 0}.k{display:flex;gap:24px;margin:10px 0}.k b{font-size:22px;display:block}@media print{body{margin:12mm}}</style><\/head><body><h1>Bilan de la semaine</h1><p class="sub">${escH(me.display_name)} · du ${escH(fmtDay(monday, { day: "numeric", month: "long" }))} au ${escH(fmtDay(sunday, { day: "numeric", month: "long", year: "numeric" }))}</p><div class="k"><div><b>${done.length}</b>tâche(s) terminée(s)</div><div><b>${meets}</b>réunion(s)</div><div><b>${escH(est ? fmtEst(est) : "—")}</b>travail estimé terminé</div></div><h2>Terminé cette semaine</h2>${ul(done, t => `<li>${escH(t.title)}</li>`)}<h2>En retard</h2>${ul(late, t => `<li>${escH(t.title)} <small>(échéance ${escH(fmtDay(t.due, { day: "numeric", month: "long" }))})</small></li>`)}<h2>À venir (7 jours)</h2>${ul(next, t => `<li>${escH(t.title)} <small>(${escH(fmtDay(t.due, { weekday: "long", day: "numeric", month: "long" }))})</small></li>`)}</body></html>`);
 }
 
 /* ---------------- Lot K : visite guidée ---------------- */
